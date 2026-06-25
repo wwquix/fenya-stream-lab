@@ -14,7 +14,7 @@ function WordMutationCloud({ words, streamId, language = 'ru', t }) {
     <Reveal as="section" className="section-panel word-mutations" id="speech" aria-labelledby="word-mutations-title" data-entity-type="stream" data-entity-id={streamId}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.speechKicker}</p>
+          {t.speechKicker ? <p className="eyebrow">{t.speechKicker}</p> : null}
           <h2 id="word-mutations-title">{t.speechPatterns}</h2>
           <p className="section-note">{t.speechNote}</p>
         </div>

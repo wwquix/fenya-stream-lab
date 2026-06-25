@@ -1,9 +1,6 @@
 import CustomSelect from './CustomSelect.jsx'
 import { ProgressActionButton, Reveal } from './MotionPrimitives.jsx'
-import { motion, useReducedMotion } from "motion/react"
-import { formatCategory, formatStreamTitle } from '../i18n/translations.js'
-
-const categories = ['All', 'Just Chatting', 'CS2', 'Minecraft', 'Other']
+import { formatStreamTitle } from '../i18n/translations.js'
 
 function createCsv(stream) {
   const rows = [
@@ -24,8 +21,7 @@ function downloadCsv(stream) {
   URL.revokeObjectURL(url)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, selectedCategory, onStreamChange, onCompareChange, onCategoryChange, t }) {
-  const prefersReducedMotion = useReducedMotion()
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
   const preparingLabel = t.exportReport === 'Отчёт' ? 'Готовим...' : 'Preparing...'
@@ -38,22 +34,6 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, selected
     <Reveal as="section" className="stream-control-bar glass-panel" aria-label="Stream controls">
       <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={streamOptions} onChange={onStreamChange} />
       <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
-
-      <div className="category-filter" aria-label="Category filter">
-        {categories.map((category) => (
-          <button className={selectedCategory === category ? 'is-active' : ''} type="button" onClick={() => onCategoryChange(category)} key={category}>
-            {selectedCategory === category ? (
-              <motion.span
-                className="segmented-active-indicator"
-                layoutId="category-filter-active"
-                transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                aria-hidden="true"
-              />
-            ) : null}
-            <span className="segmented-label">{category === 'All' ? t.all : formatCategory(category, t)}</span>
-          </button>
-        ))}
-      </div>
 
       <div className="export-actions">
         <ProgressActionButton preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>

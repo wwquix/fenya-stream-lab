@@ -15,7 +15,7 @@ function ModeratorUnit({ moderators, events, t }) {
     <Reveal as="section" className="section-panel moderator-unit" id="moderators" aria-labelledby="moderator-unit-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.moderatorKicker}</p>
+          {t.moderatorKicker ? <p className="eyebrow">{t.moderatorKicker}</p> : null}
           <h2 id="moderator-unit-title">{t.moderatorPerformance}</h2>
           <p className="section-note">{t.moderatorNote}</p>
         </div>

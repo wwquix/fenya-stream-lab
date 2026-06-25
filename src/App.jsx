@@ -3,7 +3,6 @@ import Hero from './components/Hero.jsx'
 import SectionRail from './components/SectionRail.jsx'
 import BackToTop from './components/BackToTop.jsx'
 import StreamControlBar from './components/StreamControlBar.jsx'
-import DashboardOverview from './components/DashboardOverview.jsx'
 import StreamPulse from './components/StreamPulse.jsx'
 import TopChatters from './components/TopChatters.jsx'
 import WordMutationCloud from './components/WordMutationCloud.jsx'
@@ -16,7 +15,7 @@ import { words } from './data/mockWords.js'
 import { streamEvents } from './data/mockEvents.js'
 import { translations } from './i18n/translations.js'
 
-const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary']
+const sectionIds = ['hero', 'stream-pulse', 'summary', 'chatters', 'speech', 'moderators', 'archive']
 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
@@ -25,7 +24,6 @@ function App() {
   const [showSectionRail, setShowSectionRail] = useState(false)
   const [selectedStreamId, setSelectedStreamId] = useState(currentStream.id)
   const [compareStreamId, setCompareStreamId] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('All')
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
   const t = translations[language] ?? translations.ru
@@ -74,7 +72,6 @@ function App() {
   function handleStreamChange(streamId) {
     setSelectedStreamId(streamId)
     setCompareStreamId((currentCompareId) => (currentCompareId === streamId ? '' : currentCompareId))
-    setSelectedCategory('All')
   }
 
   return (
@@ -88,19 +85,16 @@ function App() {
           streams={streams}
           selectedStreamId={selectedStreamId}
           compareStreamId={compareStreamId}
-          selectedCategory={selectedCategory}
           onStreamChange={handleStreamChange}
           onCompareChange={setCompareStreamId}
-          onCategoryChange={setSelectedCategory}
           t={t}
         />
-        <StreamPulse stream={selectedStream} compareStream={compareStream} events={streamEvents} selectedCategory={selectedCategory} onCategorySelect={setSelectedCategory} t={t} />
+        <StreamPulse stream={selectedStream} compareStream={compareStream} events={streamEvents} t={t} />
         {/* Data map is reserved for a future real data pipeline view. */}
-        <TopChatters chatters={chatters} t={t} />
+        <TopChatters chatters={chatters} language={language} t={t} />
         <WordMutationCloud words={words} streamId={selectedStream.id} language={language} t={t} />
         <ModeratorUnit moderators={moderators} events={streamEvents} t={t} />
         <StreamArchive streams={streams} selectedStreamId={selectedStream.id} t={t} />
-        <DashboardOverview stream={selectedStream} moderators={moderators} events={streamEvents} chatters={chatters} t={t} />
       </div>
     </main>
   )

@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from "motion/react"
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import ScannerTooltip from './ScannerTooltip.jsx'
 import { MotionCard, Reveal } from './MotionPrimitives.jsx'
 import { formatCategory, formatEventLabel, formatSummaryValue } from '../i18n/translations.js'
-
-const rangeOptions = [
-  { id: 'full', labelKey: 'full' },
-  { id: 'first-hour', labelKey: 'firstHour' },
-  { id: 'peak', labelKey: 'peakPeriod' },
-  { id: 'final-hour', labelKey: 'finalHour' },
-]
 
 function minutesFromTime(time) {
   const [hours, minutes] = time.split(':').map(Number)
@@ -83,21 +75,82 @@ function getEventForPoint(point, events) {
   return events.find((event) => event.id === point.eventId || event.time === point.time || Math.abs(minutesFromTime(event.time) - minutesFromTime(point.time)) <= 10)
 }
 
-function filterChartDataByRange(chartData, range, duration) {
-  if (range === 'full' || chartData.length < 2) {
-    return chartData
+function getEventForElapsed(elapsedMinute, events, chartData) {
+  const streamStart = minutesFromTime(chartData[0].time)
+
+  return events.find((event) => Math.abs(minutesFromTime(event.time) - streamStart - elapsedMinute) <= 3)
+}
+
+function getNearestPointByElapsed(elapsedMinute, chartData) {
+  return chartData.reduce((nearest, point) => {
+    const currentDistance = Math.abs(point.elapsedMinute - elapsedMinute)
+    const nearestDistance = Math.abs(nearest.elapsedMinute - elapsedMinute)
+    return currentDistance < nearestDistance ? point : nearest
+  }, chartData[0])
+}
+
+function formatCompactNumber(value) {
+  if (value >= 1000) {
+    const compact = value / 1000
+    return `${Number.isInteger(compact) ? compact.toFixed(0) : compact.toFixed(1)}k`
   }
 
-  if (range === 'first-hour') {
-    return chartData.filter((point) => point.elapsedMinute <= Math.min(60, duration))
+  return String(value)
+}
+
+function getYAxisTicks(points, comparePoints = []) {
+  const maxValue = [...points, ...comparePoints].reduce((max, point) => Math.max(max, point.viewers, point.chatMessagesPerMinute), 0)
+  const ceiling = Math.max(2500, Math.ceil(maxValue / 2500) * 2500)
+  const ticks = []
+
+  for (let value = 0; value <= ceiling; value += 2500) {
+    ticks.push(value)
   }
 
-  if (range === 'final-hour') {
-    return chartData.filter((point) => point.elapsedMinute >= Math.max(0, duration - 60))
+  return ticks
+}
+
+function formatTimecodeFromOffset(offsetSeconds, chartData) {
+  const streamStartSeconds = minutesFromTime(chartData[0].time) * 60
+  const totalSeconds = streamStartSeconds + offsetSeconds
+  const hours = Math.floor(totalSeconds / 3600) % 24
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const pad = (value) => String(value).padStart(2, '0')
+
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+}
+
+function getSegmentForElapsed(elapsedMinute, stream) {
+  return stream.categorySegments.find((item) => {
+    const range = getSegmentRange(item, stream.chartData)
+    return range && elapsedMinute >= range.start && elapsedMinute <= range.end
+  })
+}
+
+function getPreviewTone(category) {
+  if (category === 'CS2') {
+    return 'cs2'
   }
 
-  const peakPoint = chartData.reduce((peak, point) => (point.viewers > peak.viewers ? point : peak), chartData[0])
-  return chartData.filter((point) => Math.abs(point.elapsedMinute - peakPoint.elapsedMinute) <= 45)
+  if (category === 'Minecraft') {
+    return 'minecraft'
+  }
+
+  if (category === 'Just Chatting') {
+    return 'chatting'
+  }
+
+  return 'other'
+}
+
+function getPreviewStyle(frameIndex, point) {
+  return {
+    '--preview-pan-x': `${(frameIndex % 9) - 4}px`,
+    '--preview-pan-y': `${(Math.floor(frameIndex / 3) % 7) - 3}px`,
+    '--preview-scan': `${12 + (frameIndex % 11) * 7}%`,
+    '--preview-heat': `${Math.min(1, point.chatMessagesPerMinute / 6000)}`,
+  }
 }
 
 function StreamPulseTooltip({ active, label, payload, stream, events, t }) {
@@ -114,13 +167,18 @@ function StreamPulseTooltip({ active, label, payload, stream, events, t }) {
   return (
     <div className="stream-tooltip">
       <div className="stream-tooltip-preview">
-        <span>{t.streamPreview}</span>
-        <strong>{t.previewSlot}</strong>
+        <span>{point?.time ?? label}</span>
+        <strong>{point?.previewLabel ?? t.previewSlot}</strong>
       </div>
       <div className="stream-tooltip-body">
-        <strong>{point?.time ?? label}</strong>
+        <span className="stream-tooltip-kicker">{t.streamPreview}</span>
+        <strong>{point?.previewLabel ?? t.previewSlot}</strong>
         <span>{formatCategory(category, t)}</span>
         <dl>
+          <div>
+            <dt>{t.time}</dt>
+            <dd>{point?.time ?? label}</dd>
+          </div>
           <div>
             <dt>{t.viewers}</dt>
             <dd>{viewers?.toLocaleString()}</dd>
@@ -130,25 +188,26 @@ function StreamPulseTooltip({ active, label, payload, stream, events, t }) {
             <dd>{chatMessages?.toLocaleString()}</dd>
           </div>
         </dl>
-        {event ? <p>{formatEventLabel(event.label, t)}</p> : null}
+        {event ? <p><span>{t.event}</span>{formatEventLabel(event.label, t)}</p> : null}
       </div>
     </div>
   )
 }
 
-function StreamPulse({ stream, compareStream, events, selectedCategory = 'All', onCategorySelect, t }) {
-  const [selectedRange, setSelectedRange] = useState('full')
+function StreamPulse({ stream, compareStream, events, t }) {
   const [selectedSegmentId, setSelectedSegmentId] = useState(null)
+  const [replayPreview, setReplayPreview] = useState(null)
   const prefersReducedMotion = useReducedMotion()
   const streamEvents = events.filter((event) => event.streamId === stream.id)
   const streamDuration = getStreamDuration(stream.chartData)
   const normalizedChartData = normalizeChartData(stream.chartData)
-  const visibleChartData = filterChartDataByRange(normalizedChartData, selectedRange, streamDuration)
+  const visibleChartData = normalizedChartData
   const visibleDomain = [
     visibleChartData[0]?.elapsedMinute ?? 0,
     visibleChartData[visibleChartData.length - 1]?.elapsedMinute ?? streamDuration,
   ]
-  const compareChartData = compareStream ? filterChartDataByRange(normalizeChartData(compareStream.chartData, streamDuration), selectedRange, streamDuration) : []
+  const compareChartData = compareStream ? normalizeChartData(compareStream.chartData, streamDuration) : []
+  const yAxisTicks = getYAxisTicks(visibleChartData, compareChartData)
   const visibleTimes = new Set(visibleChartData.map((point) => point.time))
   const eventMarkers = streamEvents.map((event) => ({
     ...event,
@@ -178,16 +237,32 @@ function StreamPulse({ stream, compareStream, events, selectedCategory = 'All', 
     }
   }, [selectedSegmentId, stream.categorySegments])
 
-  useEffect(() => {
-    if (selectedSegment && selectedCategory !== selectedSegment.category) {
-      setSelectedSegmentId(null)
-    }
-  }, [selectedCategory, selectedSegment])
-
   function handleSegmentSelect(segment) {
     const isSelected = selectedSegmentId === segment.id
     setSelectedSegmentId(isSelected ? null : segment.id)
-    onCategorySelect?.(isSelected ? 'All' : segment.category)
+  }
+
+  function handleReplayHover(event) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const progress = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+    const roundedSeconds = Math.round((progress * streamDuration * 60) / 3) * 3
+    const elapsedMinute = roundedSeconds / 60
+    const point = getNearestPointByElapsed(elapsedMinute, normalizedChartData)
+    const segment = getSegmentForElapsed(elapsedMinute, stream)
+    const category = segment?.category ?? point.category
+    const eventForFrame = getEventForElapsed(elapsedMinute, streamEvents, stream.chartData) ?? getEventForPoint(point, streamEvents)
+    const frameIndex = Math.round(roundedSeconds / 3)
+
+    setReplayPreview({
+      point,
+      category,
+      event: eventForFrame,
+      frameIndex,
+      style: getPreviewStyle(frameIndex, point),
+      timecode: formatTimecodeFromOffset(roundedSeconds, stream.chartData),
+      tone: getPreviewTone(category),
+      x: `${Math.min(86, Math.max(14, progress * 100))}%`,
+    })
   }
 
   return (
@@ -202,43 +277,14 @@ function StreamPulse({ stream, compareStream, events, selectedCategory = 'All', 
       </div>
 
       <div className="chart-shell glass-panel" data-entity-type="stream" data-entity-id={stream.id}>
-        <div className="chart-toolbar">
+        <div className="chart-toolbar replay-console-toolbar">
           <div className="chart-legend" aria-label="Chart legend">
             <span className="legend-viewers">{t.viewers}</span>
             <span className="legend-chat">{t.chatPerMin}</span>
             {compareLabel ? <span className="legend-compare">{compareLabel}</span> : null}
           </div>
-          <div className="chart-event-list" aria-label={t.keyEvents}>
-            {streamEvents.slice(0, 4).map((event) => (
-              <ScannerTooltip
-                key={event.id}
-                type="event"
-                id={event.id}
-                label={`${formatEventLabel(event.label, t)} / ${event.time}`}
-                className={`chart-event-pill event-${event.type}`}
-              >
-                <span>{event.time}</span>
-                <strong>{formatEventLabel(event.label, t)}</strong>
-              </ScannerTooltip>
-            ))}
-          </div>
-          <div className="chart-range-controls" aria-label="Timeline range">
-            {rangeOptions.map((option) => (
-              <button className={selectedRange === option.id ? 'is-active' : ''} type="button" onClick={() => setSelectedRange(option.id)} key={option.id}>
-                {selectedRange === option.id ? (
-                  <motion.span
-                    className="segmented-active-indicator"
-                    layoutId="chart-range-active"
-                    transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                    aria-hidden="true"
-                  />
-                ) : null}
-                <span className="segmented-label">{t[option.labelKey]}</span>
-              </button>
-            ))}
-          </div>
         </div>
-        <ResponsiveContainer width="100%" height={340}>
+        <ResponsiveContainer width="100%" height={300}>
           <ComposedChart data={visibleChartData} margin={{ top: 28, right: 28, left: -8, bottom: 12 }}>
             <defs>
               <linearGradient id="chatGlow" x1="0" y1="0" x2="0" y2="1">
@@ -263,8 +309,16 @@ function StreamPulse({ stream, compareStream, events, selectedCategory = 'All', 
               axisLine={false}
               tickLine={false}
             />
-            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 12 }} axisLine={false} tickLine={false} />
-            <Tooltip content={<StreamPulseTooltip stream={stream} events={streamEvents} t={t} />} />
+            <YAxis
+              domain={[0, yAxisTicks[yAxisTicks.length - 1]]}
+              ticks={yAxisTicks}
+              tickFormatter={formatCompactNumber}
+              tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+              width={44}
+            />
+            <Tooltip cursor={{ stroke: 'rgba(226, 238, 237, 0.28)', strokeWidth: 1 }} content={<StreamPulseTooltip stream={stream} events={streamEvents} t={t} />} />
             {visibleSelectedRange && visibleSelectedRange.end > visibleSelectedRange.start ? (
               <ReferenceArea
                 x1={visibleSelectedRange.start}
@@ -291,13 +345,14 @@ function StreamPulse({ stream, compareStream, events, selectedCategory = 'All', 
           </ComposedChart>
         </ResponsiveContainer>
 
-        <div className="category-timeline" aria-label="Stream category timeline">
+        <div className="replay-strip" aria-label="Stream replay timeline" onMouseMove={handleReplayHover} onMouseLeave={() => setReplayPreview(null)}>
+          <div className="replay-strip-rail">
           {stream.categorySegments.map((segment) => {
-            const isSegmentActive = selectedSegmentId === segment.id || (!selectedSegmentId && selectedCategory === segment.category)
+            const isSegmentActive = selectedSegmentId === segment.id
 
             return (
             <motion.button
-              className={`category-segment ${selectedSegmentId === segment.id || (!selectedSegmentId && selectedCategory === segment.category) ? 'is-active' : ''} ${selectedCategory !== 'All' && selectedCategory !== segment.category ? 'is-muted' : ''}`}
+              className={`replay-segment category-segment ${isSegmentActive ? 'is-active' : ''}`}
               style={{ '--segment-size': `${(getSegmentSize(segment) / totalSegmentMinutes) * 100}%` }}
               title={`${segment.start}-${segment.end} ${formatCategory(segment.category, t)}`}
               type="button"
@@ -319,16 +374,59 @@ function StreamPulse({ stream, compareStream, events, selectedCategory = 'All', 
             </motion.button>
             )
           })}
+          </div>
+          {replayPreview ? (
+            <div className="replay-preview-card stream-tooltip" style={{ left: replayPreview.x }}>
+              <div className={`replay-preview-frame is-${replayPreview.tone}`} style={replayPreview.style}>
+                <div className="preview-scene">
+                  <span className="preview-live">LIVE</span>
+                  <span className="preview-timecode">{replayPreview.timecode}</span>
+                  <strong>{replayPreview.point.previewLabel ?? t.previewSlot}</strong>
+                  <div className="preview-chat">
+                    <span>{formatCompactNumber(replayPreview.point.viewers)} {t.viewers}</span>
+                    <span>{formatCompactNumber(replayPreview.point.chatMessagesPerMinute)}/min</span>
+                    <span>{replayPreview.event ? formatEventLabel(replayPreview.event.label, t) : formatCategory(replayPreview.category, t)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="stream-tooltip-body">
+                <span className="stream-tooltip-kicker">{t.streamPreview}</span>
+                <strong>{replayPreview.point.previewLabel ?? t.previewSlot}</strong>
+                <span>{formatCategory(replayPreview.category, t)}</span>
+                <dl>
+                  <div>
+                    <dt>{t.time}</dt>
+                    <dd>{replayPreview.timecode}</dd>
+                  </div>
+                  <div>
+                    <dt>{t.viewers}</dt>
+                    <dd>{replayPreview.point.viewers.toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt>{t.chatPerMin}</dt>
+                    <dd>{replayPreview.point.chatMessagesPerMinute.toLocaleString()}</dd>
+                  </div>
+                </dl>
+                {replayPreview.event ? <p><span>{t.event}</span>{formatEventLabel(replayPreview.event.label, t)}</p> : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <div className="pulse-insight-grid">
+      <div className="pulse-summary" id="summary" aria-label={t.currentStreamSummary}>
+        <div className="pulse-summary-heading">
+          <span>{t.summaryKicker}</span>
+          <strong>{t.currentStreamSummary}</strong>
+        </div>
+        <div className="pulse-insight-grid">
         {insights.map((insight) => (
           <MotionCard as="article" className="pulse-insight-card glass-panel" key={insight.label}>
             <span>{insight.label}</span>
             <strong>{insight.value}</strong>
           </MotionCard>
         ))}
+        </div>
       </div>
     </Reveal>
   )
