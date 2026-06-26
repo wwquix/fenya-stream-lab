@@ -364,7 +364,7 @@ export const translations = {
     streamArchive: 'Stream Archive',
     archiveKicker: 'session catalog',
     archiveNote: 'Browse past streams as session volumes.',
-    selectedStream: 'selected stream',
+    selectedStream: 'Selected',
     duration: 'duration',
     peak: 'peak',
     word: 'word',

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { motion, useReducedMotion } from "motion/react"
 
 function CustomSelect({ id, label, value, options, onChange }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -39,43 +39,45 @@ function CustomSelect({ id, label, value, options, onChange }) {
       <span className="custom-select-label" id={`${id}-label`}>
         {label}
       </span>
-      <button
-        className="custom-select-trigger"
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        aria-labelledby={`${id}-label ${id}-value`}
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        <span id={`${id}-value`}>{selectedOption?.label}</span>
-      </button>
-      <AnimatePresence>
-        {isOpen ? (
-          <motion.div
-            className="custom-select-menu"
-            role="listbox"
-            aria-labelledby={`${id}-label`}
-            initial={prefersReducedMotion ? { opacity: 1, y: 0, scaleY: 1 } : { opacity: 0, y: -6, scaleY: 0.96 }}
-            animate={{ opacity: 1, y: 0, scaleY: 1 }}
-            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scaleY: 0.98 }}
-            transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            style={{ transformOrigin: 'top' }}
-          >
+      <div className="custom-select-shell">
+        <button
+          className="custom-select-trigger"
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-controls={`${id}-menu`}
+          aria-labelledby={`${id}-label ${id}-value`}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          <span id={`${id}-value`}>{selectedOption?.label}</span>
+        </button>
+        <motion.div
+          className="custom-select-menu"
+          id={`${id}-menu`}
+          role="listbox"
+          aria-labelledby={`${id}-label`}
+          aria-hidden={!isOpen}
+          initial={false}
+          animate={prefersReducedMotion ? { height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0 } : { height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0, y: isOpen ? 0 : -4 }}
+          transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <div className="custom-select-options">
             {options.map((option) => (
               <button
                 className={option.value === value ? 'is-selected' : ''}
                 type="button"
                 role="option"
                 aria-selected={option.value === value}
+                tabIndex={isOpen ? 0 : -1}
                 onClick={() => selectOption(option.value)}
                 key={option.value}
               >
                 {option.label}
               </button>
             ))}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+          </div>
+        </motion.div>
+      </div>
     </div>
   )
 }

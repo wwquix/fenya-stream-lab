@@ -20,6 +20,30 @@ npm run dev
 npm run build
 ```
 
+## Mock Twitch Backend
+
+Real Twitch credentials are not required yet. Twitch SMS verification is currently blocking real Developer credentials, so the backend uses mock mode with `TWITCH_PROVIDER=mock`.
+
+Create `.env` from `.env.example`, then run the backend:
+
+```bash
+npm run server
+```
+
+Test the endpoint:
+
+```text
+http://localhost:3001/api/twitch/fenya
+```
+
+Run the frontend separately:
+
+```bash
+npm run dev
+```
+
+Later, when Twitch Developer credentials are available, the real provider can replace the mock provider without changing the frontend API shape.
+
 ## Mock Data
 
 Mock data lives in `src/data/`:
@@ -32,7 +56,7 @@ Mock data lives in `src/data/`:
 
 All mock entities have stable IDs and connected references for future hover-linking.
 
-This project intentionally has no backend, auth, database, WebSocket, real stream tokens, or real Twitch/YouTube/Kick integrations.
+This project intentionally has no production backend, auth, database, WebSocket, real stream tokens, or real Twitch/YouTube/Kick integrations yet. The current backend is a local mock API only.
 
 ## Current Sections
 

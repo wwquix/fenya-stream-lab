@@ -134,7 +134,7 @@ export const streams = [
     date: '2026-06-07',
     duration: '2h 58m',
     category: 'Late-night highlights',
-    dominantWord: 'highlight',
+    dominantWord: 'хайлайт',
     metrics: {
       peakViewers: 7420,
       chatMessages: 22140,

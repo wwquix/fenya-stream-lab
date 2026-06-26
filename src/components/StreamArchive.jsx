@@ -22,6 +22,14 @@ function formatArchiveDate(value, t) {
   }).format(date)
 }
 
+function formatDuration(value, t) {
+  if (t.navTop !== 'Топ') {
+    return value
+  }
+
+  return value.replace(/(\d+)h\s*(\d+)m/, '$1ч $2м')
+}
+
 function StreamArchive({ streams, selectedStreamId, t }) {
   return (
     <Reveal as="section" className="section-panel stream-archive" id="archive" aria-labelledby="stream-archive-title">
@@ -48,7 +56,7 @@ function StreamArchive({ streams, selectedStreamId, t }) {
               <dl>
                 <div>
                   <dt>{t.duration}</dt>
-                  <dd>{stream.duration}</dd>
+                  <dd>{formatDuration(stream.duration, t)}</dd>
                 </div>
                 <div>
                   <dt>{t.peak}</dt>

@@ -6125,7 +6125,7 @@ body,
 
 .stream-archive .archive-track {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   align-items: stretch;
   gap: clamp(12px, 1.4vw, 16px);
   width: 100%;
@@ -6217,13 +6217,12 @@ body,
   max-width: 94px;
   margin: 0;
   padding: 4px 7px;
-  overflow: hidden;
+  overflow: visible;
   border-color: rgba(156, 255, 61, 0.2);
   color: rgba(156, 255, 61, 0.86);
   background: rgba(156, 255, 61, 0.07);
   font-size: 0.62rem;
   line-height: 1;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -6256,10 +6255,10 @@ body,
 }
 
 .stream-archive .archive-book dl div {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) max-content;
   min-width: 0;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
   padding: 8px 0;
   border-top: 0;
@@ -6272,14 +6271,14 @@ body,
 }
 
 .stream-archive .archive-book dd {
-  min-width: 0;
-  overflow: hidden;
+  min-width: max-content;
+  overflow: visible;
   color: rgba(246, 251, 250, 0.86);
   font-size: 0.82rem;
   font-weight: 760;
   line-height: 1.2;
   text-align: right;
-  text-overflow: ellipsis;
+  text-overflow: initial;
   white-space: nowrap;
 }
 
@@ -6292,5 +6291,199 @@ body,
   .stream-archive .archive-book.ripple-surface,
   .stream-archive .archive-book.is-current {
     min-height: 0;
+  }
+}
+
+/* Stream control dropdown: connected expanding custom select. */
+.stream-control-bar {
+  overflow: visible;
+}
+
+.stream-control-bar:has(.custom-select.is-open) {
+  z-index: 90;
+}
+
+.stream-control-bar .custom-select {
+  isolation: isolate;
+  overflow: visible;
+}
+
+.stream-control-bar .custom-select-shell {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(225, 235, 238, 0.11);
+  border-radius: 15px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.068), rgba(255, 255, 255, 0.02)),
+    rgba(4, 8, 11, 0.88);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.045);
+  transition: border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+}
+
+.stream-control-bar .custom-select.is-open .custom-select-shell {
+  border-color: rgba(156, 255, 61, 0.22);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.082), rgba(255, 255, 255, 0.024)),
+    rgba(5, 10, 13, 0.94);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.055),
+    0 18px 38px rgba(0, 0, 0, 0.18);
+}
+
+.stream-control-bar .custom-select::after,
+.stream-control-bar .custom-select.is-open::after {
+  display: none;
+}
+
+.stream-control-bar .custom-select-trigger,
+.stream-control-bar .custom-select.is-open .custom-select-trigger {
+  min-height: 42px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.stream-control-bar .custom-select-trigger::after {
+  transition: transform 220ms ease, border-color 220ms ease;
+}
+
+.stream-control-bar .custom-select.is-open .custom-select-trigger::after {
+  border-color: rgba(156, 255, 61, 0.82);
+  transform: translateY(2px) rotate(225deg);
+}
+
+.stream-control-bar .custom-select-menu {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  max-height: none;
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid rgba(225, 235, 238, 0.07);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  backdrop-filter: none;
+  transform-origin: top;
+  pointer-events: none;
+  will-change: height, opacity, transform;
+}
+
+.stream-control-bar .custom-select.is-open .custom-select-menu {
+  pointer-events: auto;
+}
+
+.stream-control-bar .custom-select-menu::before {
+  display: none;
+}
+
+.stream-control-bar .custom-select-options {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+}
+
+.stream-control-bar .custom-select-menu button {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  color: rgba(226, 238, 237, 0.76);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+
+.stream-control-bar .custom-select-menu button:hover {
+  color: rgba(246, 251, 250, 0.94);
+  background: rgba(94, 231, 255, 0.075);
+  transform: translateY(-1px);
+}
+
+.stream-control-bar .custom-select-menu button.is-selected {
+  color: rgba(156, 255, 61, 0.92);
+  background: rgba(156, 255, 61, 0.085);
+}
+
+.stream-control-bar .custom-select-menu[aria-hidden="true"] .custom-select-options {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.stream-control-bar .custom-select-options {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+/* Hero manual position polish */
+.hero-navbar {
+  position: relative !important;
+  top: -60px !important;
+}
+
+.hero-copy {
+  position: relative !important;
+  top: -10px !important;
+}
+
+@media (max-width: 768px) {
+  .hero-navbar {
+    top: -60px !important;
+  }
+
+  .hero-copy {
+    top: -10px !important;
+  }
+}
+/* Hero balanced compact layout */
+.hero-navbar {
+  position: relative !important;
+  top: 0 !important;
+}
+
+.hero-copy {
+  position: relative !important;
+  top: -22px !important;
+}
+
+/* Smaller hero height */
+.hero-wrap .hero-section {
+  min-height: 95vh !important;
+  padding-top: 64px !important;
+  padding-bottom: 56px !important;
+}
+
+/* Pull dashboard a bit closer */
+.hero-wrap {
+  margin-bottom: -16px !important;
+}
+
+/* Remove broken bottom stripe/fade */
+.hero-wrap::after {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .hero-navbar {
+    top: 0 !important;
+  }
+
+  .hero-copy {
+    top: -36px !important;
+  }
+
+  .hero-wrap .hero-section {
+    min-height: 74vh !important;
+    padding-top: 44px !important;
+    padding-bottom: 40px !important;
+  }
+
+  .hero-wrap {
+    margin-bottom: 0 !important;
   }
 }
