@@ -14,6 +14,7 @@ import { chatters } from './data/mockChatters.js'
 import { moderators } from './data/mockModerators.js'
 import { words } from './data/mockWords.js'
 import { streamEvents } from './data/mockEvents.js'
+import { useTwitchMetadata } from './hooks/useTwitchMetadata.js'
 import { translations } from './i18n/translations.js'
 
 const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary']
@@ -27,6 +28,7 @@ function App() {
   const [compareStreamId, setCompareStreamId] = useState('')
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
+  const twitchMetadata = useTwitchMetadata()
   const t = translations[language] ?? translations.ru
 
   useEffect(() => {
@@ -88,6 +90,7 @@ function App() {
           compareStreamId={compareStreamId}
           onStreamChange={handleStreamChange}
           onCompareChange={setCompareStreamId}
+          twitchMetadata={twitchMetadata}
           t={t}
         />
         <StreamPulse stream={selectedStream} compareStream={compareStream} events={streamEvents} t={t} />

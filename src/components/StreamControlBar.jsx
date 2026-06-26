@@ -1,6 +1,6 @@
 import CustomSelect from './CustomSelect.jsx'
 import { ProgressActionButton, Reveal } from './MotionPrimitives.jsx'
-import { formatStreamTitle } from '../i18n/translations.js'
+import { formatCategory, formatStreamTitle } from '../i18n/translations.js'
 
 function createCsv(stream) {
   const rows = [
@@ -21,17 +21,33 @@ function downloadCsv(stream) {
   URL.revokeObjectURL(url)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, t }) {
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
+  const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
   const preparingLabel = t.exportReport === 'Отчёт' ? 'Готовим...' : 'Preparing...'
   const compareOptions = [
     { value: '', label: t.compareOff },
     ...streams.filter((stream) => stream.id !== selectedStreamId).map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) })),
   ]
+  const metadataTitle = metadata?.streamTitle || formatStreamTitle(selectedStream, t)
+  const metadataCategory = metadata?.categoryName || formatCategory(selectedStream.summary?.bestCategory || selectedStream.category, t)
+  const hasLiveState = typeof metadata?.isLive === 'boolean'
+  const liveLabel = hasLiveState ? (metadata.isLive ? t.liveNow : t.offlineNow) : t.mockFallback
+  const metadataStateClass = metadata?.isLive ? 'is-live' : 'is-offline'
 
   return (
     <Reveal as="section" className="stream-control-bar glass-panel" aria-label="Stream controls">
+      <div className="stream-live-meta" aria-busy={twitchMetadata?.isLoading ? 'true' : 'false'}>
+        <span className={`stream-live-status ${metadataStateClass}`}>
+          {twitchMetadata?.isLoading ? t.loadingMetadata : liveLabel}
+        </span>
+        <div className="stream-live-copy">
+          <strong>{metadataTitle}</strong>
+          <span>{metadataCategory}</span>
+        </div>
+      </div>
+
       <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={streamOptions} onChange={onStreamChange} />
       <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
 
