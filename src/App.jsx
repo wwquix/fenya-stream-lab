@@ -8,6 +8,7 @@ import TopChatters from './components/TopChatters.jsx'
 import WordMutationCloud from './components/WordMutationCloud.jsx'
 import ModeratorUnit from './components/ModeratorUnit.jsx'
 import StreamArchive from './components/StreamArchive.jsx'
+import DashboardOverview from './components/DashboardOverview.jsx'
 import { currentStream, streams } from './data/mockStreams.js'
 import { chatters } from './data/mockChatters.js'
 import { moderators } from './data/mockModerators.js'
@@ -15,7 +16,7 @@ import { words } from './data/mockWords.js'
 import { streamEvents } from './data/mockEvents.js'
 import { translations } from './i18n/translations.js'
 
-const sectionIds = ['hero', 'stream-pulse', 'summary', 'chatters', 'speech', 'moderators', 'archive']
+const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary']
 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
@@ -95,6 +96,7 @@ function App() {
         <WordMutationCloud words={words} streamId={selectedStream.id} language={language} t={t} />
         <ModeratorUnit moderators={moderators} events={streamEvents} t={t} />
         <StreamArchive streams={streams} selectedStreamId={selectedStream.id} t={t} />
+        <DashboardOverview stream={selectedStream} moderators={moderators} events={streamEvents} chatters={chatters} t={t} />
       </div>
     </main>
   )

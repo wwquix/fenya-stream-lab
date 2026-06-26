@@ -50,7 +50,12 @@ export const translations = {
     messagesLeaderboard: 'По сообщениям',
     watchTimeLeaderboard: 'По времени',
     activityLeaderboard: 'По активности',
+    activityLeaderboardTitle: 'Активность',
     streakLeaderboard: 'По вовлечённости',
+    messagesTab: 'Сообщения',
+    watchTimeTab: 'Время',
+    paceTab: 'Темп',
+    engagementTab: 'Вовлечённость',
     activityPoints: 'очк.',
     activeNow: 'Активные сейчас',
     streamMessages: 'Сообщений за стрим',
@@ -86,7 +91,7 @@ export const translations = {
     moderatorPerformance: 'Работа модераторов',
     moderatorKicker: '',
     moderatorNote: 'Баны, муты, разбаны и скорость реакции команды.',
-    consoleTrainer: 'CS2 Console Trainer',
+    consoleTrainer: 'CS2 Тренажер консольных команд',
     consoleStart: 'Старт',
     consoleRunning: 'Идёт',
     consoleTask: 'Задача',
@@ -132,14 +137,14 @@ export const translations = {
     streamArchive: 'Архив стримов',
     archiveKicker: 'каталог сессий',
     archiveNote: 'Прошлые стримы как тома сессий.',
-    selectedStream: 'выбранный стрим',
-    duration: 'длительность',
-    peak: 'пик',
-    word: 'слово',
-    activity: 'активность',
-    currentStreamSummary: 'Итог текущего стрима',
-    summaryKicker: 'итоги стрима',
-    summaryNote: 'Полезные выводы из таймлайна, активности чата и событий модерации.',
+    selectedStream: 'Выбран',
+    duration: 'Длительность',
+    peak: 'Пик',
+    word: 'Слово',
+    activity: 'Активность',
+    currentStreamSummary: 'Итог выбранного стрима',
+    summaryKicker: 'ФИНАЛЬНАЯ СВОДКА',
+    summaryNote: 'Короткая выжимка по зрителям, чату, категориям и модерации.',
     mainCategory: 'Главная категория',
     sessionHealth: 'Состояние стрима',
     topChatter: 'Топ чатер',
@@ -210,6 +215,16 @@ export const translations = {
       'High pressure': 'Высокая нагрузка',
       'Calm session': 'Спокойный стрим',
     },
+    dominantWordLabels: {
+      queue: 'очередь',
+      ban: 'бан',
+      highlight: 'хайлайт',
+      diamond: 'алмаз',
+      'очередь': 'очередь',
+      'бан': 'бан',
+      'хайлайт': 'хайлайт',
+      'алмаз': 'алмаз',
+    },
   },
   en: {
     navTop: 'Top',
@@ -262,7 +277,12 @@ export const translations = {
     messagesLeaderboard: 'Messages',
     watchTimeLeaderboard: 'Watch time',
     activityLeaderboard: 'Activity',
+    activityLeaderboardTitle: 'Activity',
     streakLeaderboard: 'Engagement',
+    messagesTab: 'Messages',
+    watchTimeTab: 'Time',
+    paceTab: 'Pace',
+    engagementTab: 'Engagement',
     activityPoints: 'pts',
     activeNow: 'Active now',
     streamMessages: 'Stream messages',
@@ -375,6 +395,16 @@ export const translations = {
       '23:15 / 7.4K viewers': '23:15 · 7.4K viewers',
       '23:15 / 1,840 chat per min': '23:15 · 1,840/min',
     },
+    dominantWordLabels: {
+      queue: 'queue',
+      ban: 'ban',
+      highlight: 'highlight',
+      diamond: 'diamond',
+      'очередь': 'queue',
+      'бан': 'ban',
+      'хайлайт': 'highlight',
+      'алмаз': 'diamond',
+    },
   },
 }
 
@@ -396,4 +426,8 @@ export function formatStatusLabel(status, t) {
 
 export function formatSummaryValue(value, t) {
   return t.summaryValues?.[value] ?? value
+}
+
+export function formatDominantWord(value, t) {
+  return t.dominantWordLabels?.[value] ?? value
 }

@@ -2,7 +2,7 @@ export const words = [
   {
     id: 'word-main-1',
     streamId: 'stream-2026-06-23',
-    text: { ru: 'блять', en: 'damn' },
+    text: { ru: 'жёстко', en: 'intense' },
     count: 2209,
     size: 'hero',
     tone: 'violet',
@@ -11,7 +11,7 @@ export const words = [
   {
     id: 'word-main-2',
     streamId: 'stream-2026-06-23',
-    text: { ru: 'нахуй', en: 'no way' },
+    text: { ru: 'да ладно', en: 'no way' },
     count: 1490,
     size: 'xl',
     tone: 'cyan',

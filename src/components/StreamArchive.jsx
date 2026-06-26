@@ -1,9 +1,25 @@
 import ScannerTooltip from './ScannerTooltip.jsx'
 import { AnimatedNumber, Reveal, RippleSurface } from './MotionPrimitives.jsx'
-import { formatStreamTitle } from '../i18n/translations.js'
+import { formatDominantWord, formatStreamTitle } from '../i18n/translations.js'
 
 function formatPlainInteger(value) {
   return Math.round(value).toString()
+}
+
+function formatArchiveDate(value, t) {
+  const date = new Date(`${value}T00:00:00`)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  const isRussian = t.navTop === 'Топ'
+
+  return new Intl.DateTimeFormat(isRussian ? 'ru-RU' : 'en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
 }
 
 function StreamArchive({ streams, selectedStreamId, t }) {
@@ -23,9 +39,12 @@ function StreamArchive({ streams, selectedStreamId, t }) {
           <ScannerTooltip as={RippleSurface} key={stream.id} type="stream" id={stream.id} label={formatStreamTitle(stream, t)} className={`archive-book ${stream.id === selectedStreamId ? 'is-current' : ''}`}>
             <div className="archive-book-spine" aria-hidden="true" />
             <div className="archive-book-content">
-              {stream.id === selectedStreamId ? <span className="current-marker">{t.selectedStream}</span> : null}
-              <span className="archive-date">{stream.date}</span>
+              <div className="archive-book-topline">
+                <span className="archive-date">{formatArchiveDate(stream.date, t)}</span>
+                {stream.id === selectedStreamId ? <span className="current-marker">{t.selectedStream}</span> : null}
+              </div>
               <strong>{formatStreamTitle(stream, t)}</strong>
+              <span className="archive-divider" aria-hidden="true" />
               <dl>
                 <div>
                   <dt>{t.duration}</dt>
@@ -39,7 +58,7 @@ function StreamArchive({ streams, selectedStreamId, t }) {
                 </div>
                 <div>
                   <dt>{t.word}</dt>
-                  <dd>{stream.dominantWord}</dd>
+                  <dd>{formatDominantWord(stream.dominantWord, t)}</dd>
                 </div>
                 <div>
                   <dt>{t.activity}</dt>

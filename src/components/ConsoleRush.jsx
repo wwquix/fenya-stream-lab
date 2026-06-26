@@ -159,55 +159,58 @@ function ConsoleRush({ language = 'ru', t }) {
         </button>
       </div>
 
-      <div className="console-task">
+      <div className={`console-task${isRunning ? ' is-running' : ''}`}>
         <div>
           <span>{t.consoleTask}</span>
           <strong>{getLocalized(currentCommand.task, language)}</strong>
           {currentCommand.note ? <small>{getLocalized(currentCommand.note, language)}</small> : null}
         </div>
         <div className="console-badges">
-          <span>{t.consoleCategories[currentCommand.category]}</span>
+          {isRunning ? <span>{t.consoleCategories[currentCommand.category]}</span> : null}
           <span className={`difficulty-${currentCommand.difficulty}`}>{t.consoleDifficulties[currentCommand.difficulty]}</span>
         </div>
       </div>
 
-      <form className="console-input-row" onSubmit={handleSubmit}>
-        <label htmlFor="console-rush-input">&gt;</label>
-        <input
-          id="console-rush-input"
-          ref={inputRef}
-          value={inputValue}
-          onChange={(event) => setInputValue(event.target.value)}
-          placeholder={isRunning ? '_' : t.consolePressStart}
-          disabled={!isRunning}
-          autoComplete="off"
-          spellCheck="false"
-        />
-      </form>
+      {isRunning ? (
+        <>
+          <form className="console-input-row" onSubmit={handleSubmit}>
+            <label htmlFor="console-rush-input">&gt;</label>
+            <input
+              id="console-rush-input"
+              ref={inputRef}
+              value={inputValue}
+              onChange={(event) => setInputValue(event.target.value)}
+              placeholder="_"
+              autoComplete="off"
+              spellCheck="false"
+            />
+          </form>
 
-      <div className="console-progress" aria-label="Round timer">
-        <span />
-      </div>
+          <div className="console-progress" aria-label="Round timer">
+            <span />
+          </div>
 
-      <div className="console-stats">
-        <div><span>{t.consoleScore}</span><strong>{score}</strong></div>
-        <div><span>{t.consoleStreak}</span><strong>{streak}</strong></div>
-        <div><span>{t.consoleBest}</span><strong>{bestStreak}</strong></div>
-        <div><span>{t.consoleReaction}</span><strong>{reactionMs ? `${(reactionMs / 1000).toFixed(1)}s` : '--'}</strong></div>
-      </div>
+          <div className="console-stats">
+            <div><span>{t.consoleScore}</span><strong>{score}</strong></div>
+            <div><span>{t.consoleStreak}</span><strong>{streak}</strong></div>
+            <div><span>{t.consoleBest}</span><strong>{bestStreak}</strong></div>
+            <div><span>{t.consoleReaction}</span><strong>{reactionMs ? `${(reactionMs / 1000).toFixed(1)}s` : '--'}</strong></div>
+          </div>
 
-      <div className="console-actions">
-        <button type="button" onClick={handleHint} disabled={!isRunning}>{t.consoleHint}</button>
-        <button type="button" onClick={handleSkip} disabled={!isRunning}>{t.consoleSkip}</button>
-        <button type="button" onClick={handleReset}>{t.consoleReset}</button>
-        {hint ? <span>{hint}</span> : null}
-      </div>
+          <div className="console-actions">
+            <button type="button" onClick={handleHint}>{t.consoleHint}</button>
+            <button type="button" onClick={handleSkip}>{t.consoleSkip}</button>
+            <button type="button" onClick={handleReset}>{t.consoleReset}</button>
+            {hint ? <span>{hint}</span> : null}
+          </div>
 
-      <div className="console-log" aria-live="polite">
-        {feedbackLog.map((line, index) => (
-          <span key={`${line}-${index}`}>{line}</span>
-        ))}
-      </div>
+          <div className="console-log" aria-live="polite">
+            {feedbackLog.map((line, index) => (
+              <span key={`${line}-${index}`}>{line}</span>
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }

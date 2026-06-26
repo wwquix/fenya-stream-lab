@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from "motion/react"
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { MotionCard, Reveal } from './MotionPrimitives.jsx'
-import { formatCategory, formatEventLabel, formatSummaryValue } from '../i18n/translations.js'
+import { Reveal } from './MotionPrimitives.jsx'
+import { formatCategory, formatEventLabel, formatStreamTitle } from '../i18n/translations.js'
 
 function minutesFromTime(time) {
   const [hours, minutes] = time.split(':').map(Number)
@@ -222,15 +222,7 @@ function StreamPulse({ stream, compareStream, events, t }) {
         end: Math.min(selectedSegmentRange.end, visibleDomain[1]),
       }
     : null
-  const compareLabel = compareStream ? `Compare: ${compareStream.title}` : null
-  const insights = [
-    { label: t.peakMoment, value: formatSummaryValue(stream.summary.peakMoment, t) },
-    { label: t.strongestChatSpike, value: formatSummaryValue(stream.summary.strongestChatSpike, t) },
-    { label: t.bestCategory, value: formatCategory(stream.summary.bestCategory, t) },
-    { label: t.viewerDrop, value: formatSummaryValue(stream.summary.viewerDrop, t) },
-    { label: t.moderatorLoad, value: formatSummaryValue(stream.summary.moderatorLoad, t) },
-  ]
-
+  const compareLabel = compareStream ? `${t.compare}: ${formatStreamTitle(compareStream, t)}` : null
   useEffect(() => {
     if (!stream.categorySegments.some((segment) => segment.id === selectedSegmentId)) {
       setSelectedSegmentId(null)
@@ -414,20 +406,6 @@ function StreamPulse({ stream, compareStream, events, t }) {
         </div>
       </div>
 
-      <div className="pulse-summary" id="summary" aria-label={t.currentStreamSummary}>
-        <div className="pulse-summary-heading">
-          <span>{t.summaryKicker}</span>
-          <strong>{t.currentStreamSummary}</strong>
-        </div>
-        <div className="pulse-insight-grid">
-        {insights.map((insight) => (
-          <MotionCard as="article" className="pulse-insight-card glass-panel" key={insight.label}>
-            <span>{insight.label}</span>
-            <strong>{insight.value}</strong>
-          </MotionCard>
-        ))}
-        </div>
-      </div>
     </Reveal>
   )
 }
