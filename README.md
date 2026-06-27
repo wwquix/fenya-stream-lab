@@ -44,6 +44,34 @@ http://localhost:3001/api/analytics/fenya/current-stream
 
 Both endpoints return mock data for now: `/api/twitch/fenya` returns Twitch-like channel metadata, and `/api/analytics/fenya/current-stream` returns normalized stream analytics points, segments, and events. Real Twitch and chat integrations can replace these providers later without changing the frontend API shape.
 
+## Local analytics storage
+
+Stream analytics are currently mock/local and do not require Twitch credentials. The current stream data is stored in `server/data/fenya-current-stream.json`. If that file is missing or invalid, the backend recreates it from the mock analytics provider.
+
+Run the backend:
+
+```bash
+npm run server
+```
+
+View the current analytics:
+
+```text
+http://localhost:3001/api/analytics/fenya/current-stream
+```
+
+Add a generated mock sample with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sample
+```
+
+Reset analytics to the original mock data:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
+```
+
 Run the frontend separately:
 
 ```bash
