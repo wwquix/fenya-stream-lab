@@ -72,6 +72,42 @@ Reset analytics to the original mock data:
 Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
 ```
 
+## Mock live sampler
+
+The mock live sampler is for local development only. It simulates live stream analytics by periodically appending clamped mock points to `server/data/fenya-current-stream.json`. It does not use Twitch credentials, Twitch chat, or EventSub.
+
+Start the backend:
+
+```bash
+npm run server
+```
+
+Start the sampler:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sampler/start
+```
+
+Check sampler status:
+
+```text
+http://localhost:3001/api/analytics/fenya/sampler/status
+```
+
+Stop the sampler:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sampler/stop
+```
+
+Reset analytics:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
+```
+
+The default sampler interval is 10 seconds. Set `MOCK_SAMPLER_INTERVAL_MS` to override it or set `MOCK_SAMPLER_AUTOSTART=true` to start it with the backend. Auto-start is disabled by default. The Stream Pulse frontend polls only the analytics endpoint every 10 seconds and keeps its fallback data if the backend is unavailable.
+
 Run the frontend separately:
 
 ```bash

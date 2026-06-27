@@ -6,6 +6,11 @@ import process from "node:process";
 import { getTwitchChannelMetadata as getMockTwitchChannelMetadata } from "./providers/mockTwitchProvider.js";
 import { getTwitchChannelMetadata as getRealTwitchChannelMetadata } from "./providers/twitchProvider.js";
 import {
+  getMockLiveSamplerStatus,
+  startMockLiveSampler,
+  stopMockLiveSampler,
+} from "./services/mockLiveSampler.js";
+import {
   appendStreamPoint,
   loadCurrentStreamAnalytics,
   resetCurrentStreamAnalytics,
@@ -125,6 +130,28 @@ app.post("/api/analytics/fenya/reset", async (_req, res) => {
   }
 });
 
+app.post("/api/analytics/fenya/sampler/start", (_req, res) => {
+  res.json(startMockLiveSampler());
+});
+
+app.post("/api/analytics/fenya/sampler/stop", (_req, res) => {
+  res.json(stopMockLiveSampler());
+});
+
+app.get("/api/analytics/fenya/sampler/status", async (_req, res) => {
+  try {
+    res.json(await getMockLiveSamplerStatus());
+  } catch (error) {
+    console.error("Failed to load mock live sampler status:", error);
+    res.status(500).json({ error: true, message: "Failed to load mock live sampler status" });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Fenya Stream Lab backend listening on http://localhost:${port}`);
+
+  if (String(process.env.MOCK_SAMPLER_AUTOSTART).toLowerCase() === "true") {
+    const samplerStatus = startMockLiveSampler();
+    console.log(`Mock live sampler started with a ${samplerStatus.intervalMs}ms interval`);
+  }
 });

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+const STREAM_ANALYTICS_POLL_INTERVAL_MS = 10_000
+
 function normalizeString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
@@ -143,12 +145,17 @@ export function useStreamAnalytics() {
 
   useEffect(() => {
     const controller = new AbortController()
+    let isInitialRequest = true
+    let isRequestInFlight = false
 
     async function loadAnalytics() {
-      try {
-        setIsLoading(true)
-        setError(null)
+      if (isRequestInFlight) {
+        return
+      }
 
+      isRequestInFlight = true
+
+      try {
         const response = await fetch('/api/analytics/fenya/current-stream', {
           signal: controller.signal,
         })
@@ -158,24 +165,35 @@ export function useStreamAnalytics() {
         }
 
         const payload = await response.json()
-        setAnalytics(normalizeAnalytics(payload))
+        const normalizedAnalytics = normalizeAnalytics(payload)
+
+        if (!normalizedAnalytics) {
+          throw new Error('Stream analytics response has an invalid shape')
+        }
+
+        setAnalytics(normalizedAnalytics)
+        setError(null)
       } catch (requestError) {
         if (requestError.name === 'AbortError') {
           return
         }
 
-        setAnalytics(null)
         setError(requestError)
       } finally {
-        if (!controller.signal.aborted) {
+        isRequestInFlight = false
+
+        if (isInitialRequest && !controller.signal.aborted) {
+          isInitialRequest = false
           setIsLoading(false)
         }
       }
     }
 
     loadAnalytics()
+    const pollingInterval = window.setInterval(loadAnalytics, STREAM_ANALYTICS_POLL_INTERVAL_MS)
 
     return () => {
+      window.clearInterval(pollingInterval)
       controller.abort()
     }
   }, [])
