@@ -36,6 +36,14 @@ Test the endpoint:
 http://localhost:3001/api/twitch/fenya
 ```
 
+The mock backend also exposes provider-based stream analytics for the Stream Pulse chart:
+
+```text
+http://localhost:3001/api/analytics/fenya/current-stream
+```
+
+Both endpoints return mock data for now: `/api/twitch/fenya` returns Twitch-like channel metadata, and `/api/analytics/fenya/current-stream` returns normalized stream analytics points, segments, and events. Real Twitch and chat integrations can replace these providers later without changing the frontend API shape.
+
 Run the frontend separately:
 
 ```bash

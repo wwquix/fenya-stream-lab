@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 
+import { getCurrentStreamAnalytics } from "./providers/mockAnalyticsProvider.js";
 import { getTwitchChannelMetadata as getMockTwitchChannelMetadata } from "./providers/mockTwitchProvider.js";
 import { getTwitchChannelMetadata as getRealTwitchChannelMetadata } from "./providers/twitchProvider.js";
 
@@ -40,6 +41,22 @@ app.get("/api/twitch/fenya", async (_req, res) => {
     res.status(500).json({
       error: true,
       message: "Failed to load Twitch metadata",
+    });
+  }
+});
+
+app.get("/api/analytics/fenya/current-stream", async (_req, res) => {
+  try {
+    const channelLogin = process.env.TWITCH_CHANNEL_LOGIN || "fenya";
+    const analytics = await getCurrentStreamAnalytics(channelLogin);
+
+    res.json(analytics);
+  } catch (error) {
+    console.error("Failed to load stream analytics:", error);
+
+    res.status(500).json({
+      error: true,
+      message: "Failed to load stream analytics",
     });
   }
 });

@@ -14,6 +14,7 @@ import { chatters } from './data/mockChatters.js'
 import { moderators } from './data/mockModerators.js'
 import { words } from './data/mockWords.js'
 import { streamEvents } from './data/mockEvents.js'
+import { adaptAnalyticsForStreamPulse, useStreamAnalytics } from './hooks/useStreamAnalytics.js'
 import { useTwitchMetadata } from './hooks/useTwitchMetadata.js'
 import { translations } from './i18n/translations.js'
 
@@ -28,7 +29,11 @@ function App() {
   const [compareStreamId, setCompareStreamId] = useState('')
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
+  const streamAnalytics = useStreamAnalytics()
   const twitchMetadata = useTwitchMetadata()
+  const backendPulseData = selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
+  const streamPulseStream = backendPulseData?.stream ?? selectedStream
+  const streamPulseEvents = backendPulseData?.events ?? streamEvents
   const t = translations[language] ?? translations.ru
 
   useEffect(() => {
@@ -93,7 +98,7 @@ function App() {
           twitchMetadata={twitchMetadata}
           t={t}
         />
-        <StreamPulse stream={selectedStream} compareStream={compareStream} events={streamEvents} t={t} />
+        <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
         {/* Data map is reserved for a future real data pipeline view. */}
         <TopChatters chatters={chatters} language={language} t={t} />
         <WordMutationCloud words={words} streamId={selectedStream.id} language={language} t={t} />
