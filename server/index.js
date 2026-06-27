@@ -10,11 +10,17 @@ import {
   startMockLiveSampler,
   stopMockLiveSampler,
 } from "./services/mockLiveSampler.js";
+import { createMockChatMessage } from "./providers/mockChatProvider.js";
 import {
   appendStreamPoint,
   loadCurrentStreamAnalytics,
   resetCurrentStreamAnalytics,
 } from "./storage/streamAnalyticsStore.js";
+import {
+  appendMockChatMessage,
+  loadCurrentChatAnalytics,
+  resetCurrentChatAnalytics,
+} from "./storage/chatAnalyticsStore.js";
 
 dotenv.config();
 
@@ -67,6 +73,34 @@ app.get("/api/analytics/fenya/current-stream", async (_req, res) => {
       error: true,
       message: "Failed to load stream analytics",
     });
+  }
+});
+
+app.get("/api/chat/fenya/current-stream", async (_req, res) => {
+  try {
+    res.json(await loadCurrentChatAnalytics());
+  } catch (error) {
+    console.error("Failed to load chat analytics:", error);
+    res.status(500).json({ error: true, message: "Failed to load chat analytics" });
+  }
+});
+
+app.post("/api/chat/fenya/sample", async (req, res) => {
+  try {
+    const message = createMockChatMessage(req.body ?? {});
+    res.json(await appendMockChatMessage(message));
+  } catch (error) {
+    console.error("Failed to append mock chat message:", error);
+    res.status(500).json({ error: true, message: "Failed to append mock chat message" });
+  }
+});
+
+app.post("/api/chat/fenya/reset", async (_req, res) => {
+  try {
+    res.json(await resetCurrentChatAnalytics());
+  } catch (error) {
+    console.error("Failed to reset chat analytics:", error);
+    res.status(500).json({ error: true, message: "Failed to reset chat analytics" });
   }
 });
 

@@ -15,6 +15,7 @@ import { moderators } from './data/mockModerators.js'
 import { words } from './data/mockWords.js'
 import { streamEvents } from './data/mockEvents.js'
 import { adaptAnalyticsForStreamPulse, useStreamAnalytics } from './hooks/useStreamAnalytics.js'
+import { useChatAnalytics } from './hooks/useChatAnalytics.js'
 import { useTwitchMetadata } from './hooks/useTwitchMetadata.js'
 import { translations } from './i18n/translations.js'
 
@@ -30,6 +31,7 @@ function App() {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
   const streamAnalytics = useStreamAnalytics()
+  const chatAnalytics = useChatAnalytics()
   const twitchMetadata = useTwitchMetadata()
   const backendPulseData = selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
   const streamPulseStream = backendPulseData?.stream ?? selectedStream
@@ -100,7 +102,12 @@ function App() {
         />
         <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
         {/* Data map is reserved for a future real data pipeline view. */}
-        <TopChatters chatters={chatters} language={language} t={t} />
+        <TopChatters
+          chatters={chatters}
+          chatAnalytics={selectedStream.id === currentStream.id ? chatAnalytics.analytics : null}
+          language={language}
+          t={t}
+        />
         <WordMutationCloud words={words} streamId={selectedStream.id} language={language} t={t} />
         <ModeratorUnit moderators={moderators} events={streamEvents} t={t} />
         <StreamArchive streams={streams} selectedStreamId={selectedStream.id} t={t} />

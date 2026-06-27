@@ -21,15 +21,19 @@ function getActivityScore(chatter) {
   return Math.round(chatter.messages * getMultiplierValue(chatter.multiplier) + getWatchMinutes(chatter.watchTime) * 4)
 }
 
+function formatLeaderboardValue(value) {
+  return typeof value === 'number' ? formatPlainInteger(value) : value
+}
+
 function LeaderboardList({ metricLabel, items, renderMetric, descriptorOffset = 0, t }) {
   return (
     <ol>
       {items.slice(0, 5).map((chatter, index) => (
-        <li key={chatter.id}>
+        <li key={chatter.id ?? `${chatter.nickname}-${index}`}>
           <span className="leaderboard-rank">{index + 1}</span>
           <div>
             <strong>{chatter.nickname}</strong>
-            <small>{t.chatterDescriptors[(index + descriptorOffset) % t.chatterDescriptors.length] ?? formatStatusLabel(chatter.status, t)}</small>
+            <small>{chatter.note ?? t.chatterDescriptors[(index + descriptorOffset) % t.chatterDescriptors.length] ?? formatStatusLabel(chatter.status, t)}</small>
           </div>
           <em aria-label={metricLabel}>{renderMetric(chatter)}</em>
         </li>
@@ -66,7 +70,7 @@ function TabbedLeaderboard({ title, tabs, initialTabId }) {
   )
 }
 
-function TopChatters({ chatters, language = 'ru', t }) {
+function TopChatters({ chatters, chatAnalytics = null, language = 'ru', t }) {
   const byMessages = [...chatters].sort((first, second) => second.messages - first.messages)
   const byWatchTime = [...chatters].sort((first, second) => getWatchMinutes(second.watchTime) - getWatchMinutes(first.watchTime))
   const byActivity = [...chatters].sort((first, second) => getActivityScore(second) - getActivityScore(first))
@@ -75,9 +79,13 @@ function TopChatters({ chatters, language = 'ru', t }) {
     const firstScore = getWatchMinutes(first.watchTime) + first.messages / 10
     return secondScore - firstScore
   })
-  const totalMessages = chatters.reduce((total, chatter) => total + chatter.messages, 0)
-  const activeViewers = chatters.length
-  const topMultiplier = byActivity[0]?.multiplier ?? 'x1.0'
+  const totalMessages = chatAnalytics?.totalMessages ?? chatters.reduce((total, chatter) => total + chatter.messages, 0)
+  const activeViewers = chatAnalytics?.activeNow ?? chatters.length
+  const topMultiplier = chatAnalytics ? `x${chatAnalytics.activityPeak}` : byActivity[0]?.multiplier ?? 'x1.0'
+  const messagesLeaderboard = chatAnalytics?.leaderboards.messages ?? byMessages
+  const watchTimeLeaderboard = chatAnalytics?.leaderboards.watchTime ?? byWatchTime
+  const tempoLeaderboard = chatAnalytics?.leaderboards.tempo ?? byActivity
+  const engagementLeaderboard = chatAnalytics?.leaderboards.engagement ?? byStreak
 
   return (
     <Reveal as="section" className="section-panel top-chatters" id="chatters" aria-labelledby="top-chatters-title">
@@ -107,8 +115,8 @@ function TopChatters({ chatters, language = 'ru', t }) {
           <TabbedLeaderboard
             title={t.topChatters}
             tabs={[
-              { id: 'messages', label: t.messagesTab, metricLabel: t.messages, items: byMessages, renderMetric: (chatter) => formatPlainInteger(chatter.messages), descriptorOffset: 0, t },
-              { id: 'watchTime', label: t.watchTimeTab, metricLabel: t.watchTime, items: byWatchTime, renderMetric: (chatter) => chatter.watchTime, descriptorOffset: 5, t },
+              { id: 'messages', label: t.messagesTab, metricLabel: t.messages, items: messagesLeaderboard, renderMetric: (chatter) => formatLeaderboardValue(chatAnalytics ? chatter.value : chatter.messages), descriptorOffset: 0, t },
+              { id: 'watchTime', label: t.watchTimeTab, metricLabel: t.watchTime, items: watchTimeLeaderboard, renderMetric: (chatter) => chatAnalytics ? chatter.value : chatter.watchTime, descriptorOffset: 5, t },
             ]}
           />
         </div>
@@ -121,8 +129,8 @@ function TopChatters({ chatters, language = 'ru', t }) {
           <TabbedLeaderboard
             title={t.activityLeaderboardTitle}
             tabs={[
-              { id: 'pace', label: t.paceTab, metricLabel: t.activity, items: byActivity, renderMetric: (chatter) => chatter.multiplier, descriptorOffset: 10, t },
-              { id: 'engagement', label: t.engagementTab, metricLabel: t.watchTime, items: byStreak, renderMetric: (chatter) => `${Math.round(getWatchMinutes(chatter.watchTime) / 12)} ${t.activityPoints}`, descriptorOffset: 15, t },
+              { id: 'pace', label: t.paceTab, metricLabel: t.activity, items: tempoLeaderboard, renderMetric: (chatter) => chatAnalytics ? chatter.value : chatter.multiplier, descriptorOffset: 10, t },
+              { id: 'engagement', label: t.engagementTab, metricLabel: t.watchTime, items: engagementLeaderboard, renderMetric: (chatter) => chatAnalytics ? chatter.value : `${Math.round(getWatchMinutes(chatter.watchTime) / 12)} ${t.activityPoints}`, descriptorOffset: 15, t },
             ]}
           />
         </div>

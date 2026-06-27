@@ -8,7 +8,7 @@ const FENYA_CURRENT_STREAM_ANALYTICS = {
     { time: "19:20", viewers: 4700, messagesPerMinute: 940 },
     { time: "19:40", viewers: 6100, messagesPerMinute: 1680 },
     { time: "20:00", viewers: 7400, messagesPerMinute: 2140 },
-    { time: "20:20", viewers: 11001, messagesPerMinute: 3020 },
+    { time: "20:20", viewers: 14888, messagesPerMinute: 3020 },
     { time: "20:40", viewers: 11800, messagesPerMinute: 4100 },
     { time: "21:00", viewers: 12840, messagesPerMinute: 5360 },
     { time: "21:20", viewers: 10900, messagesPerMinute: 4580 },

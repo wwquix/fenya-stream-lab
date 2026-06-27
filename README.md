@@ -108,6 +108,36 @@ Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
 
 The default sampler interval is 10 seconds. Set `MOCK_SAMPLER_INTERVAL_MS` to override it or set `MOCK_SAMPLER_AUTOSTART=true` to start it with the backend. Auto-start is disabled by default. The Stream Pulse frontend polls only the analytics endpoint every 10 seconds and keeps its fallback data if the backend is unavailable.
 
+## Mock chat analytics
+
+Chat analytics are mock/local only and do not require real Twitch chat credentials. Data is stored in `server/data/fenya-current-chat.json`; the backend initializes or repairs the file from the mock chat provider when needed.
+
+Run the backend:
+
+```bash
+npm run server
+```
+
+View current chat analytics:
+
+```text
+http://localhost:3001/api/chat/fenya/current-stream
+```
+
+Append a mock chat message with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/chat/fenya/sample
+```
+
+Reset chat analytics:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/chat/fenya/reset
+```
+
+The “Зрители и чат” section polls this local endpoint every 10 seconds. If the backend is unavailable, the existing frontend mock chatter data remains active.
+
 Run the frontend separately:
 
 ```bash
