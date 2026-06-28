@@ -43,12 +43,10 @@ export function useTwitchMetadata() {
 
   useEffect(() => {
     const controller = new AbortController()
+    let isActive = true
 
     async function loadMetadata() {
       try {
-        setIsLoading(true)
-        setError(null)
-
         const response = await fetch('/api/twitch/fenya', {
           signal: controller.signal,
         })
@@ -58,16 +56,20 @@ export function useTwitchMetadata() {
         }
 
         const payload = await response.json()
-        setMetadata(normalizeMetadata(payload))
+
+        if (isActive) {
+          setMetadata(normalizeMetadata(payload))
+          setError(null)
+        }
       } catch (requestError) {
-        if (requestError.name === 'AbortError') {
+        if (!isActive || requestError.name === 'AbortError') {
           return
         }
 
         setMetadata(null)
         setError(requestError)
       } finally {
-        if (!controller.signal.aborted) {
+        if (isActive && !controller.signal.aborted) {
           setIsLoading(false)
         }
       }
@@ -76,6 +78,7 @@ export function useTwitchMetadata() {
     loadMetadata()
 
     return () => {
+      isActive = false
       controller.abort()
     }
   }, [])

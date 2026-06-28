@@ -1,353 +1,96 @@
 # Fenya Stream Lab
 
-MVP demo website for streamer analytics using mock data only. The current version is moving toward a clean premium dark analytics dashboard: cinematic glass hero, localized RU/EN UI, stream controls, stream pulse analytics, top chatters, speech patterns, moderator performance, bookshelf-style stream archive, and a bottom current stream summary.
+Premium dark streamer analytics dashboard built with React, Vite, JavaScript, and a local Express mock backend. The project uses mock/local data only and does not require Twitch credentials, real chat access, or EventSub.
 
-## Install
+## Project setup
+
+The repository intentionally uses one root `package.json` for both the frontend and local backend.
 
 ```bash
 npm install
 ```
 
-## Run Dev Server
+Run the backend:
+
+```bash
+npm run server
+```
+
+Run the frontend in a separate terminal:
 
 ```bash
 npm run dev
 ```
 
-## Build
+Create a production build:
 
 ```bash
 npm run build
 ```
 
-## Mock Twitch Backend
+The Vite development server proxies `/api` requests to `http://localhost:3001`.
 
-Real Twitch credentials are not required yet. Twitch SMS verification is currently blocking real Developer credentials, so the backend uses mock mode with `TWITCH_PROVIDER=mock`.
+## Local data safety
 
-Create `.env` from `.env.example`, then run the backend:
+Mutable backend state is stored under `server/data/*.json`. Runtime JSON files are ignored by Git:
 
-```bash
-npm run server
-```
+- `fenya-current-stream.json`
+- `fenya-current-chat.json`
+- `fenya-current-words.json`
+- `fenya-current-moderation.json`
+- `fenya-archive.json`
+- `fenya-current-summary.json`
 
-Test the endpoint:
+Committed `server/data/*.example.json` files document each response shape. Storage helpers recreate missing or invalid runtime files from their mock providers.
 
-```text
-http://localhost:3001/api/twitch/fenya
-```
+## API endpoints
 
-The mock backend also exposes provider-based stream analytics for the Stream Pulse chart:
+All endpoints are local mock APIs.
 
-```text
-http://localhost:3001/api/analytics/fenya/current-stream
-```
+| Group | Endpoint |
+| --- | --- |
+| Twitch-like metadata | `GET /api/twitch/fenya` |
+| Stream analytics | `GET /api/analytics/fenya/current-stream` |
+| Chat analytics | `GET /api/chat/fenya/current-stream` |
+| Word analytics | `GET /api/words/fenya/current-stream` |
+| Moderation analytics | `GET /api/moderation/fenya/current-stream` |
+| Stream archive | `GET /api/archive/fenya/streams` |
+| Current summary | `GET /api/summary/fenya/current-stream` |
+| Structured report | `GET /api/report/fenya/current-stream` |
+| JSON export | `GET /api/report/fenya/current-stream.json` |
+| Markdown export | `GET /api/report/fenya/current-stream.md` |
 
-Both endpoints return mock data for now: `/api/twitch/fenya` returns Twitch-like channel metadata, and `/api/analytics/fenya/current-stream` returns normalized stream analytics points, segments, and events. Real Twitch and chat integrations can replace these providers later without changing the frontend API shape.
+Base URL while the backend is running: `http://localhost:3001`.
 
-## Local analytics storage
+## Local mock controls
 
-Stream analytics are currently mock/local and do not require Twitch credentials. The current stream data is stored in `server/data/fenya-current-stream.json`. If that file is missing or invalid, the backend recreates it from the mock analytics provider.
-
-Run the backend:
-
-```bash
-npm run server
-```
-
-View the current analytics:
-
-```text
-http://localhost:3001/api/analytics/fenya/current-stream
-```
-
-Add a generated mock sample with PowerShell:
+PowerShell examples:
 
 ```powershell
+# Append mock samples
 Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sample
-```
-
-Reset analytics to the original mock data:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
-```
-
-## Mock live sampler
-
-The mock live sampler is for local development only. It simulates live stream analytics by periodically appending clamped mock points to `server/data/fenya-current-stream.json`. It does not use Twitch credentials, Twitch chat, or EventSub.
-
-Start the backend:
-
-```bash
-npm run server
-```
-
-Start the sampler:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sampler/start
-```
-
-Check sampler status:
-
-```text
-http://localhost:3001/api/analytics/fenya/sampler/status
-```
-
-Stop the sampler:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sampler/stop
-```
-
-Reset analytics:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
-```
-
-The default sampler interval is 10 seconds. Set `MOCK_SAMPLER_INTERVAL_MS` to override it or set `MOCK_SAMPLER_AUTOSTART=true` to start it with the backend. Auto-start is disabled by default. The Stream Pulse frontend polls only the analytics endpoint every 10 seconds and keeps its fallback data if the backend is unavailable.
-
-## Mock chat analytics
-
-Chat analytics are mock/local only and do not require real Twitch chat credentials. Data is stored in `server/data/fenya-current-chat.json`; the backend initializes or repairs the file from the mock chat provider when needed.
-
-Run the backend:
-
-```bash
-npm run server
-```
-
-View current chat analytics:
-
-```text
-http://localhost:3001/api/chat/fenya/current-stream
-```
-
-Append a mock chat message with PowerShell:
-
-```powershell
 Invoke-RestMethod -Method Post http://localhost:3001/api/chat/fenya/sample
-```
-
-Reset chat analytics:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/chat/fenya/reset
-```
-
-The “Зрители и чат” section polls this local endpoint every 10 seconds. If the backend is unavailable, the existing frontend mock chatter data remains active.
-
-Run the frontend separately:
-
-```bash
-npm run dev
-```
-
-Later, when Twitch Developer credentials are available, the real provider can replace the mock provider without changing the frontend API shape.
-
-## Mock word analytics
-
-Word analytics are mock/local only and require no real Twitch credentials. The normalized source can later be replaced by viewer chat word analytics or speech transcription without changing the frontend response shape.
-
-Runtime data is stored in `server/data/fenya-current-words.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-current-words.example.json`.
-
-Run the backend:
-
-```bash
-npm run server
-```
-
-View current word analytics:
-
-```text
-http://localhost:3001/api/words/fenya/current-stream
-```
-
-Append or update a mock word with PowerShell:
-
-```powershell
 Invoke-RestMethod -Method Post http://localhost:3001/api/words/fenya/sample
-```
-
-Reset word analytics:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/words/fenya/reset
-```
-
-The word cloud polls the local endpoint every 15 seconds and keeps its existing frontend mock words if the backend is unavailable or returns invalid data.
-
-## Mock moderation analytics
-
-Moderation analytics are mock/local only and require no real Twitch credentials. The provider can later be replaced by real Twitch moderation or EventSub data without changing the frontend response shape.
-
-Runtime data is stored in `server/data/fenya-current-moderation.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-current-moderation.example.json`.
-
-Run the backend:
-
-```bash
-npm run server
-```
-
-View current moderation analytics:
-
-```text
-http://localhost:3001/api/moderation/fenya/current-stream
-```
-
-Append a mock moderation event with PowerShell:
-
-```powershell
 Invoke-RestMethod -Method Post http://localhost:3001/api/moderation/fenya/sample
-```
-
-Reset moderation analytics:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/moderation/fenya/reset
-```
-
-The “Работа модераторов” section polls this local endpoint every 15 seconds and keeps the existing frontend moderator data if the backend is unavailable.
-
-## Mock stream archive
-
-The stream archive is mock/local only and requires no real Twitch credentials. The provider can later be replaced by real archived stream data without changing the frontend response shape.
-
-Runtime data is stored in `server/data/fenya-archive.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-archive.example.json`.
-
-Run the backend:
-
-```bash
-npm run server
-```
-
-View the stream archive:
-
-```text
-http://localhost:3001/api/archive/fenya/streams
-```
-
-View one archived stream:
-
-```text
-http://localhost:3001/api/archive/fenya/streams/2026-06-23
-```
-
-Append a mock archived stream with PowerShell:
-
-```powershell
 Invoke-RestMethod -Method Post http://localhost:3001/api/archive/fenya/sample
-```
 
-Reset the archive:
-
-```powershell
-Invoke-RestMethod -Method Post http://localhost:3001/api/archive/fenya/reset
-```
-
-The “Архив стримов” section fetches this local endpoint once on mount and keeps the existing frontend archive data if the backend is unavailable.
-
-## Mock stream summary
-
-The final stream summary is mock/local only and requires no real Twitch credentials. It can regenerate a combined summary from the current analytics, chat, word, moderation, and archive stores; unavailable sources fall back safely to demo data.
-
-Runtime data is stored in `server/data/fenya-current-summary.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-current-summary.example.json`.
-
-Run the backend:
-
-```bash
-npm run server
-```
-
-View the current stream summary:
-
-```text
-http://localhost:3001/api/summary/fenya/current-stream
-```
-
-Regenerate the summary with PowerShell:
-
-```powershell
+# Regenerate the combined summary
 Invoke-RestMethod -Method Post http://localhost:3001/api/summary/fenya/regenerate
-```
 
-Reset the summary to its initial mock data:
-
-```powershell
+# Reset local mock datasets
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/reset
+Invoke-RestMethod -Method Post http://localhost:3001/api/chat/fenya/reset
+Invoke-RestMethod -Method Post http://localhost:3001/api/words/fenya/reset
+Invoke-RestMethod -Method Post http://localhost:3001/api/moderation/fenya/reset
+Invoke-RestMethod -Method Post http://localhost:3001/api/archive/fenya/reset
 Invoke-RestMethod -Method Post http://localhost:3001/api/summary/fenya/reset
 ```
 
-The bottom final summary fetches this local endpoint once on mount. If the backend is unavailable or returns invalid data, the existing frontend summary cards remain active.
+The analytics mock sampler is optional:
 
-## Report/export endpoints
-
-The local report service combines available Twitch-like mock metadata, analytics, chat, word, moderation, archive, and summary data. It does not use real Twitch credentials or external APIs.
-
-View the structured JSON report:
-
-```text
-http://localhost:3001/api/report/fenya/current-stream.json
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sampler/start
+Invoke-RestMethod -Method Post http://localhost:3001/api/analytics/fenya/sampler/stop
 ```
 
-The same JSON is also available at:
-
-```text
-http://localhost:3001/api/report/fenya/current-stream
-```
-
-View the readable Russian Markdown report:
-
-```text
-http://localhost:3001/api/report/fenya/current-stream.md
-```
-
-## Mock Data
-
-Mock data lives in `src/data/`:
-
-- `mockStreams.js`
-- `mockChatters.js`
-- `mockModerators.js`
-- `mockWords.js`
-- `mockEvents.js`
-
-All mock entities have stable IDs and connected references for future hover-linking.
-
-## Repository hygiene / local data
-
-Runtime backend state is written to `server/data/*.json`. These mutable files are ignored by Git, while matching `.example.json` files document safe demo shapes. The storage helpers automatically recreate runtime stream, chat, word, moderation, archive, and summary JSON from their mock providers when files are missing or invalid.
-
-This repository intentionally uses one root `package.json` for both the Vite frontend and the local Express mock backend, so `express`, `cors`, and `dotenv` remain root runtime dependencies. Express 5 is used for the local development server; production backend separation and hardening can be handled later if deployment requirements change.
-
-Generated AI-tool configuration copies were removed from the repository root. `AGENTS.md`, project documentation, and the single `.codex` skill configuration remain as the maintained project guidance.
-
-This project intentionally has no production backend, auth, database, WebSocket, real stream tokens, or real Twitch/YouTube/Kick integrations yet. The current backend is a local mock API only.
-
-## Current Sections
-
-- `Hero` with premium cinematic background slot, glass navigation, language switch, and dashboard CTA.
-- `SectionRail` powers the desktop left-side floating section rail.
-- `BackToTop` powers the floating return control after scrolling.
-- `CustomSelect` powers the styled dropdown controls.
-- `StreamControlBar` powers selected stream, compare mode, category focus, and export placeholders.
-- `DashboardOverview` powers the bottom current stream summary insight cards.
-- `FloatingStats` liquid glass analytics cards.
-- `StreamPulse` powers the selected stream chart, Brush timeline inspection, comparison line, preview tooltip, event markers, insight cards, and category timeline.
-- `StreamDataMap` is reserved for a future real data pipeline view and is not rendered in the current main page.
-- `TopChatters` powers the visible Top Chatters leaderboard cards.
-- `WordMutationCloud` powers the visible Speech Patterns word cloud.
-- `ModeratorUnit` powers the visible Moderator Performance cards.
-- `StreamArchive` powers the visible bookshelf-style Stream Archive prototype.
-- `ScannerTooltip` reusable scanner hover wrapper with `data-entity-type` and `data-entity-id`.
-- `src/i18n/translations.js` contains the lightweight Russian/English translation map.
-
-`LiquidSurfaceBand` and `ExperimentsArena` remain available as future components, but they are not rendered in the current main page flow.
-
-## Future Roadmap
-
-1. Replace the CSS hero background slot with a real premium image/video asset.
-2. Replace `LiquidSurfaceBand` with a real WebGL liquid shader when the visual direction is ready.
-3. Add full hover-linking between related stream, chatter, word, moderator, and event entities.
-4. Expand ExperimentsArena into richer chatter battles, giveaways, and stream experiments.
-5. Later connect real stream/chat/moderation APIs.
+Frontend hooks keep the existing mock UI active when the backend is unavailable or returns invalid data.
