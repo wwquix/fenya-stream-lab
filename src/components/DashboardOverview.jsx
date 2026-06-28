@@ -14,7 +14,63 @@ function getAverageReactionTime(moderators) {
   return `${average.toFixed(1)}s`
 }
 
-function DashboardOverview({ stream, moderators, events, chatters, t }) {
+function getLargestHighlight(highlights, field) {
+  return highlights.reduce((largest, highlight) => (
+    (highlight[field] ?? -1) > (largest?.[field] ?? -1) ? highlight : largest
+  ), null)
+}
+
+function createBackendCards(streamSummary, t) {
+  if (!streamSummary?.metrics || !streamSummary.topChatters?.length || !streamSummary.insights?.length) {
+    return null
+  }
+
+  const viewerPeak = getLargestHighlight(streamSummary.highlights ?? [], 'viewers')
+  const chatPeak = getLargestHighlight(streamSummary.highlights ?? [], 'messagesPerMinute')
+  const topChatter = streamSummary.topChatters[0]
+  const numberFormat = new Intl.NumberFormat()
+
+  return [
+    {
+      label: t.peakMoment,
+      value: viewerPeak
+        ? `${viewerPeak.time} · ${numberFormat.format(viewerPeak.viewers)}`
+        : numberFormat.format(streamSummary.metrics.peakViewers),
+      detail: viewerPeak?.label ?? t.highestAudience,
+      variant: 'highlight',
+    },
+    {
+      label: t.strongestChatSpike,
+      value: chatPeak
+        ? `${chatPeak.time} · ${numberFormat.format(chatPeak.messagesPerMinute)}/${t.chatPerMin.split('/').at(-1).trim()}`
+        : numberFormat.format(streamSummary.metrics.totalMessages),
+      detail: chatPeak?.label ?? t.busiestChat,
+      variant: 'highlight',
+    },
+    {
+      label: t.mainCategory,
+      value: formatCategory(streamSummary.categoryName, t),
+      detail: t.mostActiveSegment,
+    },
+    {
+      label: t.moderatorLoad,
+      value: numberFormat.format(streamSummary.metrics.moderationActions),
+      detail: `${numberFormat.format(streamSummary.metrics.timeouts)} ${t.timeouts}, ${numberFormat.format(streamSummary.metrics.bans)} ${t.bans}`,
+    },
+    {
+      label: t.sessionHealth,
+      value: streamSummary.verdict,
+      detail: streamSummary.insights[0],
+    },
+    {
+      label: t.topChatter,
+      value: topChatter.nickname,
+      detail: `${numberFormat.format(topChatter.messages)} ${t.messages}${topChatter.note ? `, ${topChatter.note}` : ''}`,
+    },
+  ]
+}
+
+function DashboardOverview({ stream, moderators, events, chatters, streamSummary, t }) {
   const streamEvents = events.filter((event) => event.streamId === stream.id)
   const moderationEvents = streamEvents.filter((event) => event.type === 'ban' || event.type === 'timeout')
   const topChatter = chatters.reduce((top, chatter) => (chatter.messages > top.messages ? chatter : top), chatters[0])
@@ -22,7 +78,7 @@ function DashboardOverview({ stream, moderators, events, chatters, t }) {
   const moderatorLoad = moderationEvents.length >= 4 ? 'High' : moderationEvents.length >= 2 ? 'Medium' : 'Low'
   const fallbackHealth = stream.metrics.toxicityIndex >= 75 ? 'Intense but stable' : stream.metrics.toxicityIndex >= 55 ? 'Balanced activity' : 'Calm session'
 
-  const cards = [
+  const fallbackCards = [
     {
       label: t.peakMoment,
       value: formatSummaryValue(stream.summary?.peakMoment ?? 'n/a', t),
@@ -56,6 +112,7 @@ function DashboardOverview({ stream, moderators, events, chatters, t }) {
       detail: `${topChatter.messages.toLocaleString()} ${t.messages}, ${topChatter.watchTime} ${t.watchTime}`,
     },
   ]
+  const cards = createBackendCards(streamSummary, t) ?? fallbackCards
 
   return (
     <Reveal as="section" className="section-panel dashboard-overview" id="summary" aria-labelledby="dashboard-overview-title" data-entity-type="stream" data-entity-id={stream.id}>

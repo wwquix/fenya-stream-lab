@@ -210,6 +210,98 @@ Invoke-RestMethod -Method Post http://localhost:3001/api/moderation/fenya/reset
 
 The “Работа модераторов” section polls this local endpoint every 15 seconds and keeps the existing frontend moderator data if the backend is unavailable.
 
+## Mock stream archive
+
+The stream archive is mock/local only and requires no real Twitch credentials. The provider can later be replaced by real archived stream data without changing the frontend response shape.
+
+Runtime data is stored in `server/data/fenya-archive.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-archive.example.json`.
+
+Run the backend:
+
+```bash
+npm run server
+```
+
+View the stream archive:
+
+```text
+http://localhost:3001/api/archive/fenya/streams
+```
+
+View one archived stream:
+
+```text
+http://localhost:3001/api/archive/fenya/streams/2026-06-23
+```
+
+Append a mock archived stream with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/archive/fenya/sample
+```
+
+Reset the archive:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/archive/fenya/reset
+```
+
+The “Архив стримов” section fetches this local endpoint once on mount and keeps the existing frontend archive data if the backend is unavailable.
+
+## Mock stream summary
+
+The final stream summary is mock/local only and requires no real Twitch credentials. It can regenerate a combined summary from the current analytics, chat, word, moderation, and archive stores; unavailable sources fall back safely to demo data.
+
+Runtime data is stored in `server/data/fenya-current-summary.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-current-summary.example.json`.
+
+Run the backend:
+
+```bash
+npm run server
+```
+
+View the current stream summary:
+
+```text
+http://localhost:3001/api/summary/fenya/current-stream
+```
+
+Regenerate the summary with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/summary/fenya/regenerate
+```
+
+Reset the summary to its initial mock data:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/summary/fenya/reset
+```
+
+The bottom final summary fetches this local endpoint once on mount. If the backend is unavailable or returns invalid data, the existing frontend summary cards remain active.
+
+## Report/export endpoints
+
+The local report service combines available Twitch-like mock metadata, analytics, chat, word, moderation, archive, and summary data. It does not use real Twitch credentials or external APIs.
+
+View the structured JSON report:
+
+```text
+http://localhost:3001/api/report/fenya/current-stream.json
+```
+
+The same JSON is also available at:
+
+```text
+http://localhost:3001/api/report/fenya/current-stream
+```
+
+View the readable Russian Markdown report:
+
+```text
+http://localhost:3001/api/report/fenya/current-stream.md
+```
+
 ## Mock Data
 
 Mock data lives in `src/data/`:
@@ -224,7 +316,7 @@ All mock entities have stable IDs and connected references for future hover-link
 
 ## Repository hygiene / local data
 
-Runtime backend state is written to `server/data/*.json`. These mutable files are ignored by Git, while matching `.example.json` files document safe demo shapes. The storage helpers automatically recreate runtime stream, chat, word, and moderation JSON from their mock providers when files are missing or invalid.
+Runtime backend state is written to `server/data/*.json`. These mutable files are ignored by Git, while matching `.example.json` files document safe demo shapes. The storage helpers automatically recreate runtime stream, chat, word, moderation, archive, and summary JSON from their mock providers when files are missing or invalid.
 
 This repository intentionally uses one root `package.json` for both the Vite frontend and the local Express mock backend, so `express`, `cors`, and `dotenv` remain root runtime dependencies. Express 5 is used for the local development server; production backend separation and hardening can be handled later if deployment requirements change.
 

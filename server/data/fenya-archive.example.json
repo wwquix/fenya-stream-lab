@@ -1,0 +1,42 @@
+{
+  "channelLogin": "fenya",
+  "updatedAt": "2026-06-28T18:30:00.000Z",
+  "streams": [
+    {
+      "streamId": "2026-06-23",
+      "date": "2026-06-23",
+      "title": "Вечерний рейтинговый стрим",
+      "categoryName": "Counter-Strike 2",
+      "startedAt": "2026-06-23T18:30:00.000Z",
+      "endedAt": "2026-06-23T22:50:00.000Z",
+      "durationMinutes": 260,
+      "averageViewers": 8420,
+      "peakViewers": 12840,
+      "totalMessages": 10435,
+      "uniqueChatters": 1280,
+      "moderationActions": 842,
+      "topWords": ["клатч", "камбэк", "жёстко"],
+      "topMoment": "Пик онлайна во время клатча на 20:48",
+      "summary": "Стрим с плавным ростом онлайна, сильным пиком в CS2 и активным чатом.",
+      "status": "completed"
+    },
+    {
+      "streamId": "2026-06-19",
+      "date": "2026-06-19",
+      "title": "Разбор очереди сообщества",
+      "categoryName": "Minecraft / Общение",
+      "startedAt": "2026-06-19T18:50:00.000Z",
+      "endedAt": "2026-06-19T22:32:00.000Z",
+      "durationMinutes": 222,
+      "averageViewers": 6780,
+      "peakViewers": 9840,
+      "totalMessages": 13910,
+      "uniqueChatters": 1742,
+      "moderationActions": 121,
+      "topWords": ["очередь", "постройка", "голосование"],
+      "topMoment": "Пик голосования сообщества на 20:10",
+      "summary": "Спокойная смешанная сессия с разбором построек и активным голосованием зрителей.",
+      "status": "completed"
+    }
+  ]
+}

@@ -30,7 +30,41 @@ function formatDuration(value, t) {
   return value.replace(/(\d+)h\s*(\d+)m/, '$1ч $2м')
 }
 
-function StreamArchive({ streams, selectedStreamId, t }) {
+function formatDurationMinutes(durationMinutes) {
+  const hours = Math.floor(durationMinutes / 60)
+  const minutes = durationMinutes % 60
+  return `${hours}h ${minutes}m`
+}
+
+function adaptBackendStreams(archive) {
+  if (!Array.isArray(archive?.streams) || archive.streams.length === 0) {
+    return null
+  }
+
+  return archive.streams.map((stream) => ({
+    id: stream.streamId.startsWith('stream-') ? stream.streamId : `stream-${stream.streamId}`,
+    title: stream.title,
+    date: stream.date,
+    duration: formatDurationMinutes(stream.durationMinutes),
+    category: stream.categoryName,
+    dominantWord: stream.topWords[0],
+    metrics: {
+      peakViewers: stream.peakViewers,
+      chatMessages: stream.totalMessages,
+      activeChatters: stream.uniqueChatters,
+      moderatorActions: stream.moderationActions,
+    },
+    archiveMetrics: {
+      averageViewers: stream.averageViewers,
+      topMoment: stream.topMoment,
+      summary: stream.summary,
+    },
+  }))
+}
+
+function StreamArchive({ streams, archive, selectedStreamId, t }) {
+  const activeStreams = adaptBackendStreams(archive) ?? streams
+
   return (
     <Reveal as="section" className="section-panel stream-archive" id="archive" aria-labelledby="stream-archive-title">
       <div className="section-heading">
@@ -43,7 +77,7 @@ function StreamArchive({ streams, selectedStreamId, t }) {
 
       <div className="archive-bookshelf" aria-label="Stream archive bookshelf">
         <div className="archive-track">
-        {streams.map((stream) => (
+        {activeStreams.map((stream) => (
           <ScannerTooltip as={RippleSurface} key={stream.id} type="stream" id={stream.id} label={formatStreamTitle(stream, t)} className={`archive-book ${stream.id === selectedStreamId ? 'is-current' : ''}`}>
             <div className="archive-book-spine" aria-hidden="true" />
             <div className="archive-book-content">
@@ -69,9 +103,10 @@ function StreamArchive({ streams, selectedStreamId, t }) {
                   <dd>{formatDominantWord(stream.dominantWord, t)}</dd>
                 </div>
                 <div>
-                  <dt>{t.activity}</dt>
+                  <dt>{stream.archiveMetrics ? t.moderationActions : t.activity}</dt>
                   <dd>
-                    <AnimatedNumber value={stream.metrics.toxicityIndex} format={formatPlainInteger} />/100
+                    <AnimatedNumber value={stream.archiveMetrics ? stream.metrics.moderatorActions : stream.metrics.toxicityIndex} format={formatPlainInteger} />
+                    {stream.archiveMetrics ? null : '/100'}
                   </dd>
                 </div>
               </dl>

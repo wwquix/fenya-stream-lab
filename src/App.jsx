@@ -19,6 +19,8 @@ import { useChatAnalytics } from './hooks/useChatAnalytics.js'
 import { useTwitchMetadata } from './hooks/useTwitchMetadata.js'
 import { useWordAnalytics } from './hooks/useWordAnalytics.js'
 import { useModerationAnalytics } from './hooks/useModerationAnalytics.js'
+import { useStreamArchive } from './hooks/useStreamArchive.js'
+import { useStreamSummary } from './hooks/useStreamSummary.js'
 import { translations } from './i18n/translations.js'
 
 const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary']
@@ -37,6 +39,8 @@ function App() {
   const twitchMetadata = useTwitchMetadata()
   const wordAnalytics = useWordAnalytics()
   const moderationAnalytics = useModerationAnalytics()
+  const streamArchive = useStreamArchive()
+  const streamSummary = useStreamSummary()
   const backendPulseData = selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
   const streamPulseStream = backendPulseData?.stream ?? selectedStream
   const streamPulseEvents = backendPulseData?.events ?? streamEvents
@@ -125,8 +129,15 @@ function App() {
           moderationAnalytics={selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null}
           t={t}
         />
-        <StreamArchive streams={streams} selectedStreamId={selectedStream.id} t={t} />
-        <DashboardOverview stream={selectedStream} moderators={moderators} events={streamEvents} chatters={chatters} t={t} />
+        <StreamArchive streams={streams} archive={streamArchive.archive} selectedStreamId={selectedStream.id} t={t} />
+        <DashboardOverview
+          stream={selectedStream}
+          moderators={moderators}
+          events={streamEvents}
+          chatters={chatters}
+          streamSummary={selectedStream.id === currentStream.id ? streamSummary.summary : null}
+          t={t}
+        />
       </div>
     </main>
   )

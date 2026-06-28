@@ -1,0 +1,47 @@
+{
+  "streamId": "2026-06-23",
+  "title": "Вечерний рейтинговый стрим",
+  "categoryName": "Counter-Strike 2",
+  "updatedAt": "2026-06-23T22:50:00.000Z",
+  "metrics": {
+    "durationMinutes": 260,
+    "averageViewers": 8420,
+    "peakViewers": 12840,
+    "totalMessages": 10435,
+    "uniqueChatters": 1280,
+    "moderationActions": 842,
+    "timeouts": 526,
+    "bans": 74
+  },
+  "highlights": [
+    {
+      "time": "20:50",
+      "label": "Пик онлайна во время клатча",
+      "type": "viewer-peak",
+      "viewers": 12840,
+      "messagesPerMinute": 5074
+    },
+    {
+      "time": "21:20",
+      "label": "Смена категории и новый всплеск чата",
+      "type": "category-change",
+      "viewers": 11341,
+      "messagesPerMinute": 4380
+    }
+  ],
+  "topWords": [
+    { "text": "клатч", "count": 460 },
+    { "text": "камбэк", "count": 390 },
+    { "text": "жёстко", "count": 360 }
+  ],
+  "topChatters": [
+    { "nickname": "agapuku106", "messages": 1840, "note": "Часто пишет в пике" },
+    { "nickname": "fen_signal_042", "messages": 1512, "note": "Поддерживает темп чата" }
+  ],
+  "insights": [
+    "Онлайн рос плавно и достиг максимума в центральном CS2-сегменте.",
+    "Чат сохранял высокий темп после пика и активно реагировал на смену категории.",
+    "Модерация выдержала нагрузку без заметного падения темпа обсуждения."
+  ],
+  "verdict": "Сильный эфир с устойчивым онлайном"
+}

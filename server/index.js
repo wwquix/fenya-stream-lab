@@ -13,6 +13,7 @@ import {
 import { createMockChatMessage } from "./providers/mockChatProvider.js";
 import { createMockWordUpdate } from "./providers/mockWordsProvider.js";
 import { createMockModerationEvent } from "./providers/mockModerationProvider.js";
+import { createMockArchivedStream } from "./providers/mockArchiveProvider.js";
 import {
   appendStreamPoint,
   loadCurrentStreamAnalytics,
@@ -33,6 +34,21 @@ import {
   loadCurrentModerationAnalytics,
   resetCurrentModerationAnalytics,
 } from "./storage/moderationAnalyticsStore.js";
+import {
+  appendMockArchivedStream,
+  getArchivedStreamById,
+  loadStreamArchive,
+  resetStreamArchive,
+} from "./storage/archiveStore.js";
+import {
+  loadCurrentStreamSummary,
+  regenerateCurrentStreamSummary,
+  resetCurrentStreamSummary,
+} from "./storage/summaryStore.js";
+import {
+  buildCurrentStreamReport,
+  formatCurrentStreamReportMarkdown,
+} from "./services/reportService.js";
 
 dotenv.config();
 
@@ -192,6 +208,104 @@ app.post("/api/moderation/fenya/reset", async (_req, res) => {
   } catch (error) {
     console.error("Failed to reset moderation analytics:", error);
     res.status(500).json({ error: true, message: "Failed to reset moderation analytics" });
+  }
+});
+
+app.get("/api/archive/fenya/streams", async (_req, res) => {
+  try {
+    res.json(await loadStreamArchive());
+  } catch (error) {
+    console.error("Failed to load stream archive:", error);
+    res.status(500).json({ error: true, message: "Failed to load stream archive" });
+  }
+});
+
+app.get("/api/archive/fenya/streams/:streamId", async (req, res) => {
+  try {
+    const stream = await getArchivedStreamById(req.params.streamId);
+
+    if (!stream) {
+      res.status(404).json({ error: "Archived stream not found" });
+      return;
+    }
+
+    res.json(stream);
+  } catch (error) {
+    console.error("Failed to load archived stream:", error);
+    res.status(500).json({ error: true, message: "Failed to load archived stream" });
+  }
+});
+
+app.post("/api/archive/fenya/sample", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    res.json(await appendMockArchivedStream(createMockArchivedStream(body)));
+  } catch (error) {
+    if (error instanceof TypeError) {
+      res.status(400).json({ error: true, message: error.message });
+      return;
+    }
+
+    console.error("Failed to append mock archived stream:", error);
+    res.status(500).json({ error: true, message: "Failed to append mock archived stream" });
+  }
+});
+
+app.post("/api/archive/fenya/reset", async (_req, res) => {
+  try {
+    res.json(await resetStreamArchive());
+  } catch (error) {
+    console.error("Failed to reset stream archive:", error);
+    res.status(500).json({ error: true, message: "Failed to reset stream archive" });
+  }
+});
+
+app.get("/api/summary/fenya/current-stream", async (_req, res) => {
+  try {
+    res.json(await loadCurrentStreamSummary());
+  } catch (error) {
+    console.error("Failed to load stream summary:", error);
+    res.status(500).json({ error: true, message: "Failed to load stream summary" });
+  }
+});
+
+app.post("/api/summary/fenya/regenerate", async (_req, res) => {
+  try {
+    res.json(await regenerateCurrentStreamSummary());
+  } catch (error) {
+    console.error("Failed to regenerate stream summary:", error);
+    res.status(500).json({ error: true, message: "Failed to regenerate stream summary" });
+  }
+});
+
+app.post("/api/summary/fenya/reset", async (_req, res) => {
+  try {
+    res.json(await resetCurrentStreamSummary());
+  } catch (error) {
+    console.error("Failed to reset stream summary:", error);
+    res.status(500).json({ error: true, message: "Failed to reset stream summary" });
+  }
+});
+
+async function sendJsonReport(_req, res) {
+  try {
+    res.json(await buildCurrentStreamReport());
+  } catch (error) {
+    console.error("Failed to build stream report:", error);
+    res.status(500).json({ error: true, message: "Failed to build stream report" });
+  }
+}
+
+app.get("/api/report/fenya/current-stream", sendJsonReport);
+app.get("/api/report/fenya/current-stream.json", sendJsonReport);
+
+app.get("/api/report/fenya/current-stream.md", async (_req, res) => {
+  try {
+    const report = await buildCurrentStreamReport();
+    res.type("text/markdown; charset=utf-8").send(formatCurrentStreamReportMarkdown(report));
+  } catch (error) {
+    console.error("Failed to build Markdown stream report:", error);
+    res.status(500).json({ error: true, message: "Failed to build Markdown stream report" });
   }
 });
 
