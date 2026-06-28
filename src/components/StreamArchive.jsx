@@ -85,7 +85,7 @@ function StreamArchive({ streams, archive, selectedStreamId, t }) {
                 <span className="archive-date">{formatArchiveDate(stream.date, t)}</span>
                 {stream.id === selectedStreamId ? <span className="current-marker">{t.selectedStream}</span> : null}
               </div>
-              <strong>{formatStreamTitle(stream, t)}</strong>
+              <h3 className="archive-book-title">{formatStreamTitle(stream, t)}</h3>
               <span className="archive-divider" aria-hidden="true" />
               <dl>
                 <div>

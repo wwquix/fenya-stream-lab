@@ -6263,16 +6263,26 @@ body,
   white-space: nowrap;
 }
 
-.stream-archive .archive-book strong {
+.stream-archive .archive-book .archive-book-title {
   display: -webkit-box;
-  min-height: 2.42em;
+  width: 100%;
+  min-height: 3.63em;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 0 auto;
   margin: 13px 0 0;
   overflow: hidden;
   color: rgba(246, 251, 250, 0.94);
+  font-family: var(--font-heading);
   font-size: 1.05rem;
+  font-weight: 600;
   line-height: 1.21;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
   white-space: normal;
 }
 
