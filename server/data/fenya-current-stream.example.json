@@ -1,0 +1,46 @@
+{
+  "streamId": "2026-06-23",
+  "title": "Вечерний рейтинговый стрим",
+  "categoryName": "Counter-Strike 2",
+  "startedAt": "2026-06-26T18:30:00.000Z",
+  "points": [
+    {
+      "time": "19:00",
+      "viewers": 3200,
+      "messagesPerMinute": 650
+    },
+    {
+      "time": "19:20",
+      "viewers": 4700,
+      "messagesPerMinute": 940
+    },
+    {
+      "time": "19:40",
+      "viewers": 6100,
+      "messagesPerMinute": 1680
+    }
+  ],
+  "segments": [
+    {
+      "start": "19:00",
+      "end": "19:35",
+      "label": "Общение"
+    },
+    {
+      "start": "19:35",
+      "end": "20:45",
+      "label": "CS2"
+    }
+  ],
+  "events": [
+    {
+      "time": "19:40",
+      "label": "Первый рейтинговый матч",
+      "category": "CS2",
+      "type": "spike",
+      "viewers": 6100,
+      "messagesPerMinute": 1680
+    }
+  ],
+  "updatedAt": "2026-06-26T19:40:00.000Z"
+}

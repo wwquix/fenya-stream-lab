@@ -158,6 +158,14 @@ Mock data lives in `src/data/`:
 
 All mock entities have stable IDs and connected references for future hover-linking.
 
+## Repository hygiene / local data
+
+Runtime backend state is written to `server/data/*.json`. These mutable files are ignored by Git, while matching `.example.json` files document safe demo shapes. The storage helpers automatically recreate runtime stream and chat JSON from their mock providers when files are missing or invalid.
+
+This repository intentionally uses one root `package.json` for both the Vite frontend and the local Express mock backend, so `express`, `cors`, and `dotenv` remain root runtime dependencies. Express 5 is used for the local development server; production backend separation and hardening can be handled later if deployment requirements change.
+
+Generated AI-tool configuration copies were removed from the repository root. `AGENTS.md`, project documentation, and the single `.codex` skill configuration remain as the maintained project guidance.
+
 This project intentionally has no production backend, auth, database, WebSocket, real stream tokens, or real Twitch/YouTube/Kick integrations yet. The current backend is a local mock API only.
 
 ## Current Sections

@@ -1,0 +1,46 @@
+{
+  "streamId": "2026-06-23",
+  "title": "Вечерний рейтинговый стрим",
+  "activeNow": 10,
+  "totalMessages": 10435,
+  "activityPeak": 2.8,
+  "leaderboards": {
+    "messages": [
+      {
+        "nickname": "agapuku106",
+        "value": 1840,
+        "note": "Часто пишет в пике"
+      }
+    ],
+    "watchTime": [
+      {
+        "nickname": "agapuku106",
+        "value": "4ч 11м",
+        "note": "Смотрит почти весь стрим"
+      }
+    ],
+    "tempo": [
+      {
+        "nickname": "agapuku106",
+        "value": "x2.8",
+        "note": "Сильная активность"
+      }
+    ],
+    "engagement": [
+      {
+        "nickname": "agapuku106",
+        "value": "21 очк.",
+        "note": "Часто возвращается"
+      }
+    ]
+  },
+  "recentMessages": [
+    {
+      "time": "21:04",
+      "nickname": "agapuku106",
+      "text": "го ещё одну",
+      "type": "normal"
+    }
+  ],
+  "updatedAt": "2026-06-26T21:04:00.000Z"
+}

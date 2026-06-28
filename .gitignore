@@ -5,3 +5,10 @@ dist/
 !.env.example
 *.log
 .DS_Store
+__pycache__/
+*.py[cod]
+server/data/*.json
+!server/data/*.example.json
+# Runtime backend data
+server/data/*.json
+!server/data/*.example.json

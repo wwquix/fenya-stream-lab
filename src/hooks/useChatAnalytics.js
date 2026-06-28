@@ -69,6 +69,7 @@ export function useChatAnalytics() {
 
   useEffect(() => {
     const controller = new AbortController()
+    let isActive = true
     let isInitialRequest = true
     let isRequestInFlight = false
 
@@ -94,10 +95,12 @@ export function useChatAnalytics() {
           throw new Error('Chat analytics response has an invalid shape')
         }
 
-        setAnalytics(normalizedAnalytics)
-        setError(null)
+        if (isActive) {
+          setAnalytics(normalizedAnalytics)
+          setError(null)
+        }
       } catch (requestError) {
-        if (requestError.name === 'AbortError') {
+        if (!isActive || requestError.name === 'AbortError') {
           return
         }
 
@@ -105,7 +108,7 @@ export function useChatAnalytics() {
       } finally {
         isRequestInFlight = false
 
-        if (isInitialRequest && !controller.signal.aborted) {
+        if (isActive && isInitialRequest && !controller.signal.aborted) {
           isInitialRequest = false
           setIsLoading(false)
         }
@@ -116,6 +119,7 @@ export function useChatAnalytics() {
     const pollingInterval = window.setInterval(loadAnalytics, CHAT_ANALYTICS_POLL_INTERVAL_MS)
 
     return () => {
+      isActive = false
       window.clearInterval(pollingInterval)
       controller.abort()
     }
@@ -127,4 +131,3 @@ export function useChatAnalytics() {
     error,
   }
 }
-
