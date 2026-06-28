@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react"
 
 const calmEase = [0.16, 1, 0.3, 1]
+const cardRevealVariants = {
+  hidden: { opacity: 0, y: 14, scale: 0.988 },
+  visible: (delay = 0) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.52, delay, ease: calmEase },
+  }),
+}
 
 function getMotionComponent(as) {
   return typeof as === 'string' && motion[as] ? motion[as] : motion.div
@@ -13,10 +22,12 @@ function Reveal({ as = 'div', children, transition, ...props }) {
 
   return (
     <Component
-      initial={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={prefersReducedMotion ? { opacity: 1, y: 0, filter: 'none' } : { opacity: 0, y: 26, filter: 'blur(8px)' }}
+      whileInView={prefersReducedMotion
+        ? { opacity: 1, y: 0, filter: 'none' }
+        : { opacity: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
       viewport={{ once: true, amount: 0.16 }}
-      transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.58, ease: calmEase, ...transition }}
+      transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.68, ease: calmEase, ...transition }}
       {...props}
     >
       {children}
@@ -24,15 +35,20 @@ function Reveal({ as = 'div', children, transition, ...props }) {
   )
 }
 
-function MotionCard({ as = 'div', children, transition, ...props }) {
+function MotionCard({ as = 'div', children, transition, revealDelay = 0, ...props }) {
   const prefersReducedMotion = useReducedMotion()
   const Component = getMotionComponent(as)
 
   return (
     <Component
-      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
+      custom={revealDelay}
+      variants={cardRevealVariants}
+      initial={prefersReducedMotion ? 'visible' : 'hidden'}
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.14 }}
+      whileHover={prefersReducedMotion ? undefined : { y: -3, scale: 1.006 }}
       whileTap={prefersReducedMotion ? undefined : { scale: 0.99 }}
-      transition={{ duration: 0.18, ease: calmEase, ...transition }}
+      transition={{ duration: 0.22, ease: calmEase, ...transition }}
       {...props}
     >
       {children}
@@ -71,7 +87,7 @@ function AnimatedNumber({ value, format = (nextValue) => Math.round(nextValue).t
   return <>{displayValue}</>
 }
 
-function RippleSurface({ as = 'div', children, className = '', onClick, ...props }) {
+function RippleSurface({ as = 'div', children, className = '', onClick, revealDelay = 0, ...props }) {
   const prefersReducedMotion = useReducedMotion()
   const Component = getMotionComponent(as)
   const [ripples, setRipples] = useState([])
@@ -109,6 +125,11 @@ function RippleSurface({ as = 'div', children, className = '', onClick, ...props
     <Component
       className={`${className} ripple-surface`}
       onClick={handleClick}
+      custom={revealDelay}
+      variants={cardRevealVariants}
+      initial={prefersReducedMotion ? 'visible' : 'hidden'}
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.12 }}
       whileHover={prefersReducedMotion ? undefined : { y: -2 }}
       whileTap={prefersReducedMotion ? undefined : { scale: 0.99 }}
       transition={{ duration: 0.18, ease: calmEase }}

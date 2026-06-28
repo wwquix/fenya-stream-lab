@@ -268,7 +268,7 @@ function StreamPulse({ stream, compareStream, events, t }) {
         <span className="section-kicker">{t.viewers} / {t.chatPerMin}</span>
       </div>
 
-      <div className="chart-shell glass-panel" data-entity-type="stream" data-entity-id={stream.id}>
+      <div className="chart-shell glass-panel liquid-card subtle-shine soft-glow" data-entity-type="stream" data-entity-id={stream.id}>
         <div className="chart-toolbar replay-console-toolbar">
           <div className="chart-legend" aria-label="Chart legend">
             <span className="legend-viewers">{t.viewers}</span>

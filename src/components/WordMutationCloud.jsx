@@ -1,5 +1,6 @@
 import ScannerTooltip from './ScannerTooltip.jsx'
 import { Reveal } from './MotionPrimitives.jsx'
+import { motion, useReducedMotion } from 'motion/react'
 
 function formatCount(count, language) {
   return count.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')
@@ -98,6 +99,7 @@ function mergeBackendWords(fallbackWords, wordAnalytics) {
 
 function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', t }) {
   const visibleWords = mergeBackendWords(words, wordAnalytics)
+  const prefersReducedMotion = useReducedMotion()
 
   return (
     <Reveal as="section" className="section-panel word-mutations" id="speech" aria-labelledby="word-mutations-title" data-entity-type="stream" data-entity-id={streamId}>
@@ -109,18 +111,26 @@ function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', t 
         </div>
       </div>
 
-      <div className="word-cloud word-cloud-dense glass-panel">
+      <div className="word-cloud word-cloud-dense glass-panel liquid-card soft-glow">
         {visibleWords.map((word, index) => {
           const countLabel = `${formatCount(word.count, language)} ${t.mentions}`
+          const verticalDrift = getStableVerticalDrift(word, index)
 
           return (
             <ScannerTooltip
-              as="button"
+              as={motion.button}
+              htmlType="button"
               key={word.id}
               type="word"
               id={word.id}
-              className={`word-token word-size-${word.size} word-tone-${word.tone ?? 'muted'}`}
-              style={{ '--word-drift-y': `${getStableVerticalDrift(word, index)}px` }}
+              className={`word-token stagger-item word-size-${word.size} word-tone-${word.tone ?? 'muted'}`}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: verticalDrift + 10, scale: 0.97 }}
+              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: verticalDrift, scale: 1 }}
+              whileHover={prefersReducedMotion ? undefined : { y: verticalDrift - 2, scale: 1.035 }}
+              transition={prefersReducedMotion
+                ? { duration: 0 }
+                : { duration: 0.46, delay: Math.min(index, 47) * 0.012, ease: [0.16, 1, 0.3, 1] }}
+              style={{ '--word-drift-y': `${verticalDrift}px` }}
             >
               <span>{getWordText(word, language)}</span>
               <small>{countLabel}</small>

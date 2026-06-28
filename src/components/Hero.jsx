@@ -42,10 +42,10 @@ function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'hero', la
             ))}
           </div>
           <div className="hero-nav-actions">
-            <button className="language-toggle" type="button" onClick={onToggleLanguage} aria-label="Switch language">
+            <button className="language-toggle liquid-button" type="button" onClick={onToggleLanguage} aria-label="Switch language">
               {language === 'ru' ? 'RU' : 'EN'}
             </button>
-            <a className="hero-nav-cta" href="#stream-pulse">
+            <a className="hero-nav-cta liquid-button" href="#stream-pulse">
               {t.viewDashboard} <span aria-hidden="true">↗</span>
             </a>
           </div>

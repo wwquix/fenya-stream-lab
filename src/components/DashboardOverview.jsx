@@ -126,8 +126,8 @@ function DashboardOverview({ stream, moderators, events, chatters, streamSummary
       </div>
 
       <div className="overview-grid">
-        {cards.map((card) => (
-          <MotionCard as="article" className={`overview-card glass-panel ${card.variant ? `is-${card.variant}` : ''}`} key={card.label}>
+        {cards.map((card, index) => (
+          <MotionCard as="article" className={`overview-card glass-panel liquid-card subtle-shine ${card.variant ? `is-${card.variant}` : ''}`} revealDelay={index * 0.045} key={card.label}>
             <span>{card.label}</span>
             <strong>{card.value}</strong>
             <p>{card.detail}</p>

@@ -37,9 +37,9 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   const metadataStateClass = metadata?.isLive ? 'is-live' : 'is-offline'
 
   return (
-    <Reveal as="section" className="stream-control-bar glass-panel" aria-label="Stream controls">
+    <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label="Stream controls">
       <div className="stream-live-meta" aria-busy={twitchMetadata?.isLoading ? 'true' : 'false'}>
-        <span className={`stream-live-status ${metadataStateClass}`}>
+        <span className={`stream-live-status ${metadataStateClass} ${metadata?.isLive ? 'live-pulse' : ''}`}>
           {twitchMetadata?.isLoading ? t.loadingMetadata : liveLabel}
         </span>
         <div className="stream-live-copy">
@@ -52,10 +52,10 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
       <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
 
       <div className="export-actions">
-        <ProgressActionButton preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
+        <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
           {t.exportCsv}
         </ProgressActionButton>
-        <ProgressActionButton preparingLabel={preparingLabel} onAction={() => window.print()}>
+        <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => window.print()}>
           {t.exportReport}
         </ProgressActionButton>
       </div>

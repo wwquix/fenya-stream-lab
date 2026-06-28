@@ -1,6 +1,6 @@
 import ScannerTooltip from './ScannerTooltip.jsx'
 import { AnimatedNumber, Reveal, RippleSurface } from './MotionPrimitives.jsx'
-import { formatDominantWord, formatStreamTitle } from '../i18n/translations.js'
+import { formatDominantWord } from '../i18n/translations.js'
 
 function formatPlainInteger(value) {
   return Math.round(value).toString()
@@ -77,15 +77,15 @@ function StreamArchive({ streams, archive, selectedStreamId, t }) {
 
       <div className="archive-bookshelf" aria-label="Stream archive bookshelf">
         <div className="archive-track">
-        {activeStreams.map((stream) => (
-          <ScannerTooltip as={RippleSurface} key={stream.id} type="stream" id={stream.id} label={formatStreamTitle(stream, t)} className={`archive-book ${stream.id === selectedStreamId ? 'is-current' : ''}`}>
+        {activeStreams.map((stream, index) => (
+          <ScannerTooltip as={RippleSurface} key={stream.id} type="stream" id={stream.id} label={stream.title} className={`archive-book liquid-card ${stream.id === selectedStreamId ? 'is-current' : ''}`} revealDelay={Math.min(index, 9) * 0.04}>
             <div className="archive-book-spine" aria-hidden="true" />
             <div className="archive-book-content">
               <div className="archive-book-topline">
                 <span className="archive-date">{formatArchiveDate(stream.date, t)}</span>
                 {stream.id === selectedStreamId ? <span className="current-marker">{t.selectedStream}</span> : null}
               </div>
-              <h3 className="archive-book-title">{formatStreamTitle(stream, t)}</h3>
+              <h3 className="archive-book-title">{stream.title}</h3>
               <span className="archive-divider" aria-hidden="true" />
               <dl>
                 <div>

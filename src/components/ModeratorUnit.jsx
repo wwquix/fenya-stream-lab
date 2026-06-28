@@ -44,17 +44,17 @@ function ModeratorUnit({ moderators, events, moderationAnalytics, t }) {
           <h2 id="moderator-unit-title">{t.moderatorPerformance}</h2>
           <p className="section-note">{t.moderatorNote}</p>
         </div>
-        <button className="moderator-toggle" type="button" onClick={() => setShowAllModerators((isShown) => !isShown)}>
+        <button className="moderator-toggle liquid-button" type="button" onClick={() => setShowAllModerators((isShown) => !isShown)}>
           {showAllModerators ? t.showLess : `${t.showAll} ${activeModerators.length}`}
         </button>
       </div>
 
       <div className="moderator-grid">
-        {visibleModerators.map((moderator) => {
+        {visibleModerators.map((moderator, index) => {
           const linkedEvents = events.filter((event) => event.moderatorId === moderator.id)
 
           return (
-            <ScannerTooltip as={MotionCard} key={moderator.id} type="moderator" id={moderator.id} label={`${moderator.actions ?? linkedEvents.length} ${t.linkedActions}`} className="moderator-card glass-panel">
+            <ScannerTooltip as={MotionCard} key={moderator.id} type="moderator" id={moderator.id} label={`${moderator.actions ?? linkedEvents.length} ${t.linkedActions}`} className="moderator-card glass-panel liquid-card" revealDelay={Math.min(index, 7) * 0.045}>
               <div className="moderator-header">
                 <div>
                   <span className="unit-label">{t.moderator}</span>
