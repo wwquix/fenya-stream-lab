@@ -11,6 +11,8 @@ import {
   stopMockLiveSampler,
 } from "./services/mockLiveSampler.js";
 import { createMockChatMessage } from "./providers/mockChatProvider.js";
+import { createMockWordUpdate } from "./providers/mockWordsProvider.js";
+import { createMockModerationEvent } from "./providers/mockModerationProvider.js";
 import {
   appendStreamPoint,
   loadCurrentStreamAnalytics,
@@ -21,6 +23,16 @@ import {
   loadCurrentChatAnalytics,
   resetCurrentChatAnalytics,
 } from "./storage/chatAnalyticsStore.js";
+import {
+  appendOrUpdateWord,
+  loadCurrentWordAnalytics,
+  resetCurrentWordAnalytics,
+} from "./storage/wordAnalyticsStore.js";
+import {
+  appendMockModerationEvent,
+  loadCurrentModerationAnalytics,
+  resetCurrentModerationAnalytics,
+} from "./storage/moderationAnalyticsStore.js";
 
 dotenv.config();
 
@@ -101,6 +113,85 @@ app.post("/api/chat/fenya/reset", async (_req, res) => {
   } catch (error) {
     console.error("Failed to reset chat analytics:", error);
     res.status(500).json({ error: true, message: "Failed to reset chat analytics" });
+  }
+});
+
+app.get("/api/words/fenya/current-stream", async (_req, res) => {
+  try {
+    res.json(await loadCurrentWordAnalytics());
+  } catch (error) {
+    console.error("Failed to load word analytics:", error);
+    res.status(500).json({ error: true, message: "Failed to load word analytics" });
+  }
+});
+
+app.post("/api/words/fenya/sample", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const sample = createMockWordUpdate();
+
+    for (const field of ["weight", "count", "tone", "category"]) {
+      if (body[field] !== undefined) {
+        sample[field] = body[field];
+      }
+    }
+
+    if (typeof body.text === "string" && body.text.trim()) {
+      sample.text = body.text;
+    }
+
+    res.json(await appendOrUpdateWord(sample));
+  } catch (error) {
+    if (error instanceof TypeError) {
+      res.status(400).json({ error: true, message: error.message });
+      return;
+    }
+
+    console.error("Failed to append mock word:", error);
+    res.status(500).json({ error: true, message: "Failed to append mock word" });
+  }
+});
+
+app.post("/api/words/fenya/reset", async (_req, res) => {
+  try {
+    res.json(await resetCurrentWordAnalytics());
+  } catch (error) {
+    console.error("Failed to reset word analytics:", error);
+    res.status(500).json({ error: true, message: "Failed to reset word analytics" });
+  }
+});
+
+app.get("/api/moderation/fenya/current-stream", async (_req, res) => {
+  try {
+    res.json(await loadCurrentModerationAnalytics());
+  } catch (error) {
+    console.error("Failed to load moderation analytics:", error);
+    res.status(500).json({ error: true, message: "Failed to load moderation analytics" });
+  }
+});
+
+app.post("/api/moderation/fenya/sample", async (req, res) => {
+  try {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const event = createMockModerationEvent(body);
+    res.json(await appendMockModerationEvent(event));
+  } catch (error) {
+    if (error instanceof TypeError) {
+      res.status(400).json({ error: true, message: error.message });
+      return;
+    }
+
+    console.error("Failed to append mock moderation event:", error);
+    res.status(500).json({ error: true, message: "Failed to append mock moderation event" });
+  }
+});
+
+app.post("/api/moderation/fenya/reset", async (_req, res) => {
+  try {
+    res.json(await resetCurrentModerationAnalytics());
+  } catch (error) {
+    console.error("Failed to reset moderation analytics:", error);
+    res.status(500).json({ error: true, message: "Failed to reset moderation analytics" });
   }
 });
 

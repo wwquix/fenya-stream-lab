@@ -136,6 +136,7 @@ export const translations = {
     bans: 'баны',
     timeouts: 'таймауты/муты',
     unbans: 'разбаны',
+    deletedMessages: 'удаления',
     reaction: 'реакция',
     efficiency: 'Эффективность',
     streamArchive: 'Архив стримов',
@@ -197,6 +198,9 @@ export const translations = {
       'Late stream backup': 'Резерв позднего стрима',
       'Chat review lead': 'Лид проверки чата',
       'Standby moderator': 'Запасной модератор',
+      active: 'Активен',
+      standby: 'В резерве',
+      inactive: 'Неактивен',
     },
     summaryValues: {
       '21:00 / 12.8K viewers': '21:00 · 12.8K',
@@ -367,6 +371,7 @@ export const translations = {
     bans: 'bans',
     timeouts: 'timeouts/mutes',
     unbans: 'unbans',
+    deletedMessages: 'deletions',
     reaction: 'reaction',
     efficiency: 'Efficiency',
     streamArchive: 'Stream Archive',
@@ -392,7 +397,11 @@ export const translations = {
     streamTitles: {},
     categoryLabels: {},
     eventLabels: {},
-    statusLabels: {},
+    statusLabels: {
+      active: 'Active',
+      standby: 'Standby',
+      inactive: 'Inactive',
+    },
     summaryValues: {
       '21:00 / 12.8K viewers': '21:00 · 12.8K viewers',
       '21:00 / 5,360 chat per min': '21:00 · 5,360/min',

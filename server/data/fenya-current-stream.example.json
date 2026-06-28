@@ -4,43 +4,68 @@
   "categoryName": "Counter-Strike 2",
   "startedAt": "2026-06-26T18:30:00.000Z",
   "points": [
-    {
-      "time": "19:00",
-      "viewers": 3200,
-      "messagesPerMinute": 650
-    },
-    {
-      "time": "19:20",
-      "viewers": 4700,
-      "messagesPerMinute": 940
-    },
-    {
-      "time": "19:40",
-      "viewers": 6100,
-      "messagesPerMinute": 1680
-    }
+    { "time": "19:00", "viewers": 3200, "messagesPerMinute": 688 },
+    { "time": "19:05", "viewers": 3565, "messagesPerMinute": 809 },
+    { "time": "19:10", "viewers": 3789, "messagesPerMinute": 866 },
+    { "time": "19:15", "viewers": 3935, "messagesPerMinute": 862 },
+    { "time": "19:20", "viewers": 4172, "messagesPerMinute": 861 },
+    { "time": "19:25", "viewers": 4521, "messagesPerMinute": 921 },
+    { "time": "19:30", "viewers": 4824, "messagesPerMinute": 1036 },
+    { "time": "19:35", "viewers": 5148, "messagesPerMinute": 1228 },
+    { "time": "19:40", "viewers": 5435, "messagesPerMinute": 1362 },
+    { "time": "19:45", "viewers": 5847, "messagesPerMinute": 1449 },
+    { "time": "19:50", "viewers": 6365, "messagesPerMinute": 1556 },
+    { "time": "19:55", "viewers": 6820, "messagesPerMinute": 1731 },
+    { "time": "20:00", "viewers": 7149, "messagesPerMinute": 1957 },
+    { "time": "20:05", "viewers": 7606, "messagesPerMinute": 2250 },
+    { "time": "20:10", "viewers": 8206, "messagesPerMinute": 2477 },
+    { "time": "20:15", "viewers": 8877, "messagesPerMinute": 2656 },
+    { "time": "20:20", "viewers": 9446, "messagesPerMinute": 2855 },
+    { "time": "20:25", "viewers": 9888, "messagesPerMinute": 3115 },
+    { "time": "20:30", "viewers": 10360, "messagesPerMinute": 3411 },
+    { "time": "20:35", "viewers": 11042, "messagesPerMinute": 3893 },
+    { "time": "20:40", "viewers": 11749, "messagesPerMinute": 4303 },
+    { "time": "20:45", "viewers": 12324, "messagesPerMinute": 4673 },
+    { "time": "20:50", "viewers": 12799, "messagesPerMinute": 5074 },
+    { "time": "20:55", "viewers": 12634, "messagesPerMinute": 5019 },
+    { "time": "21:00", "viewers": 12609, "messagesPerMinute": 5001 },
+    { "time": "21:05", "viewers": 12389, "messagesPerMinute": 4894 },
+    { "time": "21:10", "viewers": 12041, "messagesPerMinute": 4725 },
+    { "time": "21:15", "viewers": 11636, "messagesPerMinute": 4530 },
+    { "time": "21:20", "viewers": 11341, "messagesPerMinute": 4380 },
+    { "time": "21:25", "viewers": 11172, "messagesPerMinute": 4299 },
+    { "time": "21:30", "viewers": 10963, "messagesPerMinute": 4245 },
+    { "time": "21:35", "viewers": 10710, "messagesPerMinute": 4181 },
+    { "time": "21:40", "viewers": 10417, "messagesPerMinute": 4049 },
+    { "time": "21:45", "viewers": 10240, "messagesPerMinute": 3891 },
+    { "time": "21:50", "viewers": 10149, "messagesPerMinute": 3775 },
+    { "time": "21:55", "viewers": 9974, "messagesPerMinute": 3719 },
+    { "time": "22:00", "viewers": 9659, "messagesPerMinute": 3675 },
+    { "time": "22:05", "viewers": 9330, "messagesPerMinute": 3578 },
+    { "time": "22:10", "viewers": 9140, "messagesPerMinute": 3415 },
+    { "time": "22:15", "viewers": 9022, "messagesPerMinute": 3239 },
+    { "time": "22:20", "viewers": 8809, "messagesPerMinute": 3116 },
+    { "time": "22:25", "viewers": 8487, "messagesPerMinute": 3060 },
+    { "time": "22:30", "viewers": 8216, "messagesPerMinute": 3016 },
+    { "time": "22:35", "viewers": 8135, "messagesPerMinute": 2929 },
+    { "time": "22:40", "viewers": 8088, "messagesPerMinute": 2788 },
+    { "time": "22:45", "viewers": 7915, "messagesPerMinute": 2647 },
+    { "time": "22:50", "viewers": 7643, "messagesPerMinute": 2567 },
+    { "time": "22:55", "viewers": 7438, "messagesPerMinute": 2547 },
+    { "time": "23:00", "viewers": 7358, "messagesPerMinute": 2525 }
   ],
   "segments": [
-    {
-      "start": "19:00",
-      "end": "19:35",
-      "label": "Общение"
-    },
-    {
-      "start": "19:35",
-      "end": "20:45",
-      "label": "CS2"
-    }
+    { "start": "19:00", "end": "19:35", "label": "Общение" },
+    { "start": "19:35", "end": "20:45", "label": "CS2" },
+    { "start": "20:45", "end": "21:20", "label": "Общение" },
+    { "start": "21:20", "end": "23:00", "label": "Minecraft" }
   ],
   "events": [
-    {
-      "time": "19:40",
-      "label": "Первый рейтинговый матч",
-      "category": "CS2",
-      "type": "spike",
-      "viewers": 6100,
-      "messagesPerMinute": 1680
-    }
+    { "time": "19:45", "label": "Первый рейтинговый матч", "category": "CS2", "type": "spike", "viewers": 5847, "messagesPerMinute": 1449 },
+    { "time": "20:05", "label": "Волна модерации", "category": "CS2", "type": "timeout", "viewers": 7606, "messagesPerMinute": 2250 },
+    { "time": "20:50", "label": "Клатч и всплеск чата", "category": "CS2", "type": "spike", "viewers": 12799, "messagesPerMinute": 5074 },
+    { "time": "21:20", "label": "Смена категории", "category": "Minecraft", "type": "category-change", "viewers": 11341, "messagesPerMinute": 4380 },
+    { "time": "21:40", "label": "Просадка зрителей", "category": "Minecraft", "type": "drop", "viewers": 10417, "messagesPerMinute": 4049 }
   ],
-  "updatedAt": "2026-06-26T19:40:00.000Z"
+  "updatedAt": "2026-06-28T18:30:00.000Z"
 }

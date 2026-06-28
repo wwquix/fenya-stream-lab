@@ -7,9 +7,34 @@ function formatPlainInteger(value) {
   return Math.round(value).toString()
 }
 
-function ModeratorUnit({ moderators, events, t }) {
+function getBackendModeratorId(nickname, index) {
+  const slug = nickname.toLocaleLowerCase('en-US').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return `backend-moderator-${slug || index + 1}`
+}
+
+function adaptBackendModerators(moderationAnalytics) {
+  if (!Array.isArray(moderationAnalytics?.moderators) || moderationAnalytics.moderators.length === 0) {
+    return null
+  }
+
+  return moderationAnalytics.moderators.map((moderator, index) => ({
+    id: getBackendModeratorId(moderator.nickname, index),
+    name: moderator.nickname,
+    actions: moderator.actions,
+    bans: moderator.bans,
+    timeouts: moderator.timeouts,
+    deletedMessages: moderator.deletedMessages,
+    reactionTime: `${moderator.responseTimeSec.toFixed(1)}s`,
+    efficiency: moderator.accuracy,
+    status: moderator.status,
+  }))
+}
+
+function ModeratorUnit({ moderators, events, moderationAnalytics, t }) {
   const [showAllModerators, setShowAllModerators] = useState(false)
-  const visibleModerators = showAllModerators ? moderators : moderators.slice(0, 4)
+  const backendModerators = adaptBackendModerators(moderationAnalytics)
+  const activeModerators = backendModerators ?? moderators
+  const visibleModerators = showAllModerators ? activeModerators : activeModerators.slice(0, 4)
 
   return (
     <Reveal as="section" className="section-panel moderator-unit" id="moderators" aria-labelledby="moderator-unit-title">
@@ -20,7 +45,7 @@ function ModeratorUnit({ moderators, events, t }) {
           <p className="section-note">{t.moderatorNote}</p>
         </div>
         <button className="moderator-toggle" type="button" onClick={() => setShowAllModerators((isShown) => !isShown)}>
-          {showAllModerators ? t.showLess : `${t.showAll} ${moderators.length}`}
+          {showAllModerators ? t.showLess : `${t.showAll} ${activeModerators.length}`}
         </button>
       </div>
 
@@ -29,7 +54,7 @@ function ModeratorUnit({ moderators, events, t }) {
           const linkedEvents = events.filter((event) => event.moderatorId === moderator.id)
 
           return (
-            <ScannerTooltip as={MotionCard} key={moderator.id} type="moderator" id={moderator.id} label={`${linkedEvents.length} ${t.linkedActions}`} className="moderator-card glass-panel">
+            <ScannerTooltip as={MotionCard} key={moderator.id} type="moderator" id={moderator.id} label={`${moderator.actions ?? linkedEvents.length} ${t.linkedActions}`} className="moderator-card glass-panel">
               <div className="moderator-header">
                 <div>
                   <span className="unit-label">{t.moderator}</span>
@@ -52,9 +77,9 @@ function ModeratorUnit({ moderators, events, t }) {
                   </dd>
                 </div>
                 <div>
-                  <dt>{t.unbans}</dt>
+                  <dt>{moderator.deletedMessages === undefined ? t.unbans : t.deletedMessages}</dt>
                   <dd>
-                    <AnimatedNumber value={moderator.unbans} format={formatPlainInteger} />
+                    <AnimatedNumber value={moderator.deletedMessages ?? moderator.unbans} format={formatPlainInteger} />
                   </dd>
                 </div>
                 <div>

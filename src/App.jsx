@@ -17,6 +17,8 @@ import { streamEvents } from './data/mockEvents.js'
 import { adaptAnalyticsForStreamPulse, useStreamAnalytics } from './hooks/useStreamAnalytics.js'
 import { useChatAnalytics } from './hooks/useChatAnalytics.js'
 import { useTwitchMetadata } from './hooks/useTwitchMetadata.js'
+import { useWordAnalytics } from './hooks/useWordAnalytics.js'
+import { useModerationAnalytics } from './hooks/useModerationAnalytics.js'
 import { translations } from './i18n/translations.js'
 
 const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary']
@@ -33,6 +35,8 @@ function App() {
   const streamAnalytics = useStreamAnalytics()
   const chatAnalytics = useChatAnalytics()
   const twitchMetadata = useTwitchMetadata()
+  const wordAnalytics = useWordAnalytics()
+  const moderationAnalytics = useModerationAnalytics()
   const backendPulseData = selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
   const streamPulseStream = backendPulseData?.stream ?? selectedStream
   const streamPulseEvents = backendPulseData?.events ?? streamEvents
@@ -108,8 +112,19 @@ function App() {
           language={language}
           t={t}
         />
-        <WordMutationCloud words={words} streamId={selectedStream.id} language={language} t={t} />
-        <ModeratorUnit moderators={moderators} events={streamEvents} t={t} />
+        <WordMutationCloud
+          words={words}
+          wordAnalytics={selectedStream.id === currentStream.id ? wordAnalytics.analytics : null}
+          streamId={selectedStream.id}
+          language={language}
+          t={t}
+        />
+        <ModeratorUnit
+          moderators={moderators}
+          events={streamEvents}
+          moderationAnalytics={selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null}
+          t={t}
+        />
         <StreamArchive streams={streams} selectedStreamId={selectedStream.id} t={t} />
         <DashboardOverview stream={selectedStream} moderators={moderators} events={streamEvents} chatters={chatters} t={t} />
       </div>

@@ -146,6 +146,70 @@ npm run dev
 
 Later, when Twitch Developer credentials are available, the real provider can replace the mock provider without changing the frontend API shape.
 
+## Mock word analytics
+
+Word analytics are mock/local only and require no real Twitch credentials. The normalized source can later be replaced by viewer chat word analytics or speech transcription without changing the frontend response shape.
+
+Runtime data is stored in `server/data/fenya-current-words.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-current-words.example.json`.
+
+Run the backend:
+
+```bash
+npm run server
+```
+
+View current word analytics:
+
+```text
+http://localhost:3001/api/words/fenya/current-stream
+```
+
+Append or update a mock word with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/words/fenya/sample
+```
+
+Reset word analytics:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/words/fenya/reset
+```
+
+The word cloud polls the local endpoint every 15 seconds and keeps its existing frontend mock words if the backend is unavailable or returns invalid data.
+
+## Mock moderation analytics
+
+Moderation analytics are mock/local only and require no real Twitch credentials. The provider can later be replaced by real Twitch moderation or EventSub data without changing the frontend response shape.
+
+Runtime data is stored in `server/data/fenya-current-moderation.json`. This mutable JSON is ignored by Git; the example response shape lives in `server/data/fenya-current-moderation.example.json`.
+
+Run the backend:
+
+```bash
+npm run server
+```
+
+View current moderation analytics:
+
+```text
+http://localhost:3001/api/moderation/fenya/current-stream
+```
+
+Append a mock moderation event with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/moderation/fenya/sample
+```
+
+Reset moderation analytics:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:3001/api/moderation/fenya/reset
+```
+
+The “Работа модераторов” section polls this local endpoint every 15 seconds and keeps the existing frontend moderator data if the backend is unavailable.
+
 ## Mock Data
 
 Mock data lives in `src/data/`:
@@ -160,7 +224,7 @@ All mock entities have stable IDs and connected references for future hover-link
 
 ## Repository hygiene / local data
 
-Runtime backend state is written to `server/data/*.json`. These mutable files are ignored by Git, while matching `.example.json` files document safe demo shapes. The storage helpers automatically recreate runtime stream and chat JSON from their mock providers when files are missing or invalid.
+Runtime backend state is written to `server/data/*.json`. These mutable files are ignored by Git, while matching `.example.json` files document safe demo shapes. The storage helpers automatically recreate runtime stream, chat, word, and moderation JSON from their mock providers when files are missing or invalid.
 
 This repository intentionally uses one root `package.json` for both the Vite frontend and the local Express mock backend, so `express`, `cors`, and `dotenv` remain root runtime dependencies. Express 5 is used for the local development server; production backend separation and hardening can be handled later if deployment requirements change.
 
