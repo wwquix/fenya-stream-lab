@@ -1,0 +1,50 @@
+[
+  {
+    "eventId": "sample-viewer-001",
+    "type": "viewer_sample",
+    "streamId": "2026-06-23",
+    "timestamp": "2026-06-26T21:05:00.000Z",
+    "viewers": 12640,
+    "messagesPerMinute": 4920
+  },
+  {
+    "eventId": "sample-chat-001",
+    "type": "chat_message",
+    "streamId": "2026-06-23",
+    "timestamp": "2026-06-26T21:05:08.000Z",
+    "chatter": "portfolio_viewer",
+    "message": "сильный момент",
+    "messageType": "normal"
+  },
+  {
+    "eventId": "sample-moderation-001",
+    "type": "moderation_action",
+    "streamId": "2026-06-23",
+    "timestamp": "2026-06-26T21:05:12.000Z",
+    "action": "timeout",
+    "moderator": "mod_shadow",
+    "target": "spam_account",
+    "reason": "Повторяющиеся сообщения"
+  },
+  {
+    "eventId": "sample-marker-001",
+    "type": "stream_marker",
+    "streamId": "2026-06-23",
+    "timestamp": "2026-06-26T21:05:20.000Z",
+    "label": "Импортированный хайлайт",
+    "markerType": "highlight",
+    "category": "CS2",
+    "viewers": 12640,
+    "messagesPerMinute": 4920
+  },
+  {
+    "eventId": "sample-segment-001",
+    "type": "stream_segment",
+    "streamId": "2026-06-23",
+    "timestamp": "2026-06-26T21:05:00.000Z",
+    "start": "21:05",
+    "end": "21:25",
+    "label": "CS2 — импорт",
+    "category": "CS2"
+  }
+]

@@ -4,6 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { getCurrentChatAnalytics } from "../providers/mockChatProvider.js";
+import {
+  loadCurrentChatAnalyticsFromDatabase,
+  saveChatAnalyticsToDatabase,
+} from "../repositories/dashboardRepository.js";
 
 const dataDirectory = fileURLToPath(new URL("../data/", import.meta.url));
 const chatFilePath = join(dataDirectory, "fenya-current-chat.json");
@@ -99,6 +103,16 @@ async function initializeFromMock() {
 
 export async function loadCurrentChatAnalytics() {
   try {
+    const databaseAnalytics = loadCurrentChatAnalyticsFromDatabase();
+
+    if (databaseAnalytics) {
+      return normalizeChatAnalytics(databaseAnalytics);
+    }
+  } catch (error) {
+    console.warn("SQLite chat storage is unavailable; using local JSON fallback:", error);
+  }
+
+  try {
     const contents = await readFile(chatFilePath, "utf8");
     const storedAnalytics = JSON.parse(contents);
     const analytics = normalizeChatAnalytics(storedAnalytics);
@@ -139,6 +153,13 @@ export async function saveCurrentChatAnalytics(data) {
     });
 
   await pendingWrite;
+
+  try {
+    saveChatAnalyticsToDatabase(analytics);
+  } catch (error) {
+    console.warn("Failed to mirror chat analytics to SQLite:", error);
+  }
+
   return analytics;
 }
 
@@ -185,4 +206,3 @@ export async function resetCurrentChatAnalytics() {
   const mockAnalytics = await getCurrentChatAnalytics("fenya");
   return saveCurrentChatAnalytics(mockAnalytics);
 }
-

@@ -6,6 +6,7 @@ const railItems = [
   { id: 'moderators', labelKey: 'navMods' },
   { id: 'archive', labelKey: 'navArchive' },
   { id: 'summary', labelKey: 'navSummary' },
+  { id: 'import-data', labelKey: 'navImport' },
 ]
 
 function SectionRail({ activeSection = 'hero', isVisible = false, t }) {

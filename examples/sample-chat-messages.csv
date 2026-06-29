@@ -1,0 +1,4 @@
+event_id,type,stream_id,timestamp,chatter,message,message_type
+csv-chat-001,chat_message,2026-06-23,2026-06-26T21:10:00.000Z,viewer_alpha,"отличный раунд",normal
+csv-chat-002,chat_message,2026-06-23,2026-06-26T21:10:08.000Z,viewer_beta,"чат проснулся",normal
+csv-chat-003,chat_message,2026-06-23,2026-06-26T21:10:15.000Z,viewer_alpha,"ещё одну",normal

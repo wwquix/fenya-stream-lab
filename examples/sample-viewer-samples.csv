@@ -1,0 +1,4 @@
+event_id,type,stream_id,timestamp,viewers,messages_per_minute
+csv-viewer-001,viewer_sample,2026-06-23,2026-06-26T21:10:00.000Z,12480,4750
+csv-viewer-002,viewer_sample,2026-06-23,2026-06-26T21:15:00.000Z,12720,5010
+csv-viewer-003,viewer_sample,2026-06-23,2026-06-26T21:20:00.000Z,12190,4520

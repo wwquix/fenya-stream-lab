@@ -4,6 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { getCurrentStreamSummary } from "../providers/mockSummaryProvider.js";
+import {
+  loadCurrentSummaryFromDatabase,
+  saveSummaryToDatabase,
+} from "../repositories/dashboardRepository.js";
 import { loadCurrentStreamAnalytics } from "./streamAnalyticsStore.js";
 import { loadCurrentChatAnalytics } from "./chatAnalyticsStore.js";
 import { loadCurrentWordAnalytics } from "./wordAnalyticsStore.js";
@@ -187,6 +191,16 @@ function createInsights(metrics, topWords) {
 
 export async function loadCurrentStreamSummary() {
   try {
+    const databaseSummary = loadCurrentSummaryFromDatabase();
+
+    if (databaseSummary) {
+      return normalizeSummary(databaseSummary);
+    }
+  } catch (error) {
+    console.warn("SQLite summary storage is unavailable; using local JSON fallback:", error);
+  }
+
+  try {
     const contents = await readFile(summaryFilePath, "utf8");
     const storedSummary = JSON.parse(contents);
     const summary = normalizeSummary(storedSummary);
@@ -227,6 +241,13 @@ export async function saveCurrentStreamSummary(data) {
     });
 
   await pendingWrite;
+
+  try {
+    saveSummaryToDatabase(summary);
+  } catch (error) {
+    console.warn("Failed to mirror stream summary to SQLite:", error);
+  }
+
   return summary;
 }
 

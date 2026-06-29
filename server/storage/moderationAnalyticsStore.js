@@ -4,6 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { getCurrentModerationAnalytics } from "../providers/mockModerationProvider.js";
+import {
+  loadCurrentModerationAnalyticsFromDatabase,
+  saveModerationAnalyticsToDatabase,
+} from "../repositories/dashboardRepository.js";
 
 const dataDirectory = fileURLToPath(new URL("../data/", import.meta.url));
 const moderationFilePath = join(dataDirectory, "fenya-current-moderation.json");
@@ -170,6 +174,16 @@ async function initializeFromMock() {
 
 export async function loadCurrentModerationAnalytics() {
   try {
+    const databaseAnalytics = loadCurrentModerationAnalyticsFromDatabase();
+
+    if (databaseAnalytics) {
+      return normalizeModerationAnalytics(databaseAnalytics);
+    }
+  } catch (error) {
+    console.warn("SQLite moderation storage is unavailable; using local JSON fallback:", error);
+  }
+
+  try {
     const contents = await readFile(moderationFilePath, "utf8");
     const storedAnalytics = JSON.parse(contents);
     const analytics = normalizeModerationAnalytics(storedAnalytics);
@@ -210,6 +224,13 @@ export async function saveCurrentModerationAnalytics(data) {
     });
 
   await pendingWrite;
+
+  try {
+    saveModerationAnalyticsToDatabase(analytics);
+  } catch (error) {
+    console.warn("Failed to mirror moderation analytics to SQLite:", error);
+  }
+
   return analytics;
 }
 

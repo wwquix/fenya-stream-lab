@@ -4,6 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { getStreamArchive } from "../providers/mockArchiveProvider.js";
+import {
+  loadStreamArchiveFromDatabase,
+  saveArchiveToDatabase,
+} from "../repositories/dashboardRepository.js";
 
 const dataDirectory = fileURLToPath(new URL("../data/", import.meta.url));
 const archiveFilePath = join(dataDirectory, "fenya-archive.json");
@@ -128,6 +132,16 @@ async function initializeFromMock() {
 
 export async function loadStreamArchive() {
   try {
+    const databaseArchive = loadStreamArchiveFromDatabase();
+
+    if (databaseArchive) {
+      return normalizeArchive(databaseArchive);
+    }
+  } catch (error) {
+    console.warn("SQLite archive storage is unavailable; using local JSON fallback:", error);
+  }
+
+  try {
     const contents = await readFile(archiveFilePath, "utf8");
     const storedArchive = JSON.parse(contents);
     const archive = normalizeArchive(storedArchive);
@@ -168,6 +182,13 @@ export async function saveStreamArchive(data) {
     });
 
   await pendingWrite;
+
+  try {
+    saveArchiveToDatabase(archive);
+  } catch (error) {
+    console.warn("Failed to mirror stream archive to SQLite:", error);
+  }
+
   return archive;
 }
 

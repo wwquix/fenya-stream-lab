@@ -4,6 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { getCurrentWordAnalytics, normalizeWordWeights } from "../providers/mockWordsProvider.js";
+import {
+  loadCurrentWordAnalyticsFromDatabase,
+  saveWordAnalyticsToDatabase,
+} from "../repositories/dashboardRepository.js";
 
 const dataDirectory = fileURLToPath(new URL("../data/", import.meta.url));
 const wordAnalyticsFilePath = join(dataDirectory, "fenya-current-words.json");
@@ -138,6 +142,16 @@ async function initializeFromMock() {
 
 export async function loadCurrentWordAnalytics() {
   try {
+    const databaseAnalytics = loadCurrentWordAnalyticsFromDatabase();
+
+    if (databaseAnalytics) {
+      return normalizeWordAnalytics(databaseAnalytics);
+    }
+  } catch (error) {
+    console.warn("SQLite word storage is unavailable; using local JSON fallback:", error);
+  }
+
+  try {
     const contents = await readFile(wordAnalyticsFilePath, "utf8");
     const storedAnalytics = JSON.parse(contents);
     const analytics = normalizeWordAnalytics(storedAnalytics);
@@ -178,6 +192,13 @@ export async function saveCurrentWordAnalytics(data) {
     });
 
   await pendingWrite;
+
+  try {
+    saveWordAnalyticsToDatabase(analytics);
+  } catch (error) {
+    console.warn("Failed to mirror word analytics to SQLite:", error);
+  }
+
   return analytics;
 }
 

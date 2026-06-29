@@ -19,3 +19,5 @@ __pycache__/
 # Runtime backend data
 server/data/*.json
 !server/data/*.example.json
+server/data/*.sqlite
+server/data/*.sqlite-*

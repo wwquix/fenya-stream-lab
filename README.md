@@ -21,6 +21,7 @@ The project is a working portfolio MVP built around local mock data. The fronten
 - Russian and English interface support.
 - Resilient frontend data adapters that preserve demo content when the local API is unavailable.
 - Optional local sample generation for demonstrating changing analytics.
+- Source-agnostic JSON/CSV event import with per-row validation results.
 
 ## Tech stack
 
@@ -31,10 +32,11 @@ The project is a working portfolio MVP built around local mock data. The fronten
 | Motion | Motion |
 | Styling | Regular CSS with shared design tokens |
 | Backend | Node.js, Express 5 |
-| Local persistence | JSON files with committed example datasets |
+| Local persistence | SQLite via better-sqlite3, with JSON/mock fallback |
+| Validation | Zod |
 | Tooling | ESLint, npm |
 
-The project intentionally remains JavaScript-based and does not use TypeScript, Tailwind, a database, or external platform SDKs at this stage.
+The project intentionally remains JavaScript-based and does not use TypeScript, Tailwind, or external platform SDKs at this stage.
 
 ## Run locally
 
@@ -51,6 +53,12 @@ cp .env.example .env
 ```
 
 On PowerShell, use `Copy-Item .env.example .env`. The default `TWITCH_PROVIDER=mock` mode requires no credentials.
+
+Initialize SQLite with the committed mock dataset:
+
+```bash
+npm run db:seed
+```
 
 Start the backend:
 
@@ -80,15 +88,15 @@ npm run preview
 
 ## Backend status
 
-The backend is a working local Express service organized into app setup, domain routes, services, providers, and JSON storage modules. It supports the dashboard domains, a health endpoint, mock sample/reset controls, summary generation, and report exports.
+The backend is a working local Express service organized into app setup, domain routes, services, repositories, providers, and storage modules. It supports the dashboard domains, SQLite persistence, normalized imports, a health endpoint, mock sample/reset controls, summary generation, and report exports.
 
-Runtime state is stored in ignored `server/data/*.json` files. Committed `*.example.json` datasets document the expected shapes, and the storage layer normalizes data before returning it to the frontend. API failures use a consistent JSON envelope:
+Seeded and imported events are stored in the ignored SQLite database configured by `DATABASE_PATH`. Existing runtime JSON and mock providers remain as a compatibility fallback when SQLite has no dashboard data. Committed `*.example.json` datasets document the existing response shapes. API failures use a consistent JSON envelope:
 
 ```json
 { "error": true, "message": "..." }
 ```
 
-This is not presented as a production backend. It currently has no database, authentication, public deployment hardening, multi-user support, or complete automated test suite. The POST sample/reset routes are local demonstration controls and should not be exposed as public production endpoints.
+This is not presented as a production backend. It currently has no authentication, public deployment hardening, multi-user support, or complete automated test suite. The POST sample/reset and import routes are local portfolio controls and should not be exposed as public production endpoints without access control.
 
 See [Architecture](docs/ARCHITECTURE.md) for the current data flow and boundaries.
 
@@ -97,7 +105,9 @@ See [Architecture](docs/ARCHITECTURE.md) for the current data flow and boundarie
 ### Available now
 
 - Local mock providers populate every dashboard section.
-- Runtime JSON persistence supports repeatable local demonstrations.
+- SQLite persistence supports seeded and imported local demonstrations.
+- JSON/CSV imports accept normalized events and retain rejected-row details.
+- Runtime JSON persistence remains available as a fallback.
 - Example JSON files make the API contracts reviewable without running the app.
 - Frontend hooks fetch, normalize, and safely fall back from local API responses.
 
@@ -126,8 +136,14 @@ Base URL for the local backend: `http://localhost:3001`.
 | Report | `GET /api/report/fenya/current-stream` | Combined structured report |
 | Export | `GET /api/report/fenya/current-stream.json` | JSON report export |
 | Export | `GET /api/report/fenya/current-stream.md` | Markdown report export |
+| Import | `POST /api/import/json` | Import normalized JSON events |
+| Import | `POST /api/import/csv` | Import chat/viewer CSV rows |
+| Import | `GET /api/import/:jobId` | Import job totals and status |
+| Import | `GET /api/import/:jobId/errors` | Rejected rows and validation errors |
 
 Local POST controls also exist for sample generation, dataset reset, sampler control, and summary regeneration. They are documented by the route modules under `server/routes/` and are intended for development demonstrations.
+
+Import examples are available under `examples/`. JSON accepts all normalized event types; CSV currently accepts chat messages and viewer samples.
 
 ## Portfolio highlights
 

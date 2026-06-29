@@ -9,6 +9,7 @@ import WordMutationCloud from './components/WordMutationCloud.jsx'
 import ModeratorUnit from './components/ModeratorUnit.jsx'
 import StreamArchive from './components/StreamArchive.jsx'
 import DashboardOverview from './components/DashboardOverview.jsx'
+import ImportDataPanel from './components/ImportDataPanel.jsx'
 import { currentStream, streams } from './data/mockStreams.js'
 import { chatters } from './data/mockChatters.js'
 import { moderators } from './data/mockModerators.js'
@@ -23,7 +24,7 @@ import { useStreamArchive } from './hooks/useStreamArchive.js'
 import { useStreamSummary } from './hooks/useStreamSummary.js'
 import { translations } from './i18n/translations.js'
 
-const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary']
+const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary', 'import-data']
 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
@@ -157,6 +158,7 @@ function App() {
           streamSummary={selectedStream.id === currentStream.id ? streamSummary.summary : null}
           t={t}
         />
+        <ImportDataPanel t={t} />
       </div>
     </main>
   )

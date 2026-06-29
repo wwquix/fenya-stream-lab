@@ -4,6 +4,10 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import { getCurrentStreamAnalytics } from "../providers/mockAnalyticsProvider.js";
+import {
+  loadCurrentStreamAnalyticsFromDatabase,
+  saveStreamAnalyticsToDatabase,
+} from "../repositories/dashboardRepository.js";
 
 const dataDirectory = fileURLToPath(new URL("../data/", import.meta.url));
 const analyticsFilePath = join(dataDirectory, "fenya-current-stream.json");
@@ -170,6 +174,16 @@ async function initializeFromMock() {
 
 export async function loadCurrentStreamAnalytics() {
   try {
+    const databaseAnalytics = loadCurrentStreamAnalyticsFromDatabase();
+
+    if (databaseAnalytics) {
+      return sanitizeAnalytics(databaseAnalytics).analytics;
+    }
+  } catch (error) {
+    console.warn("SQLite analytics storage is unavailable; using local JSON fallback:", error);
+  }
+
+  try {
     const contents = await readFile(analyticsFilePath, "utf8");
     const storedAnalytics = JSON.parse(contents);
     const { analytics, changed } = sanitizeAnalytics(storedAnalytics);
@@ -212,6 +226,13 @@ export async function saveCurrentStreamAnalytics(data) {
     });
 
   await pendingWrite;
+
+  try {
+    saveStreamAnalyticsToDatabase(analytics);
+  } catch (error) {
+    console.warn("Failed to mirror stream analytics to SQLite:", error);
+  }
+
   return analytics;
 }
 

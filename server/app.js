@@ -5,6 +5,7 @@ import analyticsRoutes from "./routes/analyticsRoutes.js";
 import archiveRoutes from "./routes/archiveRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import healthRoutes from "./routes/healthRoutes.js";
+import importRoutes from "./routes/importRoutes.js";
 import moderationRoutes from "./routes/moderationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import summaryRoutes from "./routes/summaryRoutes.js";
@@ -16,9 +17,10 @@ export function createApp() {
   const app = express();
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: "2mb" }));
 
   app.use("/api/health", healthRoutes);
+  app.use("/api/import", importRoutes);
   app.use("/api/twitch", twitchRoutes);
   app.use("/api/analytics", analyticsRoutes);
   app.use("/api/chat", chatRoutes);
