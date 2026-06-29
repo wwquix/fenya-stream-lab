@@ -4,9 +4,18 @@ dist/
 .env.*
 !.env.example
 *.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.pem
+*.key
+.secrets/
+secrets/
 .DS_Store
 __pycache__/
 *.py[cod]
+
 # Runtime backend data
 server/data/*.json
 !server/data/*.example.json

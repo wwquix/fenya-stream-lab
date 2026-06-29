@@ -21,7 +21,7 @@ function downloadCsv(stream) {
   URL.revokeObjectURL(url)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, t }) {
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, theme, onToggleTheme, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -35,6 +35,10 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   const hasLiveState = typeof metadata?.isLive === 'boolean'
   const liveLabel = hasLiveState ? (metadata.isLive ? t.liveNow : t.offlineNow) : t.mockFallback
   const metadataStateClass = metadata?.isLive ? 'is-live' : 'is-offline'
+  const isRussian = t.navTop === 'Топ'
+  const themeLabel = theme === 'light'
+    ? (isRussian ? 'Тёмная тема' : 'Dark theme')
+    : (isRussian ? 'Светлая тема' : 'Light theme')
 
   return (
     <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label="Stream controls">
@@ -52,6 +56,10 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
       <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
 
       <div className="export-actions">
+        <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
+          <span aria-hidden="true" />
+          {theme === 'light' ? (isRussian ? 'Тёмная' : 'Dark') : (isRussian ? 'Светлая' : 'Light')}
+        </button>
         <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
           {t.exportCsv}
         </ProgressActionButton>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { motion, useReducedMotion } from "motion/react"
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Reveal } from './MotionPrimitives.jsx'
@@ -214,7 +214,10 @@ function StreamPulse({ stream, compareStream, events, t }) {
     point: normalizedChartData.find((point) => point.time === getNearestChartPoint(event.time, stream.chartData).time),
   })).filter((event) => visibleTimes.has(event.point.time))
   const totalSegmentMinutes = stream.categorySegments.reduce((total, segment) => total + getSegmentSize(segment), 0)
-  const selectedSegment = stream.categorySegments.find((segment) => segment.id === selectedSegmentId)
+  const activeSelectedSegmentId = stream.categorySegments.some((segment) => segment.id === selectedSegmentId)
+    ? selectedSegmentId
+    : null
+  const selectedSegment = stream.categorySegments.find((segment) => segment.id === activeSelectedSegmentId)
   const selectedSegmentRange = getSegmentRange(selectedSegment, stream.chartData)
   const visibleSelectedRange = selectedSegmentRange
     ? {
@@ -223,14 +226,9 @@ function StreamPulse({ stream, compareStream, events, t }) {
       }
     : null
   const compareLabel = compareStream ? `${t.compare}: ${formatStreamTitle(compareStream, t)}` : null
-  useEffect(() => {
-    if (!stream.categorySegments.some((segment) => segment.id === selectedSegmentId)) {
-      setSelectedSegmentId(null)
-    }
-  }, [selectedSegmentId, stream.categorySegments])
 
   function handleSegmentSelect(segment) {
-    const isSelected = selectedSegmentId === segment.id
+    const isSelected = activeSelectedSegmentId === segment.id
     setSelectedSegmentId(isSelected ? null : segment.id)
   }
 
@@ -284,11 +282,11 @@ function StreamPulse({ stream, compareStream, events, t }) {
                 <stop offset="95%" stopColor="var(--cyan)" stopOpacity={0.02} />
               </linearGradient>
               <linearGradient id="viewerGlow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--violet)" stopOpacity={0.28} />
-                <stop offset="95%" stopColor="var(--violet)" stopOpacity={0.01} />
+                <stop offset="5%" stopColor="var(--chart-viewers-line)" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="var(--chart-viewers-line)" stopOpacity={0.01} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="rgba(214,225,231,0.08)" vertical={false} />
+            <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
             <XAxis
               dataKey="elapsedMinute"
               type="number"
@@ -310,27 +308,27 @@ function StreamPulse({ stream, compareStream, events, t }) {
               tickLine={false}
               width={44}
             />
-            <Tooltip cursor={{ stroke: 'rgba(226, 238, 237, 0.28)', strokeWidth: 1 }} content={<StreamPulseTooltip stream={stream} events={streamEvents} t={t} />} />
+            <Tooltip cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1 }} content={<StreamPulseTooltip stream={stream} events={streamEvents} t={t} />} />
             {visibleSelectedRange && visibleSelectedRange.end > visibleSelectedRange.start ? (
               <ReferenceArea
                 x1={visibleSelectedRange.start}
                 x2={visibleSelectedRange.end}
-                fill="rgba(94, 231, 255, 0.13)"
+                fill="var(--chart-selection)"
                 strokeOpacity={0}
                 ifOverflow="hidden"
               />
             ) : null}
-            <Area type="monotone" dataKey="viewers" fill="url(#viewerGlow)" stroke="var(--violet)" strokeWidth={2.5} />
-            <Line type="monotone" dataKey="chatMessagesPerMinute" stroke="var(--cyan)" strokeWidth={3} dot={false} />
-            {compareStream ? <Line type="monotone" data={compareChartData} dataKey="viewers" stroke="rgba(226,238,237,0.36)" strokeWidth={2} strokeDasharray="5 5" dot={false} /> : null}
+            <Area type="monotone" dataKey="viewers" fill="url(#viewerGlow)" stroke="var(--chart-viewers-line)" strokeWidth={2.5} />
+            <Line type="monotone" dataKey="chatMessagesPerMinute" stroke="var(--chart-messages-line)" strokeWidth={2.5} dot={false} />
+            {compareStream ? <Line type="monotone" data={compareChartData} dataKey="viewers" stroke="var(--chart-compare-line)" strokeWidth={2} strokeDasharray="5 5" dot={false} /> : null}
             {eventMarkers.map((event) => (
               <ReferenceDot
                 key={event.id}
                 x={event.point.elapsedMinute}
                 y={event.point.chatMessagesPerMinute}
                 r={5}
-                fill={event.type === 'ban' || event.type === 'timeout' ? '#ffb488' : 'var(--toxic-green)'}
-                stroke="rgba(8, 12, 15, 0.92)"
+                fill={event.type === 'ban' || event.type === 'timeout' ? 'var(--danger-red)' : 'var(--chart-marker)'}
+                stroke="var(--chart-marker-stroke)"
                 strokeWidth={2}
               />
             ))}
@@ -340,7 +338,7 @@ function StreamPulse({ stream, compareStream, events, t }) {
         <div className="replay-strip" aria-label="Stream replay timeline" onMouseMove={handleReplayHover} onMouseLeave={() => setReplayPreview(null)}>
           <div className="replay-strip-rail">
           {stream.categorySegments.map((segment) => {
-            const isSegmentActive = selectedSegmentId === segment.id
+            const isSegmentActive = activeSelectedSegmentId === segment.id
 
             return (
             <motion.button

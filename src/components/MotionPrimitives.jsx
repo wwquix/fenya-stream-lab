@@ -11,14 +11,15 @@ const cardRevealVariants = {
     transition: { duration: 0.52, delay, ease: calmEase },
   }),
 }
-
-function getMotionComponent(as) {
-  return typeof as === 'string' && motion[as] ? motion[as] : motion.div
+const motionComponents = {
+  article: motion.article,
+  div: motion.div,
+  section: motion.section,
 }
 
 function Reveal({ as = 'div', children, transition, ...props }) {
   const prefersReducedMotion = useReducedMotion()
-  const Component = getMotionComponent(as)
+  const Component = motionComponents[as] ?? motion.div
 
   return (
     <Component
@@ -37,7 +38,7 @@ function Reveal({ as = 'div', children, transition, ...props }) {
 
 function MotionCard({ as = 'div', children, transition, revealDelay = 0, ...props }) {
   const prefersReducedMotion = useReducedMotion()
-  const Component = getMotionComponent(as)
+  const Component = motionComponents[as] ?? motion.div
 
   return (
     <Component
@@ -65,13 +66,11 @@ function AnimatedNumber({ value, format = (nextValue) => Math.round(nextValue).t
 
   useEffect(() => {
     if (!Number.isFinite(numericValue)) {
-      setDisplayValue(String(value))
       return undefined
     }
 
     if (prefersReducedMotion) {
       motionValue.set(numericValue)
-      setDisplayValue(format(numericValue))
       return undefined
     }
 
@@ -84,12 +83,18 @@ function AnimatedNumber({ value, format = (nextValue) => Math.round(nextValue).t
     }
   }, [duration, format, formattedValue, motionValue, numericValue, prefersReducedMotion, value])
 
-  return <>{displayValue}</>
+  const visibleValue = !Number.isFinite(numericValue)
+    ? String(value)
+    : prefersReducedMotion
+      ? format(numericValue)
+      : displayValue
+
+  return <>{visibleValue}</>
 }
 
 function RippleSurface({ as = 'div', children, className = '', onClick, revealDelay = 0, ...props }) {
   const prefersReducedMotion = useReducedMotion()
-  const Component = getMotionComponent(as)
+  const Component = motionComponents[as] ?? motion.div
   const [ripples, setRipples] = useState([])
   const rippleTimeoutsRef = useRef([])
 

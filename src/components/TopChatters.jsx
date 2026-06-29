@@ -31,6 +31,9 @@ function LeaderboardList({ metricLabel, items, renderMetric, descriptorOffset = 
       {items.slice(0, 5).map((chatter, index) => (
         <li key={chatter.id ?? `${chatter.nickname}-${index}`}>
           <span className="leaderboard-rank">{index + 1}</span>
+          <span className="leaderboard-avatar" aria-hidden="true">
+            {chatter.avatarUrl || chatter.avatar ? <img src={chatter.avatarUrl ?? chatter.avatar} alt="" /> : chatter.nickname.slice(0, 1).toLocaleUpperCase()}
+          </span>
           <div>
             <strong>{chatter.nickname}</strong>
             <small>{chatter.note ?? t.chatterDescriptors[(index + descriptorOffset) % t.chatterDescriptors.length] ?? formatStatusLabel(chatter.status, t)}</small>
@@ -104,7 +107,7 @@ function TopChatters({ chatters, chatAnalytics = null, language = 'ru', t }) {
           <span>{t.streamMessages}</span>
           <strong><AnimatedNumber value={totalMessages} format={formatPlainInteger} /></strong>
         </div>
-        <div>
+        <div className="liquid-card hover-lift">
           <span>{t.activityPeak}</span>
           <strong>{topMultiplier}</strong>
         </div>

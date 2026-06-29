@@ -27,6 +27,13 @@ const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 
 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('fenya-theme') === 'dark' ? 'dark' : 'light'
+    } catch {
+      return 'light'
+    }
+  })
   const [activeSection, setActiveSection] = useState('hero')
   const [showBackToTop, setShowBackToTop] = useState(false)
   const [showSectionRail, setShowSectionRail] = useState(false)
@@ -50,6 +57,16 @@ function App() {
     localStorage.setItem('fenya-language', language)
     document.documentElement.lang = language
   }, [language])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+
+    try {
+      localStorage.setItem('fenya-theme', theme)
+    } catch {
+      // The selected theme still applies when storage is unavailable.
+    }
+  }, [theme])
 
   useEffect(() => {
     const sections = sectionIds.map((id) => document.getElementById(id)).filter(Boolean)
@@ -106,6 +123,8 @@ function App() {
           onStreamChange={handleStreamChange}
           onCompareChange={setCompareStreamId}
           twitchMetadata={twitchMetadata}
+          theme={theme}
+          onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
           t={t}
         />
         <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />

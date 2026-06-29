@@ -42,8 +42,6 @@ function ConsoleRush({ language = 'ru', t }) {
     }
 
     inputRef.current?.focus()
-    setRoundStartedAt(Date.now())
-    setTimeLeft(roundDuration)
 
     const intervalId = window.setInterval(() => {
       setTimeLeft((current) => {
@@ -62,7 +60,7 @@ function ConsoleRush({ language = 'ru', t }) {
     }, 1000)
 
     return () => window.clearInterval(intervalId)
-  }, [currentCommand.command, isRunning])
+  }, [currentCommand.command, isRunning, t.consoleTimeout])
 
   function startGame() {
     const nextCommand = pickCommand(currentCommand.command)
@@ -70,6 +68,8 @@ function ConsoleRush({ language = 'ru', t }) {
     setInputValue('')
     setHint('')
     setFeedbackLog([t.consoleReady])
+    setRoundStartedAt(Date.now())
+    setTimeLeft(roundDuration)
     setIsRunning(true)
   }
 
