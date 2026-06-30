@@ -36,7 +36,10 @@ export function errorHandler(error, _req, res, next) {
   }
 
   const status = Number.isInteger(error.status) ? error.status : 500;
-  const message = typeof error.message === "string" && error.message
+  const isMalformedJson = error instanceof SyntaxError && error.status === 400 && "body" in error;
+  const message = isMalformedJson
+    ? "Request body contains invalid JSON."
+    : typeof error.message === "string" && error.message
     ? error.message
     : "Internal server error";
 

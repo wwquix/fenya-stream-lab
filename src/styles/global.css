@@ -8256,3 +8256,87 @@ dt,
     grid-template-columns: 1fr;
   }
 }
+
+/* Replay and local report controls extend the existing control bar without changing its visual system. */
+.stream-control-bar {
+  grid-template-columns: minmax(230px, 1.05fr) minmax(190px, 0.9fr) minmax(180px, 0.85fr) minmax(250px, 1.1fr) auto;
+}
+
+.replay-controls {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.55fr) minmax(150px, 1fr);
+  align-items: end;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.replay-controls .custom-select {
+  min-width: 0;
+}
+
+.replay-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.replay-actions button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.replay-actions button:disabled,
+.export-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.replay-state {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.replay-state.is-active {
+  color: var(--accent-lime);
+}
+
+.control-feedback {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.control-feedback.is-error {
+  color: var(--danger-red);
+}
+
+@media (max-width: 1320px) {
+  .stream-control-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stream-live-meta,
+  .export-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .stream-control-bar,
+  .replay-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .stream-live-meta,
+  .export-actions,
+  .replay-state {
+    grid-column: auto;
+  }
+
+  .replay-actions,
+  .export-actions {
+    flex-wrap: wrap;
+  }
+}

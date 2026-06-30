@@ -67,10 +67,11 @@ function normalizeStreamSummary(payload) {
   }
 }
 
-export function useStreamSummary() {
+export function useStreamSummary(streamId) {
   const [summary, setSummary] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isGenerating, setIsGenerating] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -78,7 +79,15 @@ export function useStreamSummary() {
 
     async function loadSummary() {
       try {
-        const response = await fetch('/api/summary/fenya/current-stream', { signal: controller.signal })
+        const response = await fetch(`/api/streams/${encodeURIComponent(streamId)}/summary`, { signal: controller.signal })
+
+        if (response.status === 404) {
+          if (isActive) {
+            setSummary(null)
+            setError(null)
+          }
+          return
+        }
 
         if (!response.ok) {
           throw new Error(`Stream summary request failed with ${response.status}`)
@@ -113,7 +122,26 @@ export function useStreamSummary() {
       isActive = false
       controller.abort()
     }
-  }, [])
+  }, [streamId])
 
-  return { summary, isLoading, error }
+  async function generate() {
+    setIsGenerating(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/streams/${encodeURIComponent(streamId)}/summary/generate`, { method: 'POST' })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.message ?? `Summary generation failed with ${response.status}`)
+      const normalized = normalizeStreamSummary(payload)
+      if (!normalized) throw new Error('Generated summary has an invalid shape')
+      setSummary(normalized)
+      return normalized
+    } catch (requestError) {
+      setError(requestError)
+      throw requestError
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  return { summary, isLoading, isGenerating, error, generate }
 }

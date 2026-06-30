@@ -49,3 +49,8 @@ export async function getCurrentStreamSummary(channelLogin) {
     updatedAt: new Date().toISOString(),
   };
 }
+
+export async function generateMockSummary(streamId) {
+  const summary = await getCurrentStreamSummary("fenya");
+  return { ...summary, streamId: String(streamId || summary.streamId).replace(/^stream-/, ""), provider: "mock" };
+}

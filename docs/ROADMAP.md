@@ -1,32 +1,44 @@
 # Roadmap
 
-## Portfolio MVP — current
+## Portfolio repository — current
 
-- Local mock-backed analytics endpoints.
-- Dashboard data for viewers, chat, words, moderation, archive, and summaries.
-- SQLite persistence with JSON/mock fallback, health check, and JSON/Markdown reports.
-- Zod-validated JSON/CSV event import with job/error tracking.
-- Domain route modules with centralized JSON error responses.
-- Clear local setup and safe credential placeholders.
+- React/Vite dashboard with Russian and English UI.
+- Mock-backed viewer, chat, word, moderation, archive, and metadata domains.
+- SQLite persistence with deterministic seed data.
+- Zod-validated JSON/CSV imports with job/error tracking.
+- SSE Replay Mode with speed controls, duplicate protection, and demo fallback.
+- Local summary provider and JSON/Markdown reports.
+- Vitest/Supertest backend integration suite using temporary SQLite databases.
+- Honest setup, API, data-format, architecture, and limitation documentation.
 
 ## Next safe improvements
 
-1. Add unit tests for normalization/storage and integration tests for API routes.
-2. Add stronger environment validation and import size/rate policies.
-3. Expand transactional guarantees and migration tooling for SQLite.
-4. Add structured logging and graceful shutdown.
-5. Document deployment hardening once a hosting target is selected.
+1. Add explicit SQLite schema versioning and migrations.
+2. Add structured logging and graceful shutdown for active replay/sampler timers.
+3. Add environment validation at backend startup.
+4. Add import rate/size policies appropriate to a chosen deployment target.
+5. Commit curated desktop/mobile portfolio screenshots.
 
-## Later
+## Later, after real account access
 
-- Implement a real Twitch metadata adapter after account verification is available.
-- Add EventSub or an appropriate chat ingestion path after the provider contracts are tested.
-- Add production deployment configuration only when a hosting target is chosen.
-- Add richer report/export workflows after the local API contracts are stable.
+- Implement and verify Twitch OAuth and metadata adapters.
+- Add EventSub subscriptions and an appropriate chat ingestion source.
+- Add token lifecycle, retry, caching, and rate-limit handling.
+- Add contract tests against recorded real-provider fixtures.
 
-## Non-goals for this MVP
+## Deployment-dependent work
 
-- Replay execution mode.
-- Twitch API, EventSub, or chat integration.
-- Authentication or multi-tenant support.
-- A frontend redesign.
+- Authentication and authorization for write endpoints.
+- Multi-user/channel isolation.
+- Durable queue/replay recovery.
+- Observability, backups, and deployment-specific security controls.
+
+## Explicit current limitations
+
+- No real Twitch API, EventSub, OAuth, or live chat integration.
+- No functional OpenAI provider and no OpenAI requirement.
+- No authentication, rate limiting, or public deployment hardening.
+- Replay state is process-local and does not resume after restart.
+- SQLite is local single-process storage, not a multi-tenant data platform.
+
+These limitations are deliberate and should remain visible until the corresponding work is implemented and verified.

@@ -21,7 +21,7 @@ function downloadCsv(stream) {
   URL.revokeObjectURL(url)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, theme, onToggleTheme, t }) {
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, theme, onToggleTheme, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -39,6 +39,17 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   const themeLabel = theme === 'light'
     ? (isRussian ? 'Тёмная тема' : 'Dark theme')
     : (isRussian ? 'Светлая тема' : 'Light theme')
+  const replayOptions = [1, 5, 20].map((value) => ({ value, label: `${value}x` }))
+  const replayStatus = replay.error
+    ? t.replayError
+    : replay.status.isActive ? `${t.replayRunning} · ${replay.status.progress ?? 0}%` : t.replayIdle
+
+  function downloadMarkdownReport() {
+    const link = document.createElement('a')
+    link.href = `/api/streams/${encodeURIComponent(selectedStreamId)}/report/markdown`
+    link.download = `${selectedStreamId}-report.md`
+    link.click()
+  }
 
   return (
     <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label="Stream controls">
@@ -55,6 +66,15 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
       <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={streamOptions} onChange={onStreamChange} />
       <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
 
+      <div className="replay-controls" aria-label={t.replayMode} aria-busy={replay.isPending ? 'true' : 'false'}>
+        <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay.speed} options={replayOptions} onChange={replay.setSpeed} />
+        <div className="replay-actions">
+          <button className="liquid-button" type="button" disabled={replay.isPending || replay.status.isActive} onClick={() => replay.start().catch(() => undefined)}>{t.startReplay}</button>
+          <button className="liquid-button" type="button" disabled={replay.isPending || !replay.status.isActive} onClick={() => replay.stop().catch(() => undefined)}>{t.stopReplay}</button>
+        </div>
+        <span className={`replay-state ${replay.status.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatus}</span>
+      </div>
+
       <div className="export-actions">
         <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
           <span aria-hidden="true" />
@@ -63,10 +83,13 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
         <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
           {t.exportCsv}
         </ProgressActionButton>
-        <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => window.print()}>
-          {t.exportReport}
-        </ProgressActionButton>
+        <button className="liquid-button" type="button" disabled={streamSummary.isGenerating} onClick={() => streamSummary.generate().catch(() => undefined)}>
+          {streamSummary.isGenerating ? t.generatingReport : t.generateReport}
+        </button>
+        {streamSummary.summary ? <button className="liquid-button" type="button" onClick={downloadMarkdownReport}>{t.downloadReport}</button> : null}
       </div>
+      {streamSummary.error ? <p className="control-feedback is-error" role="alert">{t.reportError}</p> : null}
+      {!streamSummary.isLoading && !streamSummary.summary && !streamSummary.error ? <p className="control-feedback">{t.reportEmpty}</p> : null}
     </Reveal>
   )
 }

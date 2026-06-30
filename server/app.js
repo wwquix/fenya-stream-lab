@@ -8,6 +8,8 @@ import healthRoutes from "./routes/healthRoutes.js";
 import importRoutes from "./routes/importRoutes.js";
 import moderationRoutes from "./routes/moderationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import replayRoutes from "./routes/replayRoutes.js";
+import streamRoutes from "./routes/streamRoutes.js";
 import summaryRoutes from "./routes/summaryRoutes.js";
 import twitchRoutes from "./routes/twitchRoutes.js";
 import wordRoutes from "./routes/wordRoutes.js";
@@ -29,6 +31,8 @@ export function createApp() {
   app.use("/api/archive", archiveRoutes);
   app.use("/api/summary", summaryRoutes);
   app.use("/api/report", reportRoutes);
+  app.use("/api/replay", replayRoutes);
+  app.use("/api/streams", streamRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

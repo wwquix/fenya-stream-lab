@@ -5,6 +5,8 @@ import { loadCurrentWordAnalytics } from "../storage/wordAnalyticsStore.js";
 import { loadCurrentModerationAnalytics } from "../storage/moderationAnalyticsStore.js";
 import { loadStreamArchive } from "../storage/archiveStore.js";
 import { loadCurrentStreamSummary } from "../storage/summaryStore.js";
+import { loadStreamDataset } from "../repositories/streamReportRepository.js";
+import { generateStreamSummary, getStreamSummary } from "./summaryService.js";
 
 const unavailable = { available: false, message: "Не удалось получить данные" };
 
@@ -162,5 +164,82 @@ ${archiveStream
 ## Итог
 
 ${verdict}
+`;
+}
+
+export async function buildStreamReport(streamId) {
+  const dataset = loadStreamDataset(streamId);
+  if (!dataset) return null;
+  const storedSummary = getStreamSummary(streamId);
+  const summary = storedSummary?.provider ? storedSummary : await generateStreamSummary(streamId);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    provider: summary.provider ?? "local",
+    stream: {
+      streamId: dataset.stream.stream_id,
+      title: dataset.stream.title,
+      categoryName: dataset.stream.category_name,
+      date: dataset.stream.stream_date,
+      status: dataset.stream.status,
+      source: dataset.stream.source,
+    },
+    summary,
+    analytics: {
+      viewerSamples: dataset.viewerSamples,
+      segments: dataset.segments,
+      notableMoments: summary.notableMoments ?? summary.highlights,
+      suggestedClipMoments: summary.suggestedClipMoments ?? [],
+    },
+    chat: { topChatters: summary.topChatters, sampledMessages: dataset.chatMessages.length },
+    words: { topWords: summary.topWords },
+    moderation: summary.moderationLoad ?? { totalActions: summary.metrics.moderationActions },
+  };
+}
+
+export function formatStreamReportMarkdown(report) {
+  const summary = report.summary;
+  return `# Отчёт по стриму — ${report.stream.title}
+
+**Дата:** ${report.stream.date ?? "не указана"}
+**Статус:** ${report.stream.status}
+**Категория:** ${report.stream.categoryName ?? "не указана"}
+**Сформирован локально:** ${report.generatedAt}
+
+## Основные метрики
+
+- Средний онлайн: ${formatNumber(summary.metrics.averageViewers)}
+- Пиковый онлайн: ${formatNumber(summary.metrics.peakViewers)}
+- Сообщений в чате: ${formatNumber(summary.metrics.totalMessages)}
+- Уникальных участников: ${formatNumber(summary.metrics.uniqueChatters)}
+- Действий модерации: ${formatNumber(summary.metrics.moderationActions)}
+
+## Самый активный сегмент
+
+${summary.mostActiveSegment ? `${summary.mostActiveSegment.start}–${summary.mostActiveSegment.end} — ${summary.mostActiveSegment.label}` : "Не удалось определить"}
+
+## Топ чатеров
+
+${markdownList(summary.topChatters.slice(0, 10), (item) => `${item.nickname}: ${formatNumber(item.messages)} сообщений`)}
+
+## Частые слова
+
+${markdownList(summary.topWords.slice(0, 12), (item) => `«${item.text}» — ${formatNumber(item.count)}`)}
+
+## Заметные моменты
+
+${markdownList(summary.notableMoments ?? summary.highlights, (item) => `${item.time} — ${item.label}`)}
+
+## Предложенные клипы
+
+${markdownList(summary.suggestedClipMoments, (item) => `${item.time} — ${item.label}`)}
+
+## Нагрузка модерации
+
+${summary.moderationLoad ? `${summary.moderationLoad.level}: ${formatNumber(summary.moderationLoad.totalActions)} действий, ${formatNumber(summary.moderationLoad.actionsPerHour)} в час.` : "Не удалось получить данные"}
+
+## Итог
+
+${summary.verdict}
 `;
 }

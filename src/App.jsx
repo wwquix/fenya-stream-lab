@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Hero from './components/Hero.jsx'
 import SectionRail from './components/SectionRail.jsx'
 import BackToTop from './components/BackToTop.jsx'
@@ -22,6 +22,7 @@ import { useWordAnalytics } from './hooks/useWordAnalytics.js'
 import { useModerationAnalytics } from './hooks/useModerationAnalytics.js'
 import { useStreamArchive } from './hooks/useStreamArchive.js'
 import { useStreamSummary } from './hooks/useStreamSummary.js'
+import { useReplay } from './hooks/useReplay.js'
 import { translations } from './i18n/translations.js'
 
 const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary', 'import-data']
@@ -42,18 +43,62 @@ function App() {
   const [compareStreamId, setCompareStreamId] = useState('')
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
+  const t = translations[language] ?? translations.ru
   const streamAnalytics = useStreamAnalytics()
   const chatAnalytics = useChatAnalytics()
   const twitchMetadata = useTwitchMetadata()
   const wordAnalytics = useWordAnalytics()
   const moderationAnalytics = useModerationAnalytics()
   const streamArchive = useStreamArchive()
-  const streamSummary = useStreamSummary()
-  const backendPulseData = selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
+  const streamSummary = useStreamSummary(selectedStream.id)
+  const replay = useReplay(selectedStream.id)
+  const replayAnalytics = useMemo(() => {
+    if (!replay.data.viewerSamples.length) return null
+    return {
+      streamId: selectedStream.id,
+      title: selectedStream.title,
+      categoryName: selectedStream.category,
+      startedAt: null,
+      points: replay.data.viewerSamples.map((point) => ({ time: point.time, viewers: point.viewers, messagesPerMinute: point.messagesPerMinute })),
+      segments: selectedStream.categorySegments.map((segment) => ({ start: segment.start, end: segment.end, label: segment.category })),
+      events: replay.data.markers.map((marker) => ({ time: marker.time, label: marker.label, category: marker.category, type: marker.markerType, viewers: marker.viewers, messagesPerMinute: marker.messagesPerMinute })),
+    }
+  }, [replay.data.viewerSamples, replay.data.markers, selectedStream])
+  const backendPulseData = replayAnalytics
+    ? adaptAnalyticsForStreamPulse(replayAnalytics, selectedStream)
+    : selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
   const streamPulseStream = backendPulseData?.stream ?? selectedStream
   const streamPulseEvents = backendPulseData?.events ?? streamEvents
-  const t = translations[language] ?? translations.ru
-
+  const replayChatAnalytics = useMemo(() => {
+    if (!replay.data.chatMessages.length) return null
+    const counts = new Map()
+    replay.data.chatMessages.forEach((message) => counts.set(message.nickname, (counts.get(message.nickname) ?? 0) + 1))
+    const messages = [...counts.entries()].map(([nickname, value]) => ({ nickname, value, note: t.replayRunning })).sort((a, b) => b.value - a.value)
+    const fallback = chatters.map((chatter) => ({ nickname: chatter.nickname, value: chatter.watchTime, note: chatter.status }))
+    return {
+      totalMessages: replay.data.chatMessages.length,
+      activeNow: counts.size,
+      activityPeak: Math.min(10, Math.max(1, counts.size)),
+      leaderboards: {
+        messages,
+        watchTime: fallback,
+        tempo: fallback.map((item) => ({ ...item, value: `${counts.get(item.nickname) ?? 0}/min` })),
+        engagement: fallback,
+      },
+    }
+  }, [replay.data.chatMessages, t.replayRunning])
+  const replayModerationAnalytics = useMemo(() => {
+    if (!replay.data.moderationActions.length) return null
+    const base = moderationAnalytics.analytics
+    if (!base) return null
+    const extraActions = replay.data.moderationActions.reduce((sum, action) => sum + (action.actions ?? 1), 0)
+    return {
+      ...base,
+      summary: { ...base.summary, totalActions: extraActions },
+      moderators: base.moderators.map((moderator, index) => index === 0 ? { ...moderator, actions: extraActions } : moderator),
+      events: replay.data.moderationActions.map((action) => ({ time: action.time, label: action.label, actions: action.actions, type: action.actionType, note: action.note })),
+    }
+  }, [replay.data.moderationActions, moderationAnalytics.analytics])
   useEffect(() => {
     localStorage.setItem('fenya-language', language)
     document.documentElement.lang = language
@@ -126,13 +171,15 @@ function App() {
           twitchMetadata={twitchMetadata}
           theme={theme}
           onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
+          replay={replay}
+          streamSummary={streamSummary}
           t={t}
         />
         <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
         {/* Data map is reserved for a future real data pipeline view. */}
         <TopChatters
           chatters={chatters}
-          chatAnalytics={selectedStream.id === currentStream.id ? chatAnalytics.analytics : null}
+          chatAnalytics={replayChatAnalytics ?? (selectedStream.id === currentStream.id ? chatAnalytics.analytics : null)}
           language={language}
           t={t}
         />
@@ -146,7 +193,7 @@ function App() {
         <ModeratorUnit
           moderators={moderators}
           events={streamEvents}
-          moderationAnalytics={selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null}
+          moderationAnalytics={replayModerationAnalytics ?? (selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null)}
           t={t}
         />
         <StreamArchive streams={streams} archive={streamArchive.archive} selectedStreamId={selectedStream.id} t={t} />
@@ -155,7 +202,7 @@ function App() {
           moderators={moderators}
           events={streamEvents}
           chatters={chatters}
-          streamSummary={selectedStream.id === currentStream.id ? streamSummary.summary : null}
+          streamSummary={streamSummary.summary}
           t={t}
         />
         <ImportDataPanel t={t} />
