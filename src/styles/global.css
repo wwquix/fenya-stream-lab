@@ -8120,6 +8120,37 @@ dt,
   color: var(--theme-text-secondary);
 }
 
+.import-file-field .liquid-button,
+.import-submit {
+  appearance: none;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  color: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.import-file-field .liquid-button:hover,
+.import-submit:not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  transform: none;
+}
+
+.import-file-field .liquid-button:focus-visible,
+.import-submit:focus-visible {
+  border-color: rgba(255, 255, 255, 0.18);
+  outline: 2px solid rgba(255, 255, 255, 0.22);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
 .import-paste-field textarea {
   width: 100%;
   min-height: 190px;
@@ -8152,7 +8183,7 @@ dt,
 
 .import-submit:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
   transform: none;
 }
 
@@ -8338,5 +8369,390 @@ dt,
   .replay-actions,
   .export-actions {
     flex-wrap: wrap;
+  }
+}
+
+/* Focused polish: flowing nav state, balanced controls, readable type, and consistent inner radii. */
+.hero-nav-menu {
+  overflow: visible;
+}
+
+.hero-nav-menu a {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.hero-nav-label {
+  position: relative;
+  z-index: 2;
+  color: var(--theme-text-secondary);
+}
+
+.hero-nav-menu a:hover .hero-nav-label,
+.hero-nav-menu a.is-active .hero-nav-label {
+  color: var(--theme-text-primary);
+}
+
+.hero-nav-active-pill,
+.hero-nav-menu a:not(.is-active)::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  content: "";
+}
+
+.hero-nav-active-pill {
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+
+.hero-nav-menu a:not(.is-active)::before {
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.hero-nav-menu a:not(.is-active):hover::before {
+  opacity: 1;
+}
+
+.stream-control-bar {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+  overflow: visible;
+  border-radius: 24px;
+}
+
+.stream-control-bar .stream-live-meta {
+  flex: 1 1 190px;
+  align-self: center;
+}
+
+.stream-control-bar > .custom-select {
+  flex: 1 1 210px;
+  min-width: 190px;
+}
+
+.stream-control-bar .replay-controls {
+  flex: 2 1 390px;
+}
+
+.stream-control-bar .export-actions {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.replay-controls {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.replay-controls > .custom-select {
+  flex: 0 1 132px;
+  min-width: 112px;
+}
+
+.replay-action-stack {
+  display: grid;
+  flex: 1 1 250px;
+  min-width: 0;
+  gap: 7px;
+}
+
+.replay-actions-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--theme-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 740;
+}
+
+.replay-state {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--theme-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-state.is-active {
+  color: var(--theme-text-primary);
+}
+
+.replay-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.replay-actions button {
+  flex: 1 0 auto;
+}
+
+.stream-control-bar .custom-select-trigger,
+.stream-control-bar .replay-actions button,
+.stream-control-bar .export-actions button {
+  height: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+}
+
+.stream-control-bar .custom-select-trigger,
+.stream-control-bar .custom-select.is-open .custom-select-trigger {
+  color: var(--theme-text-primary);
+}
+
+.stream-control-bar .custom-select-shell {
+  border-radius: var(--radius-control);
+}
+
+.stream-control-bar .export-actions button {
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+
+.stream-control-bar .custom-select-label,
+.stream-live-copy span,
+.control-feedback,
+.chat-leaderboard small,
+.leaderboard-tabs button {
+  color: var(--theme-text-secondary);
+}
+
+.stream-control-bar .custom-select-menu button:hover,
+.leaderboard-tabs button:hover,
+.category-filter button:hover,
+.chart-range-controls button:hover,
+.section-rail a:hover,
+.quick-access-nav a:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.stream-control-bar .custom-select-menu button.is-selected,
+.leaderboard-tabs button.is-active,
+.category-filter button.is-active,
+.chart-range-controls button.is-active,
+.section-rail a.is-active,
+.quick-access-nav a.is-active {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.chat-leaderboard,
+.console-rush-hub,
+.chat-summary-metrics > div,
+.leaderboard-tabs,
+.chat-leaderboard li {
+  overflow: hidden;
+}
+
+.chat-leaderboard,
+.console-rush-hub,
+.chat-summary-metrics > div {
+  border-radius: var(--radius-lg);
+}
+
+.leaderboard-tabs {
+  border-radius: 20px;
+}
+
+.leaderboard-tabs button {
+  border-radius: 16px;
+}
+
+.top-chatters .chat-leaderboard ol,
+.top-chatters .chat-leaderboard li,
+.top-chatters .chat-leaderboard li > div {
+  min-width: 0;
+}
+
+.top-chatters .chat-leaderboard li {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 15px;
+}
+
+.top-chatters .leaderboard-rank {
+  flex: 0 0 22px;
+}
+
+.top-chatters .leaderboard-avatar {
+  flex: 0 0 30px;
+}
+
+.top-chatters .chat-leaderboard li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.top-chatters .chat-leaderboard strong,
+.top-chatters .chat-leaderboard small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-chatters .chat-leaderboard em {
+  flex: 0 0 auto;
+  min-width: max-content;
+  color: rgba(255, 255, 255, 0.92);
+  text-align: right;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] {
+  --theme-text-primary: rgba(255, 255, 255, 0.92);
+  --theme-text-secondary: rgba(255, 255, 255, 0.68);
+  --text-dim: rgba(255, 255, 255, 0.52);
+  --theme-hover: rgba(255, 255, 255, 0.08);
+  --theme-accent-soft: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .stream-control-bar .custom-select-menu button,
+:root[data-theme="dark"] .leaderboard-tabs button {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+:root[data-theme="dark"] .stream-control-bar .custom-select-menu button:hover,
+:root[data-theme="dark"] .stream-control-bar .custom-select-menu button.is-selected,
+:root[data-theme="dark"] .leaderboard-tabs button:hover,
+:root[data-theme="dark"] .leaderboard-tabs button.is-active {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"] .stream-control-bar .custom-select-label,
+:root[data-theme="dark"] .replay-actions-label,
+:root[data-theme="dark"] .stream-live-copy span {
+  color: rgba(255, 255, 255, 0.52);
+}
+
+:root[data-theme="dark"] .stream-control-bar .custom-select-trigger,
+:root[data-theme="dark"] .stream-control-bar .custom-select.is-open .custom-select-trigger,
+:root[data-theme="dark"] .stream-control-bar .export-actions button,
+:root[data-theme="dark"] .stream-control-bar .replay-actions button {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+:root[data-theme="dark"] .replay-state,
+:root[data-theme="dark"] .top-chatters .chat-leaderboard small {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+:root[data-theme="dark"] .stream-control-bar button:disabled {
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.035);
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .stream-control-bar .custom-select:hover .custom-select-shell,
+:root[data-theme="dark"] .stream-control-bar .custom-select.is-open .custom-select-shell,
+:root[data-theme="dark"] .stream-control-bar button:not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.console-task,
+.console-stats div,
+.console-log,
+.console-input-row {
+  overflow: hidden;
+  border-radius: var(--radius-inner);
+}
+
+@media (min-width: 1500px) {
+  .stream-control-bar .stream-live-meta {
+    flex: 0 1 190px;
+  }
+
+  .stream-control-bar > .custom-select {
+    flex: 1 1 190px;
+  }
+
+  .stream-control-bar .replay-controls {
+    flex: 1.7 1 390px;
+  }
+
+  .stream-control-bar .export-actions {
+    flex: 0 1 auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .stream-control-bar .stream-live-meta {
+    flex-basis: 100%;
+  }
+
+  .stream-control-bar > .custom-select {
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .stream-control-bar .replay-controls,
+  .stream-control-bar .export-actions {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .replay-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stream-control-bar .stream-live-meta,
+  .stream-control-bar > .custom-select,
+  .stream-control-bar .replay-controls,
+  .stream-control-bar .export-actions {
+    flex-basis: 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .stream-control-bar .export-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stream-control-bar .export-actions button {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-nav-menu a::before,
+  .hero-nav-active-pill {
+    transition: none !important;
   }
 }

@@ -15,6 +15,8 @@
   --glass-border-strong: rgba(69, 87, 108, 0.18);
   --radius-lg: 18px;
   --radius-xl: 28px;
+  --radius-control: 18px;
+  --radius-inner: 16px;
   --shadow-glow: 0 16px 42px rgba(59, 72, 89, 0.1);
   --shadow-panel: 0 18px 50px rgba(34, 42, 53, 0.08);
   --transition-fast: 140ms ease;

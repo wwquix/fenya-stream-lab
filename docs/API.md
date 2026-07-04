@@ -15,7 +15,8 @@ Malformed JSON returns `400` with `Request body contains invalid JSON.` No authe
 | Method | Endpoint | Result |
 | --- | --- | --- |
 | GET | `/api/health` | Service, provider, and timestamp |
-| GET | `/api/twitch/fenya` | Mock Twitch-shaped channel metadata |
+| GET | `/api/twitch/fenya` | Mock or real normalized Twitch channel/live metadata |
+| GET | `/api/twitch/fenya/connection` | Secret-free local Twitch configuration diagnostics |
 | GET | `/api/analytics/fenya/current-stream` | Viewer/chat timeline, segments, markers |
 | GET | `/api/chat/fenya/current-stream` | Chat totals and leaderboards |
 | GET | `/api/words/fenya/current-stream` | Frequent words and clusters |
@@ -122,3 +123,10 @@ These routes mutate/reset local demo data and are not public production operatio
 | POST | `/api/archive/fenya/reset` | Reset the archive |
 | POST | `/api/summary/fenya/regenerate` | Regenerate the compatibility summary |
 | POST | `/api/summary/fenya/reset` | Reset the compatibility summary |
+| POST | `/api/twitch/fenya/poll-once` | Fetch metadata once in Twitch mode; reports that polling is skipped in mock mode |
+
+## Twitch metadata
+
+`TWITCH_PROVIDER=mock` preserves the deterministic dashboard response. With `TWITCH_PROVIDER=twitch`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, and `TWITCH_CHANNEL_LOGIN`, the same endpoint resolves the user and reads channel/current-stream data from Helix. Offline responses use `isLive: false`, `streamId: null`, and `viewerCount: 0`.
+
+The connection route returns only presence flags, token validity/scopes, configured broadcaster ID, and a safe last error. It never returns token or client-secret values. These routes are local development diagnostics, not public authenticated operations.

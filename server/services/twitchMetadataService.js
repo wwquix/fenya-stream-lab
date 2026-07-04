@@ -3,10 +3,16 @@ import process from "node:process";
 import { getTwitchChannelMetadata as getMockTwitchChannelMetadata } from "../providers/mockTwitchProvider.js";
 import { getTwitchChannelMetadata as getRealTwitchChannelMetadata } from "../providers/twitchProvider.js";
 
-function resolveTwitchProvider() {
+export function getTwitchProviderName() {
   const providerName = process.env.TWITCH_PROVIDER || "mock";
 
-  if (providerName === "twitch" || providerName === "real") {
+  return providerName === "twitch" || providerName === "real" ? "twitch" : "mock";
+}
+
+function resolveTwitchProvider() {
+  const providerName = getTwitchProviderName();
+
+  if (providerName === "twitch") {
     return getRealTwitchChannelMetadata;
   }
 

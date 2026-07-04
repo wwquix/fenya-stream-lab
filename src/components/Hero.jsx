@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'motion/react'
 import { Reveal } from './MotionPrimitives.jsx'
 
 // Future media swap point:
@@ -20,6 +21,7 @@ const navItems = [
 
 function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'hero', language, onToggleLanguage, t }) {
   const hasHeroAsset = Boolean(heroAsset?.src)
+  const prefersReducedMotion = useReducedMotion()
 
   return (
     <Reveal as="section" className="hero-wrap" id="hero" data-entity-type="stream" data-entity-id={stream.id}>
@@ -37,7 +39,17 @@ function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'hero', la
           <div className="hero-nav-menu">
             {navItems.map((item) => (
               <a className={activeSection === item.id ? 'is-active' : ''} href={`#${item.id}`} key={item.id}>
-                {t[item.labelKey]}
+                {activeSection === item.id ? (
+                  <motion.span
+                    className="hero-nav-active-pill"
+                    layoutId="hero-nav-active-pill"
+                    aria-hidden="true"
+                    transition={prefersReducedMotion
+                      ? { duration: 0 }
+                      : { type: 'spring', stiffness: 420, damping: 36 }}
+                  />
+                ) : null}
+                <span className="hero-nav-label">{t[item.labelKey]}</span>
               </a>
             ))}
           </div>

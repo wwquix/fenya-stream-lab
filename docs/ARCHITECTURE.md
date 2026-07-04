@@ -23,8 +23,8 @@ The frontend keeps committed mock datasets as a defensive fallback. Running the 
 - `server/index.js`: loads `.env`, starts Express, and optionally starts the mock sampler.
 - `server/app.js`: composes middleware, routers, 404 handling, and the JSON error boundary.
 - `server/routes/`: maps HTTP endpoints to domain operations.
-- `server/services/`: orchestrates imports, reports, provider selection, replay timing, and SSE clients.
-- `server/providers/`: deterministic mock sources, local summary calculation, and non-functional future-provider placeholders.
+- `server/services/`: orchestrates imports, reports, provider selection, Twitch auth/Helix calls, replay timing, and SSE clients.
+- `server/providers/`: deterministic mock sources, real normalized Twitch metadata, and local summary calculation.
 - `server/repositories/`: owns SQLite queries and row-to-contract mapping.
 - `server/storage/`: initializes SQLite and preserves legacy JSON/mock compatibility stores.
 - `server/validation/`: defines normalized import contracts with Zod.
@@ -73,11 +73,11 @@ If the requested stream has no detailed events, seeded demo events are used with
 
 `reportService` combines stream metadata and the stored/generated summary into JSON or Markdown. Legacy seeded summaries without provider metadata are regenerated through the configured provider before a stream-specific report is returned.
 
-## Provider/source boundaries
+## Twitch provider boundary
 
-The real Twitch provider and OpenAI summary provider intentionally throw explicit “not configured” errors. They contain no credential handling and make no network requests. Current operation uses mock Twitch-shaped metadata and local SQLite summary logic.
+`twitchMetadataService` selects the unchanged mock provider by default or the real provider for `TWITCH_PROVIDER=twitch`. The auth service obtains and memory-caches an app token; the Helix client owns authenticated requests and safe upstream errors; the provider combines `/users`, `/channels`, and `/streams` into the frontend contract. Tokens are never persisted or returned by diagnostics.
 
-The adapter/source boundaries are the reason the project is described as Twitch-ready. They are not evidence of completed Twitch integration.
+Optional user-token validation and refresh are foundations only. EventSub WebSocket chat ingestion is a separate next step and is not part of the metadata polling path.
 
 ## Test architecture
 
@@ -92,4 +92,4 @@ After each test the database singleton is closed, environment overrides are remo
 
 ## Current boundaries
 
-This is a local single-channel portfolio backend. It has no authentication, authorization, multi-user isolation, public deployment hardening, rate limiting, durable replay recovery, or real Twitch/EventSub connection. Write, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.
+This is a local single-channel portfolio backend. It has no application authentication, multi-user isolation, public deployment hardening, rate-limit retry strategy, durable replay recovery, or EventSub chat connection. Write, diagnostic, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.

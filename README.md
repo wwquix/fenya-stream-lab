@@ -2,7 +2,7 @@
 
 Fenya Stream Lab is a bilingual streamer analytics dashboard built as a portfolio project for streamer Fenya. It presents viewer momentum, chat activity, recurring words, moderation workload, archive context, replayed events, and locally generated stream reports in one premium dashboard.
 
-The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, and local reports. Real Twitch/EventSub integration is planned but not complete. The project is Twitch-ready through its adapter/source architecture; it does not claim to be production-ready or connected to a live Twitch account.
+The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, local reports, and optional real Twitch channel/live metadata through Helix. EventSub chat ingestion is not implemented yet.
 
 ## Screenshots
 
@@ -119,11 +119,18 @@ The default `localSummaryProvider` calculates report data from SQLite only. `moc
 
 Generated summaries are stored in `stream_summaries`. Stream reports are available as structured JSON and readable Markdown. See [docs/API.md](docs/API.md) for endpoints.
 
-## Current Twitch status
+## Twitch metadata integration
 
-The supported provider is `TWITCH_PROVIDER=mock`. `/api/twitch/fenya` returns deterministic Twitch-shaped metadata for the UI.
+Mock mode remains the default and requires no credentials. To use real Twitch metadata, create a local `.env` and configure:
 
-Real Twitch API, OAuth, EventSub, chat ingestion, token refresh, retries, and rate-limit handling are not implemented. Provider and source boundaries make a future adapter possible without replacing the dashboard contracts, which is what “Twitch-ready” means in this repository.
+```dotenv
+TWITCH_PROVIDER=twitch
+TWITCH_CHANNEL_LOGIN=fenya
+TWITCH_CLIENT_ID=your_client_id
+TWITCH_CLIENT_SECRET=your_client_secret
+```
+
+The backend uses Twitch Client Credentials, caches the app access token in memory, and resolves Helix user, channel, and current-stream data. `GET /api/twitch/fenya/connection` provides secret-free local diagnostics. User and refresh tokens are optional foundations for the later EventSub step; live chat ingestion will be implemented separately through EventSub WebSocket.
 
 ## Environment variables
 
@@ -131,14 +138,21 @@ Real Twitch API, OAuth, EventSub, chat ingestion, token refresh, retries, and ra
 | --- | --- | --- |
 | `PORT` | `3001` | Express port |
 | `DATABASE_PATH` | `server/data/fenya-stream-lab.sqlite` | Local SQLite path |
-| `TWITCH_PROVIDER` | `mock` | Only supported Twitch metadata mode |
-| `TWITCH_CHANNEL_LOGIN` | `fenya` | Mock channel selector |
+| `TWITCH_PROVIDER` | `mock` | `mock` or real Helix metadata via `twitch` |
+| `TWITCH_CHANNEL_LOGIN` | `fenya` | Channel login to resolve |
+| `TWITCH_CLIENT_ID` | empty | Required in Twitch mode |
+| `TWITCH_CLIENT_SECRET` | empty | Required in Twitch mode; server-side only |
+| `TWITCH_USER_ACCESS_TOKEN` | empty | Optional now; intended for EventSub chat later |
+| `TWITCH_REFRESH_TOKEN` | empty | Optional user-token refresh foundation |
+| `TWITCH_BROADCASTER_ID` | empty | Optional cached/configured broadcaster identity |
+| `TWITCH_BOT_USER_ID` | empty | Reserved for the EventSub chat step |
+| `TWITCH_POLL_INTERVAL_MS` | `30000` | Reserved polling interval configuration |
 | `SUMMARY_PROVIDER` | `local` | `local` or deterministic `mock`; `openai` is only a placeholder |
 | `MOCK_SAMPLER_INTERVAL_MS` | `10000` | Demo sampler interval |
 | `MOCK_SAMPLER_AUTOSTART` | `false` | Start demo sampler with the backend |
 | `REPLAY_MS_PER_STREAM_MINUTE` | `250` | Local replay timing scale before speed multiplier |
 
-No credentials are required. Twitch/OpenAI key fields are intentionally absent from `.env.example` because those providers are not implemented.
+No credentials are required in the default mock mode. `.env` remains ignored and secrets must never be committed.
 
 ## npm scripts
 
@@ -187,8 +201,7 @@ Base URL: `http://localhost:3001`. See [docs/API.md](docs/API.md) for the comple
 
 ## Future improvements
 
-- Implement and verify a real Twitch OAuth/metadata adapter.
-- Add EventSub/chat ingestion after provider contracts are proven against a real account.
+- Add EventSub WebSocket chat ingestion using user authorization after metadata is verified against a real account.
 - Add migrations, structured logging, graceful shutdown, and deployment hardening.
 - Add authentication and rate limiting before exposing write endpoints publicly.
 - Add repository-owned portfolio screenshots.

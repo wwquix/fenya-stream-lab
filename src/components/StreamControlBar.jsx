@@ -68,11 +68,16 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
 
       <div className="replay-controls" aria-label={t.replayMode} aria-busy={replay.isPending ? 'true' : 'false'}>
         <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay.speed} options={replayOptions} onChange={replay.setSpeed} />
-        <div className="replay-actions">
-          <button className="liquid-button" type="button" disabled={replay.isPending || replay.status.isActive} onClick={() => replay.start().catch(() => undefined)}>{t.startReplay}</button>
-          <button className="liquid-button" type="button" disabled={replay.isPending || !replay.status.isActive} onClick={() => replay.stop().catch(() => undefined)}>{t.stopReplay}</button>
+        <div className="replay-action-stack">
+          <span className="replay-actions-label">
+            {t.replayMode}
+            <span className={`replay-state ${replay.status.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatus}</span>
+          </span>
+          <div className="replay-actions">
+            <button className="liquid-button" type="button" disabled={replay.isPending || replay.status.isActive} onClick={() => replay.start().catch(() => undefined)}>{t.startReplay}</button>
+            <button className="liquid-button" type="button" disabled={replay.isPending || !replay.status.isActive} onClick={() => replay.stop().catch(() => undefined)}>{t.stopReplay}</button>
+          </div>
         </div>
-        <span className={`replay-state ${replay.status.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatus}</span>
       </div>
 
       <div className="export-actions">
