@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { HttpError, routeHandler } from "../middleware/errorHandlers.js";
 import { createMockArchivedStream } from "../providers/mockArchiveProvider.js";
+import { loadStreamArchiveFromDatabase } from "../repositories/dashboardRepository.js";
+import { getTwitchProviderName } from "../services/twitchMetadataService.js";
 import {
   appendMockArchivedStream,
   getArchivedStreamById,
@@ -12,6 +14,11 @@ import {
 const router = Router();
 
 router.get("/fenya/streams", routeHandler(async (_req, res) => {
+  if (getTwitchProviderName() === "twitch") {
+    const archive = loadStreamArchiveFromDatabase("twitch");
+    if (!archive) return res.status(204).end();
+    return res.json(archive);
+  }
   res.json(await loadStreamArchive());
 }, "Failed to load stream archive"));
 

@@ -139,3 +139,7 @@ The connection route returns only presence flags, token validity/scopes, configu
 Ingest requires `TWITCH_PROVIDER=twitch`, valid client credentials, and `TWITCH_USER_ACCESS_TOKEN` with `user:read:chat`. On start, the backend resolves the broadcaster, creates a WebSocket `channel.chat.message` subscription using the validated token user ID, and begins Helix polling. Chat messages are deduplicated by Twitch message ID and update `chat_messages`, `chatters`, `word_stats`, and stream totals. Live polls update stream title/category/start time and append `viewer_samples`.
 
 The status response contains connection IDs, timestamps, counters, provider state, and a safe `lastError`; it contains no credentials. Ingest state, sockets, token refreshes, and timers are in memory and do not survive process restart. Mock mode remains available and refuses to start real ingest cleanly.
+
+When `TWITCH_PROVIDER=twitch`, dashboard read endpoints return only rows whose source is `twitch`. If no matching analytics, chat, words, moderation, or archive data exists, the corresponding endpoint returns `204 No Content`; it never falls back to demo JSON. In mock mode the existing deterministic contracts remain unchanged.
+
+`TWITCH_LIVE_INGEST_AUTOSTART=true` may start ingest with the backend. `TWITCH_POLL_INTERVAL_MS` controls Helix polling and `TWITCH_EVENTSUB_RECONNECT_MS` controls the reconnect delay. The default autostart value is `false`.

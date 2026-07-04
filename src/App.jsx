@@ -10,6 +10,7 @@ import ModeratorUnit from './components/ModeratorUnit.jsx'
 import StreamArchive from './components/StreamArchive.jsx'
 import DashboardOverview from './components/DashboardOverview.jsx'
 import ImportDataPanel from './components/ImportDataPanel.jsx'
+import { RealDataEmptySection, RealDataSummary, RealModeNotice } from './components/RealModeStates.jsx'
 import { currentStream, streams } from './data/mockStreams.js'
 import { chatters } from './data/mockChatters.js'
 import { moderators } from './data/mockModerators.js'
@@ -18,6 +19,7 @@ import { streamEvents } from './data/mockEvents.js'
 import { adaptAnalyticsForStreamPulse, useStreamAnalytics } from './hooks/useStreamAnalytics.js'
 import { useChatAnalytics } from './hooks/useChatAnalytics.js'
 import { useTwitchMetadata } from './hooks/useTwitchMetadata.js'
+import { useTwitchIngest } from './hooks/useTwitchIngest.js'
 import { useWordAnalytics } from './hooks/useWordAnalytics.js'
 import { useModerationAnalytics } from './hooks/useModerationAnalytics.js'
 import { useStreamArchive } from './hooks/useStreamArchive.js'
@@ -47,11 +49,14 @@ function App() {
   const streamAnalytics = useStreamAnalytics()
   const chatAnalytics = useChatAnalytics()
   const twitchMetadata = useTwitchMetadata()
+  const twitchIngest = useTwitchIngest()
   const wordAnalytics = useWordAnalytics()
   const moderationAnalytics = useModerationAnalytics()
   const streamArchive = useStreamArchive()
   const streamSummary = useStreamSummary(selectedStream.id)
   const replay = useReplay(selectedStream.id)
+  const isTwitchMode = twitchIngest.connection?.provider === 'twitch'
+  const isDataModeLoading = twitchIngest.isLoading && !twitchIngest.connection
   const replayAnalytics = useMemo(() => {
     if (!replay.data.viewerSamples.length) return null
     return {
@@ -64,11 +69,21 @@ function App() {
       events: replay.data.markers.map((marker) => ({ time: marker.time, label: marker.label, category: marker.category, type: marker.markerType, viewers: marker.viewers, messagesPerMinute: marker.messagesPerMinute })),
     }
   }, [replay.data.viewerSamples, replay.data.markers, selectedStream])
-  const backendPulseData = replayAnalytics
-    ? adaptAnalyticsForStreamPulse(replayAnalytics, selectedStream)
-    : selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
+  const backendPulseData = isTwitchMode
+    ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream)
+    : replayAnalytics
+      ? adaptAnalyticsForStreamPulse(replayAnalytics, selectedStream)
+      : selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
   const streamPulseStream = backendPulseData?.stream ?? selectedStream
   const streamPulseEvents = backendPulseData?.events ?? streamEvents
+  const hasRealStream = Boolean(streamAnalytics.analytics?.points?.length)
+  const hasRealChat = Boolean(chatAnalytics.analytics?.leaderboards?.messages?.length)
+  const hasRealWords = Boolean(wordAnalytics.analytics?.words?.length)
+  const twitchConnected = Boolean(
+    twitchIngest.connection?.appTokenAvailable
+    && twitchIngest.connection?.userTokenValid
+    && !twitchIngest.connection?.lastError,
+  )
   const replayChatAnalytics = useMemo(() => {
     if (!replay.data.chatMessages.length) return null
     const counts = new Map()
@@ -169,43 +184,108 @@ function App() {
           onStreamChange={handleStreamChange}
           onCompareChange={setCompareStreamId}
           twitchMetadata={twitchMetadata}
+          twitchIngest={twitchIngest}
+          persistedMessageCount={chatAnalytics.analytics?.totalMessages ?? 0}
+          isTwitchMode={isTwitchMode}
+          isDataModeLoading={isDataModeLoading}
           theme={theme}
           onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
           replay={replay}
           streamSummary={streamSummary}
           t={t}
         />
-        <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
-        {/* Data map is reserved for a future real data pipeline view. */}
-        <TopChatters
-          chatters={chatters}
-          chatAnalytics={replayChatAnalytics ?? (selectedStream.id === currentStream.id ? chatAnalytics.analytics : null)}
-          language={language}
-          t={t}
-        />
-        <WordMutationCloud
-          words={words}
-          wordAnalytics={selectedStream.id === currentStream.id ? wordAnalytics.analytics : null}
-          streamId={selectedStream.id}
-          language={language}
-          t={t}
-        />
-        <ModeratorUnit
-          moderators={moderators}
-          events={streamEvents}
-          moderationAnalytics={replayModerationAnalytics ?? (selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null)}
-          t={t}
-        />
-        <StreamArchive streams={streams} archive={streamArchive.archive} selectedStreamId={selectedStream.id} t={t} />
-        <DashboardOverview
-          stream={selectedStream}
-          moderators={moderators}
-          events={streamEvents}
-          chatters={chatters}
-          streamSummary={streamSummary.summary}
-          t={t}
-        />
-        <ImportDataPanel t={t} />
+        {isDataModeLoading ? (
+          <section className="real-data-empty glass-panel" role="status">
+            <p>{t.loadingRealMode}</p>
+          </section>
+        ) : isTwitchMode ? (
+          <>
+            {twitchConnected && twitchMetadata.metadata?.isLive === false ? (
+              <RealModeNotice title={t.offlineConnectedTitle} note={t.offlineConnectedNote} />
+            ) : null}
+            {hasRealStream ? (
+              <StreamPulse stream={streamPulseStream} compareStream={null} events={backendPulseData?.events ?? []} t={t} />
+            ) : (
+              <RealDataEmptySection
+                id="stream-pulse"
+                title={t.streamPulse}
+                note={hasRealChat ? t.pulseChatOnly : `${t.noRealData} ${t.pulseWaiting}`}
+              />
+            )}
+            {hasRealChat ? (
+              <TopChatters
+                chatters={[]}
+                chatAnalytics={chatAnalytics.analytics}
+                language={language}
+                realDataMode
+                hasRealStream={hasRealStream}
+                t={t}
+              />
+            ) : (
+              <RealDataEmptySection id="chatters" title={t.viewersAndChat} note={t.noChatMessages} />
+            )}
+            {hasRealWords ? (
+              <WordMutationCloud
+                words={[]}
+                wordAnalytics={wordAnalytics.analytics}
+                streamId={wordAnalytics.analytics.streamId}
+                language={language}
+                realDataMode
+                t={t}
+              />
+            ) : (
+              <RealDataEmptySection id="speech" title={t.chatWordsTitle} note={t.noChatWords} />
+            )}
+            {moderationAnalytics.analytics ? (
+              <ModeratorUnit moderators={[]} events={[]} moderationAnalytics={moderationAnalytics.analytics} t={t} />
+            ) : (
+              <RealDataEmptySection id="moderators" title={t.moderatorPerformance} note={t.noModerationData} />
+            )}
+            <StreamArchive streams={[]} archive={streamArchive.archive} selectedStreamId="" realDataMode t={t} />
+            <RealDataSummary
+              connection={twitchIngest.connection}
+              ingestStatus={twitchIngest.status}
+              metadata={twitchMetadata.metadata}
+              chatAnalytics={chatAnalytics.analytics}
+              wordAnalytics={wordAnalytics.analytics}
+              t={t}
+            />
+          </>
+        ) : (
+          <>
+            <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
+            {/* Data map is reserved for a future real data pipeline view. */}
+            <TopChatters
+              chatters={chatters}
+              chatAnalytics={replayChatAnalytics ?? (selectedStream.id === currentStream.id ? chatAnalytics.analytics : null)}
+              language={language}
+              t={t}
+            />
+            <WordMutationCloud
+              words={words}
+              wordAnalytics={selectedStream.id === currentStream.id ? wordAnalytics.analytics : null}
+              streamId={selectedStream.id}
+              language={language}
+              t={t}
+            />
+            <ModeratorUnit
+              moderators={moderators}
+              events={streamEvents}
+              moderationAnalytics={replayModerationAnalytics ?? (selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null)}
+              t={t}
+            />
+            <StreamArchive streams={streams} archive={streamArchive.archive} selectedStreamId={selectedStream.id} t={t} />
+            <DashboardOverview
+              stream={selectedStream}
+              moderators={moderators}
+              events={streamEvents}
+              chatters={chatters}
+              streamSummary={streamSummary.summary}
+              t={t}
+            />
+            <ImportDataPanel t={t} />
+          </>
+        )}
       </div>
     </main>
   )

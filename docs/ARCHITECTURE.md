@@ -16,7 +16,7 @@ React hooks -> Express routes -> services/providers |
                                   repositories -> SQLite
 ```
 
-The frontend keeps committed mock datasets as a defensive fallback. Running the backend unlocks SQLite imports, replay sessions, generated summaries, and reports without changing component contracts.
+The frontend keeps committed mock datasets as a defensive fallback only in mock mode. With `TWITCH_PROVIDER=twitch`, dashboard routes and components accept only SQLite rows sourced from Twitch and render explicit empty states instead of demo fallback data.
 
 ## Backend layers
 
@@ -78,6 +78,8 @@ If the requested stream has no detailed events, seeded demo events are used with
 `twitchMetadataService` selects the unchanged mock provider by default or the real provider for `TWITCH_PROVIDER=twitch`. The auth service obtains and memory-caches an app token; the Helix client owns authenticated requests and safe upstream errors; the provider combines `/users`, `/channels`, and `/streams` into the frontend contract. Tokens are never persisted or returned by diagnostics.
 
 `twitchIngestService` owns user-token validation/refresh, the process-local EventSub connection, keepalive watchdog, reconnect handling, `channel.chat.message` subscription, and Helix poll timer. `twitchIngestRepository` writes live stream snapshots and idempotent chat events into the existing SQLite schema, then updates chatter, word, and stream aggregates. User tokens and refreshed tokens remain memory-only and are never returned by API routes.
+
+The dashboard can show collected chat and word aggregates while the channel is offline. Viewer samples, full stream analytics, and archive-ready sessions require the poller to observe a live stream. Process-local autostart and reconnect timing are configured with `TWITCH_LIVE_INGEST_AUTOSTART` and `TWITCH_EVENTSUB_RECONNECT_MS`.
 
 ## Test architecture
 

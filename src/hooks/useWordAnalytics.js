@@ -93,6 +93,14 @@ export function useWordAnalytics() {
       try {
         const response = await fetch('/api/words/fenya/current-stream', { signal: controller.signal })
 
+        if (response.status === 204) {
+          if (isActive) {
+            setAnalytics(null)
+            setError(null)
+          }
+          return
+        }
+
         if (!response.ok) {
           throw new Error(`Word analytics request failed with ${response.status}`)
         }

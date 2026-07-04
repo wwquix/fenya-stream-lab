@@ -135,6 +135,14 @@ export function useModerationAnalytics() {
       try {
         const response = await fetch('/api/moderation/fenya/current-stream', { signal: controller.signal })
 
+        if (response.status === 204) {
+          if (isActive) {
+            setAnalytics(null)
+            setError(null)
+          }
+          return
+        }
+
         if (!response.ok) {
           throw new Error(`Moderation analytics request failed with ${response.status}`)
         }

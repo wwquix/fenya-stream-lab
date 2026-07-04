@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 const EMPTY_METADATA = {
+  provider: null,
+  channelLogin: null,
   displayName: null,
   profileImageUrl: null,
   broadcasterId: null,
@@ -25,6 +27,8 @@ function normalizeMetadata(payload) {
   }
 
   return {
+    provider: normalizeString(payload.provider),
+    channelLogin: normalizeString(payload.channelLogin),
     displayName: normalizeString(payload.displayName),
     profileImageUrl: normalizeString(payload.profileImageUrl),
     broadcasterId: normalizeString(payload.broadcasterId),
@@ -76,9 +80,11 @@ export function useTwitchMetadata() {
     }
 
     loadMetadata()
+    const pollingInterval = window.setInterval(loadMetadata, 10_000)
 
     return () => {
       isActive = false
+      window.clearInterval(pollingInterval)
       controller.abort()
     }
   }, [])

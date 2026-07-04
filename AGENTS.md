@@ -30,7 +30,8 @@ The visual direction is premium analytics / fintech dashboard:
 Do not convert the project to TypeScript.
 Do not add Tailwind CSS unless explicitly requested.
 Do not add shadcn unless explicitly requested.
-Do not add or expand backend, database, authentication, real APIs, real tokens, WebSocket, Twitch/Kick/YouTube integrations, Three.js, Spline, WebGL, or shader effects unless explicitly requested. When the user explicitly requests backend or Twitch integration, extend the existing backend architecture narrowly and keep secrets local.
+The current project already includes an Express backend, SQLite storage, Twitch Helix metadata, and EventSub WebSocket chat ingest.
+Do not add major backend, authentication, database, or WebSocket features unless explicitly requested. When backend or Twitch work is requested, extend the existing architecture narrowly and keep secrets local.
 
 Keep React + Vite + JavaScript.
 Keep regular CSS unless explicitly requested.

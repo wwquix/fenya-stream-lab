@@ -80,7 +80,7 @@ function normalizeAnalytics(payload) {
         .filter((event) => event.time && event.label && isValidTime(event.time))
     : []
 
-  if (points.length < 2 || segments.length === 0) {
+  if (points.length === 0) {
     return null
   }
 
@@ -100,7 +100,7 @@ export function adaptAnalyticsForStreamPulse(analytics, fallbackStream) {
     return null
   }
 
-  const streamId = fallbackStream.id
+  const streamId = analytics.streamId ?? fallbackStream.id
   const categorySegments = analytics.segments.map((segment, index) => ({
     id: `backend-segment-${index + 1}`,
     start: segment.start,
@@ -160,6 +160,14 @@ export function useStreamAnalytics() {
         const response = await fetch('/api/analytics/fenya/current-stream', {
           signal: controller.signal,
         })
+
+        if (response.status === 204) {
+          if (isActive) {
+            setAnalytics(null)
+            setError(null)
+          }
+          return
+        }
 
         if (!response.ok) {
           throw new Error(`Stream analytics request failed with ${response.status}`)

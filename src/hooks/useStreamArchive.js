@@ -92,6 +92,14 @@ export function useStreamArchive() {
       try {
         const response = await fetch('/api/archive/fenya/streams', { signal: controller.signal })
 
+        if (response.status === 204) {
+          if (isActive) {
+            setArchive(null)
+            setError(null)
+          }
+          return
+        }
+
         if (!response.ok) {
           throw new Error(`Stream archive request failed with ${response.status}`)
         }

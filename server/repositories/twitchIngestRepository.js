@@ -29,10 +29,21 @@ export function saveTwitchStreamSnapshot(metadata, timestamp = new Date().toISOS
   const database = getDatabase();
   if (!metadata.isLive || !metadata.streamId) {
     database.prepare(`
-      UPDATE streams SET status = 'completed', is_current = 0,
-        analytics_updated_at = ?, updated_at = ?
-      WHERE source = 'twitch' AND is_current = 1
-    `).run(timestamp, timestamp);
+      UPDATE streams SET
+        status = 'completed', is_current = 0, ended_at = COALESCE(ended_at, ?),
+        duration_minutes = COALESCE(duration_minutes, CASE
+          WHEN started_at IS NULL THEN NULL
+          ELSE MAX(1, CAST(ROUND((julianday(?) - julianday(started_at)) * 1440) AS INTEGER))
+        END),
+        average_viewers = COALESCE((
+          SELECT ROUND(AVG(viewers)) FROM viewer_samples WHERE viewer_samples.stream_id = streams.stream_id
+        ), average_viewers),
+        peak_viewers = COALESCE((
+          SELECT MAX(viewers) FROM viewer_samples WHERE viewer_samples.stream_id = streams.stream_id
+        ), peak_viewers),
+        analytics_updated_at = ?, archive_updated_at = ?, updated_at = ?
+      WHERE source = 'twitch' AND is_current = 1 AND status = 'live'
+    `).run(timestamp, timestamp, timestamp, timestamp, timestamp);
     return null;
   }
 

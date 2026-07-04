@@ -62,8 +62,8 @@ function adaptBackendStreams(archive) {
   }))
 }
 
-function StreamArchive({ streams, archive, selectedStreamId, t }) {
-  const activeStreams = adaptBackendStreams(archive) ?? streams
+function StreamArchive({ streams, archive, selectedStreamId, realDataMode = false, t }) {
+  const activeStreams = adaptBackendStreams(archive) ?? (realDataMode ? [] : streams)
 
   return (
     <Reveal as="section" className="section-panel stream-archive" id="archive" aria-labelledby="stream-archive-title">
@@ -75,7 +75,11 @@ function StreamArchive({ streams, archive, selectedStreamId, t }) {
         </div>
       </div>
 
-      <div className="archive-bookshelf" aria-label="Stream archive bookshelf">
+      {activeStreams.length === 0 ? (
+        <div className="real-data-empty compact" role="status">
+          <p>{t.noRealArchive}</p>
+        </div>
+      ) : <div className="archive-bookshelf" aria-label="Stream archive bookshelf">
         <div className="archive-track">
         {activeStreams.map((stream, index) => (
           <ScannerTooltip as={RippleSurface} key={stream.id} type="stream" id={stream.id} label={stream.title} className={`archive-book liquid-card ${stream.id === selectedStreamId ? 'is-current' : ''}`} revealDelay={Math.min(index, 9) * 0.04}>
@@ -114,7 +118,7 @@ function StreamArchive({ streams, archive, selectedStreamId, t }) {
           </ScannerTooltip>
         ))}
         </div>
-      </div>
+      </div>}
     </Reveal>
   )
 }

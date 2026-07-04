@@ -21,7 +21,18 @@ function downloadCsv(stream) {
   URL.revokeObjectURL(url)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, theme, onToggleTheme, replay, streamSummary, t }) {
+function formatStatusTime(value, isRussian) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(isRussian ? 'ru-RU' : 'en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date)
+}
+
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, isDataModeLoading, theme, onToggleTheme, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -43,6 +54,83 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   const replayStatus = replay.error
     ? t.replayError
     : replay.status.isActive ? `${t.replayRunning} · ${replay.status.progress ?? 0}%` : t.replayIdle
+
+  if (isDataModeLoading || isTwitchMode) {
+    const connection = twitchIngest?.connection
+    const ingestStatus = twitchIngest?.status
+    const connected = Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
+    const ingestState = ingestStatus?.status ?? 'stopped'
+    const ingestRunning = ingestState === 'running'
+    const ingestBusy = ['connecting', 'subscribing', 'reconnecting'].includes(ingestState)
+    const statusError = twitchIngest?.error?.message || connection?.lastError || ingestStatus?.lastError
+    const connectionLabel = connected
+      ? t.twitchConnected
+      : statusError ? t.twitchConnectionError : t.twitchDisconnected
+    const ingestLabel = statusError || ingestState === 'error'
+      ? t.ingestError
+      : ingestRunning
+        ? t.ingestRunning
+        : ingestBusy ? t.ingestConnecting : t.ingestStopped
+    const themeLabel = theme === 'light'
+      ? (isRussian ? 'Тёмная тема' : 'Dark theme')
+      : (isRussian ? 'Светлая тема' : 'Light theme')
+    const lastEventLabel = formatStatusTime(ingestStatus?.lastEventAt, isRussian) ?? t.noEventsYet
+    const lastPollLabel = formatStatusTime(ingestStatus?.lastPollAt, isRussian) ?? '—'
+    const startLabel = twitchIngest?.isPending
+      ? t.ingestRequestPending
+      : ingestRunning || ingestBusy ? t.ingestAlreadyRunning : t.startIngest
+    const stopLabel = twitchIngest?.isPending ? t.ingestRequestPending : t.stopIngest
+
+    return (
+      <Reveal as="section" className="stream-control-bar twitch-control-bar glass-panel soft-glow" aria-label="Twitch ingest controls">
+        <div className="twitch-status-panel" aria-busy={isDataModeLoading || twitchIngest?.isPending ? 'true' : 'false'}>
+          <div className="twitch-status-badges" aria-live="polite">
+            <span className={`twitch-state-badge ${isDataModeLoading ? '' : connected ? 'is-connected' : statusError ? 'is-error' : ''}`}>
+              {isDataModeLoading ? t.loadingMetadata : connectionLabel}
+            </span>
+            <span className={`twitch-state-badge is-${ingestState}`}>{ingestLabel}</span>
+            <span className={`twitch-state-badge ${metadata?.isLive ? 'is-live' : 'is-offline'}`}>
+              {metadata?.isLive ? t.streamLive : t.offlineNow}
+            </span>
+          </div>
+          <div className="stream-live-copy">
+            <strong>{metadata?.streamTitle || metadata?.displayName || connection?.channelLogin || 'Twitch'}</strong>
+            <span>{metadata?.categoryName || (metadata?.isLive === false ? t.offlineNow : t.loadingMetadata)}</span>
+          </div>
+          <dl className="twitch-status-metrics">
+            <div><dt>{t.collectedMessages}</dt><dd>{persistedMessageCount}</dd></div>
+            <div><dt>{t.currentSessionEvents}</dt><dd>{ingestStatus?.messagesStored ?? 0}</dd></div>
+            <div><dt>{t.lastEvent}</dt><dd>{lastEventLabel}</dd></div>
+            <div><dt>{t.lastPoll}</dt><dd>{lastPollLabel}</dd></div>
+          </dl>
+          {statusError ? <p className="twitch-status-error" role="alert">{statusError}</p> : null}
+        </div>
+
+        <div className="twitch-ingest-actions">
+          <button
+            className="liquid-button"
+            type="button"
+            disabled={isDataModeLoading || twitchIngest?.isPending || ingestRunning || ingestBusy || !connected}
+            onClick={() => twitchIngest.start().catch(() => undefined)}
+          >
+            {startLabel}
+          </button>
+          <button
+            className="liquid-button"
+            type="button"
+            disabled={isDataModeLoading || twitchIngest?.isPending || (!ingestRunning && !ingestBusy)}
+            onClick={() => twitchIngest.stop().catch(() => undefined)}
+          >
+            {stopLabel}
+          </button>
+          <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
+            <span aria-hidden="true" />
+            {theme === 'light' ? (isRussian ? 'Тёмная' : 'Dark') : (isRussian ? 'Светлая' : 'Light')}
+          </button>
+        </div>
+      </Reveal>
+    )
+  }
 
   function downloadMarkdownReport() {
     const link = document.createElement('a')

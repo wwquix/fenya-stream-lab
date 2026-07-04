@@ -73,7 +73,7 @@ function TabbedLeaderboard({ title, tabs, initialTabId, revealDelay = 0 }) {
   )
 }
 
-function TopChatters({ chatters, chatAnalytics = null, language = 'ru', t }) {
+function TopChatters({ chatters, chatAnalytics = null, language = 'ru', realDataMode = false, hasRealStream = false, t }) {
   const byMessages = [...chatters].sort((first, second) => second.messages - first.messages)
   const byWatchTime = [...chatters].sort((first, second) => getWatchMinutes(second.watchTime) - getWatchMinutes(first.watchTime))
   const byActivity = [...chatters].sort((first, second) => getActivityScore(second) - getActivityScore(first))
@@ -100,11 +100,11 @@ function TopChatters({ chatters, chatAnalytics = null, language = 'ru', t }) {
 
       <div className="chat-summary-metrics" aria-label={t.viewersAndChat}>
         <div className="liquid-card hover-lift">
-          <span>{t.activeNow}</span>
+          <span>{realDataMode ? t.collectedChatters : t.activeNow}</span>
           <strong><AnimatedNumber value={activeViewers} format={formatPlainInteger} /></strong>
         </div>
         <div className="liquid-card hover-lift">
-          <span>{t.streamMessages}</span>
+          <span>{realDataMode && !hasRealStream ? t.collectedMessages : t.streamMessages}</span>
           <strong><AnimatedNumber value={totalMessages} format={formatPlainInteger} /></strong>
         </div>
         <div className="liquid-card hover-lift">
@@ -113,7 +113,17 @@ function TopChatters({ chatters, chatAnalytics = null, language = 'ru', t }) {
         </div>
       </div>
 
-      <div className="chat-dashboard">
+      <div className={`chat-dashboard ${realDataMode ? 'is-real-data' : ''}`}>
+        {realDataMode ? (
+          <div className="chat-leaderboards chat-leaderboards-left">
+            <TabbedLeaderboard
+              title={t.topChatters}
+              tabs={[
+                { id: 'messages', label: t.messagesTab, metricLabel: t.messages, items: messagesLeaderboard, renderMetric: (chatter) => formatLeaderboardValue(chatter.value), descriptorOffset: 0, t },
+              ]}
+            />
+          </div>
+        ) : <>
         <div className="chat-leaderboards chat-leaderboards-left">
           <TabbedLeaderboard
             title={t.topChatters}
@@ -139,6 +149,7 @@ function TopChatters({ chatters, chatAnalytics = null, language = 'ru', t }) {
             ]}
           />
         </div>
+        </>}
       </div>
     </Reveal>
   )

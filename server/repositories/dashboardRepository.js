@@ -45,15 +45,16 @@ function timestampForTimeLabel(startedAt, timeLabel) {
   return timestamp.toISOString();
 }
 
-function currentStreamRow(database, tableName) {
+function currentStreamRow(database, tableName, source = null) {
+  const streamFilter = source ? "streams.source = ?" : "streams.is_current = 1";
   return database.prepare(`
     SELECT streams.*
     FROM streams
-    WHERE streams.is_current = 1
+    WHERE ${streamFilter}
       AND EXISTS (SELECT 1 FROM ${tableName} WHERE ${tableName}.stream_id = streams.stream_id)
-    ORDER BY streams.updated_at DESC
+    ORDER BY streams.is_current DESC, streams.updated_at DESC
     LIMIT 1
-  `).get() ?? null;
+  `).get(...(source ? [source] : [])) ?? null;
 }
 
 function insertBaseStream(database, data, isCurrent = false) {
@@ -409,9 +410,9 @@ export function saveSummaryToDatabase(summary) {
   getDatabase().transaction(() => saveSummary(getDatabase(), summary))();
 }
 
-export function loadCurrentStreamAnalyticsFromDatabase() {
+export function loadCurrentStreamAnalyticsFromDatabase(source = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "viewer_samples");
+  const stream = currentStreamRow(database, "viewer_samples", source);
 
   if (!stream) {
     return null;
@@ -445,9 +446,9 @@ export function loadCurrentStreamAnalyticsFromDatabase() {
   };
 }
 
-export function loadCurrentChatAnalyticsFromDatabase() {
+export function loadCurrentChatAnalyticsFromDatabase(source = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "chatters");
+  const stream = currentStreamRow(database, "chatters", source);
 
   if (!stream) {
     return null;
@@ -485,9 +486,9 @@ export function loadCurrentChatAnalyticsFromDatabase() {
   };
 }
 
-export function loadCurrentWordAnalyticsFromDatabase() {
+export function loadCurrentWordAnalyticsFromDatabase(source = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "word_stats");
+  const stream = currentStreamRow(database, "word_stats", source);
 
   if (!stream) {
     return null;
@@ -513,16 +514,16 @@ export function loadCurrentWordAnalyticsFromDatabase() {
   return {
     streamId: stream.stream_id,
     title: stream.title,
-    source: stream.source === "import" ? "import" : "demo",
+    source: stream.source === "twitch" ? "twitch" : stream.source === "import" ? "import" : "demo",
     updatedAt: stream.words_updated_at ?? stream.updated_at,
     words,
     clusters,
   };
 }
 
-export function loadCurrentModerationAnalyticsFromDatabase() {
+export function loadCurrentModerationAnalyticsFromDatabase(source = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "moderation_actions");
+  const stream = currentStreamRow(database, "moderation_actions", source);
   const moderators = stream ? parseJson(stream.moderators_json, []) : [];
 
   if (!stream || !moderators.length) {
@@ -546,14 +547,16 @@ export function loadCurrentModerationAnalyticsFromDatabase() {
   };
 }
 
-export function loadStreamArchiveFromDatabase() {
+export function loadStreamArchiveFromDatabase(source = null) {
   const database = getDatabase();
+  const sourceFilter = source ? "AND source = ?" : "";
   const rows = database.prepare(`
     SELECT * FROM streams
     WHERE stream_date IS NOT NULL AND duration_minutes IS NOT NULL
+      ${sourceFilter}
     ORDER BY stream_date DESC, started_at DESC
     LIMIT 50
-  `).all();
+  `).all(...(source ? [source] : []));
 
   if (!rows.length) {
     return null;
@@ -575,7 +578,7 @@ export function loadStreamArchiveFromDatabase() {
       totalMessages: stream.total_messages,
       uniqueChatters: stream.unique_chatters,
       moderationActions: stream.moderation_actions,
-      topWords: parseJson(stream.top_words_json, ["стрим"]),
+      topWords: parseJson(stream.top_words_json, []).length ? parseJson(stream.top_words_json, []) : ["—"],
       topMoment: stream.top_moment,
       summary: stream.summary_text,
       status: stream.status,

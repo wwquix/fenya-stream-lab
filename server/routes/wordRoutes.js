@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { routeHandler } from "../middleware/errorHandlers.js";
 import { createMockWordUpdate } from "../providers/mockWordsProvider.js";
+import { loadCurrentWordAnalyticsFromDatabase } from "../repositories/dashboardRepository.js";
+import { getTwitchProviderName } from "../services/twitchMetadataService.js";
 import {
   appendOrUpdateWord,
   loadCurrentWordAnalytics,
@@ -11,6 +13,11 @@ import {
 const router = Router();
 
 router.get("/fenya/current-stream", routeHandler(async (_req, res) => {
+  if (getTwitchProviderName() === "twitch") {
+    const analytics = loadCurrentWordAnalyticsFromDatabase("twitch");
+    if (!analytics) return res.status(204).end();
+    return res.json(analytics);
+  }
   res.json(await loadCurrentWordAnalytics());
 }, "Failed to load word analytics"));
 

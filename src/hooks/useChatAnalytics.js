@@ -85,6 +85,14 @@ export function useChatAnalytics() {
           signal: controller.signal,
         })
 
+        if (response.status === 204) {
+          if (isActive) {
+            setAnalytics(null)
+            setError(null)
+          }
+          return
+        }
+
         if (!response.ok) {
           throw new Error(`Chat analytics request failed with ${response.status}`)
         }

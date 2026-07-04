@@ -130,11 +130,25 @@ TWITCH_PROVIDER=twitch
 TWITCH_CHANNEL_LOGIN=fenya
 TWITCH_CLIENT_ID=your_client_id
 TWITCH_CLIENT_SECRET=your_client_secret
+TWITCH_USER_ACCESS_TOKEN=your_user_token
+TWITCH_REFRESH_TOKEN=your_refresh_token
+TWITCH_LIVE_INGEST_AUTOSTART=false
+TWITCH_POLL_INTERVAL_MS=30000
+TWITCH_EVENTSUB_RECONNECT_MS=5000
 ```
 
 The backend uses Twitch Client Credentials, caches the app access token in memory, and resolves Helix user, channel, and current-stream data. `GET /api/twitch/fenya/connection` provides secret-free local diagnostics.
 
 Start real ingestion with `POST /api/twitch/fenya/ingest/start`. It validates the configured user token and its `user:read:chat` scope, opens Twitch EventSub WebSocket, subscribes to `channel.chat.message`, stores messages and aggregates in SQLite, and polls live metadata/viewer samples at `TWITCH_POLL_INTERVAL_MS`. Status and stop routes are documented in [docs/API.md](docs/API.md). The connection and timers are process-local and must be restarted after the backend restarts.
+
+The dashboard keeps the two data modes explicit:
+
+- `TWITCH_PROVIDER=mock` shows the complete deterministic demo dashboard and archive.
+- `TWITCH_PROVIDER=twitch` shows only Twitch rows actually collected into SQLite. Demo charts, leaderboards, summaries, moderation data, and archive sessions are not used as fallback in this mode.
+- EventSub chat ingestion works only while the backend process and ingest are running. Offline collection may still produce limited real chat and word data; viewer graphs and real archive sessions require ingest to run during a live stream.
+- If nothing has been collected yet, each dashboard section explains what is missing instead of showing demo content.
+
+In Twitch mode, use the compact dashboard status panel to start or stop ingest. The buttons call the local ingest routes; no credentials are sent to or displayed by the browser.
 
 ## Environment variables
 
@@ -147,16 +161,18 @@ Start real ingestion with `POST /api/twitch/fenya/ingest/start`. It validates th
 | `TWITCH_CLIENT_ID` | empty | Required in Twitch mode |
 | `TWITCH_CLIENT_SECRET` | empty | Required in Twitch mode; server-side only |
 | `TWITCH_USER_ACCESS_TOKEN` | empty | Required for EventSub; must include `user:read:chat` |
-| `TWITCH_REFRESH_TOKEN` | empty | Optional; used for in-memory user-token refresh |
+| `TWITCH_REFRESH_TOKEN` | empty | Configure for in-memory user-token refresh |
 | `TWITCH_BROADCASTER_ID` | empty | Optional override; otherwise resolved from channel login |
 | `TWITCH_BOT_USER_ID` | empty | Optional safety check against the validated token user ID |
 | `TWITCH_POLL_INTERVAL_MS` | `30000` | Live Helix polling interval (minimum 1000 ms) |
+| `TWITCH_EVENTSUB_RECONNECT_MS` | `5000` | Delay before reconnecting a dropped EventSub session |
+| `TWITCH_LIVE_INGEST_AUTOSTART` | `false` | Start Twitch ingest with the backend when explicitly enabled |
 | `SUMMARY_PROVIDER` | `local` | `local` or deterministic `mock`; `openai` is only a placeholder |
 | `MOCK_SAMPLER_INTERVAL_MS` | `10000` | Demo sampler interval |
 | `MOCK_SAMPLER_AUTOSTART` | `false` | Start demo sampler with the backend |
 | `REPLAY_MS_PER_STREAM_MINUTE` | `250` | Local replay timing scale before speed multiplier |
 
-No credentials are required in the default mock mode. `.env` remains ignored and secrets must never be committed.
+No credentials are required in the default mock mode. Twitch mode requires client credentials and a user token with `user:read:chat`; configure a refresh token as well so the local process can refresh an expired user token. `.env` remains ignored and secrets must never be committed.
 
 ## npm scripts
 

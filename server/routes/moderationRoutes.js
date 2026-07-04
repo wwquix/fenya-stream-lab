@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { routeHandler } from "../middleware/errorHandlers.js";
 import { createMockModerationEvent } from "../providers/mockModerationProvider.js";
+import { loadCurrentModerationAnalyticsFromDatabase } from "../repositories/dashboardRepository.js";
+import { getTwitchProviderName } from "../services/twitchMetadataService.js";
 import {
   appendMockModerationEvent,
   loadCurrentModerationAnalytics,
@@ -11,6 +13,11 @@ import {
 const router = Router();
 
 router.get("/fenya/current-stream", routeHandler(async (_req, res) => {
+  if (getTwitchProviderName() === "twitch") {
+    const analytics = loadCurrentModerationAnalyticsFromDatabase("twitch");
+    if (!analytics) return res.status(204).end();
+    return res.json(analytics);
+  }
   res.json(await loadCurrentModerationAnalytics());
 }, "Failed to load moderation analytics"));
 

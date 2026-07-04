@@ -54,6 +54,7 @@ afterEach(async () => {
     "DATABASE_PATH", "TWITCH_PROVIDER", "TWITCH_CHANNEL_LOGIN", "TWITCH_CLIENT_ID",
     "TWITCH_CLIENT_SECRET", "TWITCH_USER_ACCESS_TOKEN", "TWITCH_REFRESH_TOKEN",
     "TWITCH_BROADCASTER_ID", "TWITCH_BOT_USER_ID", "TWITCH_POLL_INTERVAL_MS",
+    "TWITCH_EVENTSUB_RECONNECT_MS", "TWITCH_LIVE_INGEST_AUTOSTART",
   ]) delete process.env[name];
   await rm(temporaryDirectory, { recursive: true, force: true });
 });
@@ -94,13 +95,82 @@ describe("Twitch ingest pipeline", () => {
   });
 
   test("ingest routes stay safe and mock mode does not open EventSub", async () => {
+    process.env.TWITCH_USER_ACCESS_TOKEN = "must-not-appear-user-token";
+    process.env.TWITCH_REFRESH_TOKEN = "must-not-appear-refresh-token";
+    process.env.TWITCH_EVENTSUB_RECONNECT_MS = "5000";
     const status = await request(app).get("/api/twitch/fenya/ingest/status");
     expect(status.status).toBe(200);
-    expect(status.body).toMatchObject({ provider: "mock", status: "stopped", running: false });
+    expect(status.body).toMatchObject({
+      provider: "mock",
+      status: "stopped",
+      running: false,
+      reconnectIntervalMs: 5000,
+    });
+    expect(JSON.stringify(status.body)).not.toContain("must-not-appear-user-token");
+    expect(JSON.stringify(status.body)).not.toContain("must-not-appear-refresh-token");
 
     const started = await request(app).post("/api/twitch/fenya/ingest/start");
     expect(started.status).toBe(409);
     expect(started.body.message).toBe("Twitch ingest requires TWITCH_PROVIDER=twitch");
+  });
+
+  test("twitch mode never returns seeded mock dashboard data as real data", async () => {
+    const database = getDatabase();
+    database.prepare(`
+      INSERT INTO streams (
+        stream_id, title, category_name, started_at, duration_minutes,
+        status, source, is_current
+      ) VALUES ('mock-stream', 'Demo stream', 'Demo', '2026-07-01T18:00:00Z', 120, 'completed', 'mock', 1)
+    `).run();
+    database.prepare(`
+      INSERT INTO viewer_samples (
+        event_id, stream_id, sampled_at, time_label, viewers, messages_per_minute, source
+      ) VALUES ('mock-viewer', 'mock-stream', '2026-07-01T18:01:00Z', '18:01', 9999, 999, 'mock')
+    `).run();
+    process.env.TWITCH_PROVIDER = "twitch";
+
+    const [analytics, archive, chat, words, moderation] = await Promise.all([
+      request(app).get("/api/analytics/fenya/current-stream"),
+      request(app).get("/api/archive/fenya/streams"),
+      request(app).get("/api/chat/fenya/current-stream"),
+      request(app).get("/api/words/fenya/current-stream"),
+      request(app).get("/api/moderation/fenya/current-stream"),
+    ]);
+
+    expect([analytics.status, archive.status, chat.status, words.status, moderation.status])
+      .toEqual([204, 204, 204, 204, 204]);
+  });
+
+  test("twitch mode keeps the latest collected real data visible after the stream goes offline", async () => {
+    const metadata = {
+      provider: "twitch",
+      channelLogin: "fenya",
+      broadcasterId: "42",
+      isLive: true,
+      streamId: "finished-live-stream",
+      streamTitle: "Collected stream",
+      categoryName: "Counter-Strike 2",
+      viewerCount: 321,
+      startedAt: "2026-07-04T18:00:00.000Z",
+    };
+    saveTwitchStreamSnapshot(metadata, "2026-07-04T18:05:00.000Z");
+    saveTwitchStreamSnapshot({ ...metadata, isLive: false, streamId: null }, "2026-07-04T19:00:00.000Z");
+    process.env.TWITCH_PROVIDER = "twitch";
+
+    const response = await request(app).get("/api/analytics/fenya/current-stream");
+    const archive = await request(app).get("/api/archive/fenya/streams");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ streamId: "finished-live-stream", title: "Collected stream" });
+    expect(response.body.points).toHaveLength(1);
+    expect(archive.status).toBe(200);
+    expect(archive.body.streams[0]).toMatchObject({
+      streamId: "finished-live-stream",
+      status: "completed",
+      durationMinutes: 60,
+      averageViewers: 321,
+      peakViewers: 321,
+    });
   });
 
   test("start validates user:read:chat, subscribes, and stores notifications", async () => {

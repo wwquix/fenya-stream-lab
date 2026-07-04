@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import { routeHandler } from "../middleware/errorHandlers.js";
+import { loadCurrentStreamAnalyticsFromDatabase } from "../repositories/dashboardRepository.js";
 import { createAnalyticsSamplePoint } from "../services/analyticsSampleService.js";
 import {
   getMockLiveSamplerStatus,
@@ -12,10 +13,16 @@ import {
   loadCurrentStreamAnalytics,
   resetCurrentStreamAnalytics,
 } from "../storage/streamAnalyticsStore.js";
+import { getTwitchProviderName } from "../services/twitchMetadataService.js";
 
 const router = Router();
 
 router.get("/fenya/current-stream", routeHandler(async (_req, res) => {
+  if (getTwitchProviderName() === "twitch") {
+    const analytics = loadCurrentStreamAnalyticsFromDatabase("twitch");
+    if (!analytics) return res.status(204).end();
+    return res.json(analytics);
+  }
   res.json(await loadCurrentStreamAnalytics());
 }, "Failed to load stream analytics"));
 

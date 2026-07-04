@@ -50,6 +50,11 @@ function pollIntervalMs() {
   return Number.isFinite(configured) && configured >= 1_000 ? configured : 30_000;
 }
 
+function reconnectIntervalMs() {
+  const configured = Number(process.env.TWITCH_EVENTSUB_RECONNECT_MS || 5_000);
+  return Number.isFinite(configured) && configured >= 1_000 ? configured : 5_000;
+}
+
 export function getTwitchIngestStatus() {
   return {
     provider: getTwitchProviderName(),
@@ -65,6 +70,7 @@ export function getTwitchIngestStatus() {
     lastPollAt: state.lastPollAt,
     messagesStored: state.messagesStored,
     pollIntervalMs: pollIntervalMs(),
+    reconnectIntervalMs: reconnectIntervalMs(),
     lastError: state.lastError,
   };
 }
@@ -167,7 +173,7 @@ function scheduleReconnect() {
       state.lastError = safeError(error, "Twitch EventSub reconnect failed");
       scheduleReconnect();
     });
-  }, 2_000);
+  }, reconnectIntervalMs());
   state.reconnectTimer.unref?.();
 }
 

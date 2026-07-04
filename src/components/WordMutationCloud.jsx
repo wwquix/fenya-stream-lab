@@ -97,21 +97,22 @@ function mergeBackendWords(fallbackWords, wordAnalytics) {
     })
 }
 
-function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', t }) {
+function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', realDataMode = false, t }) {
   const visibleWords = mergeBackendWords(words, wordAnalytics)
   const prefersReducedMotion = useReducedMotion()
+  const isMinimalCloud = realDataMode && visibleWords.length <= 3
 
   return (
     <Reveal as="section" className="section-panel word-mutations" id="speech" aria-labelledby="word-mutations-title" data-entity-type="stream" data-entity-id={streamId}>
       <div className="section-heading">
         <div>
           {t.speechKicker ? <p className="eyebrow">{t.speechKicker}</p> : null}
-          <h2 id="word-mutations-title">{t.speechPatterns}</h2>
-          <p className="section-note">{t.speechNote}</p>
+          <h2 id="word-mutations-title">{realDataMode ? t.chatWordsTitle : t.speechPatterns}</h2>
+          <p className="section-note">{realDataMode ? t.chatWordsNote : t.speechNote}</p>
         </div>
       </div>
 
-      <div className="word-cloud word-cloud-dense glass-panel liquid-card soft-glow">
+      <div className={`word-cloud word-cloud-dense glass-panel liquid-card soft-glow ${isMinimalCloud ? 'is-minimal' : ''}`}>
         {visibleWords.map((word, index) => {
           const countLabel = `${formatCount(word.count, language)} ${t.mentions}`
           const verticalDrift = getStableVerticalDrift(word, index)
