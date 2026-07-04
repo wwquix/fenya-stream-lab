@@ -2,7 +2,7 @@
 
 Fenya Stream Lab is a bilingual streamer analytics dashboard built as a portfolio project for streamer Fenya. It presents viewer momentum, chat activity, recurring words, moderation workload, archive context, replayed events, and locally generated stream reports in one premium dashboard.
 
-The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, local reports, and optional real Twitch channel/live metadata through Helix. EventSub chat ingestion is not implemented yet.
+The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, local reports, real Twitch channel/live polling through Helix, and process-local EventSub WebSocket chat ingestion into SQLite.
 
 ## Screenshots
 
@@ -26,6 +26,7 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 - Russian and English interface support.
 - Static mock-data fallback when the local API is unavailable.
 - Backend integration tests that use temporary SQLite databases.
+- Twitch viewer samples plus EventSub chat, chatter, word, and stream-total ingestion.
 
 ## Tech stack
 
@@ -36,6 +37,7 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 | Motion | Motion |
 | Styling | Regular CSS and shared design tokens |
 | Backend | Node.js, Express 5 |
+| Twitch transport | Helix HTTP, EventSub WebSocket (`ws`) |
 | Storage | SQLite via better-sqlite3 |
 | Validation | Zod |
 | Tests | Vitest, Supertest, temporary SQLite databases |
@@ -130,7 +132,9 @@ TWITCH_CLIENT_ID=your_client_id
 TWITCH_CLIENT_SECRET=your_client_secret
 ```
 
-The backend uses Twitch Client Credentials, caches the app access token in memory, and resolves Helix user, channel, and current-stream data. `GET /api/twitch/fenya/connection` provides secret-free local diagnostics. User and refresh tokens are optional foundations for the later EventSub step; live chat ingestion will be implemented separately through EventSub WebSocket.
+The backend uses Twitch Client Credentials, caches the app access token in memory, and resolves Helix user, channel, and current-stream data. `GET /api/twitch/fenya/connection` provides secret-free local diagnostics.
+
+Start real ingestion with `POST /api/twitch/fenya/ingest/start`. It validates the configured user token and its `user:read:chat` scope, opens Twitch EventSub WebSocket, subscribes to `channel.chat.message`, stores messages and aggregates in SQLite, and polls live metadata/viewer samples at `TWITCH_POLL_INTERVAL_MS`. Status and stop routes are documented in [docs/API.md](docs/API.md). The connection and timers are process-local and must be restarted after the backend restarts.
 
 ## Environment variables
 
@@ -142,11 +146,11 @@ The backend uses Twitch Client Credentials, caches the app access token in memor
 | `TWITCH_CHANNEL_LOGIN` | `fenya` | Channel login to resolve |
 | `TWITCH_CLIENT_ID` | empty | Required in Twitch mode |
 | `TWITCH_CLIENT_SECRET` | empty | Required in Twitch mode; server-side only |
-| `TWITCH_USER_ACCESS_TOKEN` | empty | Optional now; intended for EventSub chat later |
-| `TWITCH_REFRESH_TOKEN` | empty | Optional user-token refresh foundation |
-| `TWITCH_BROADCASTER_ID` | empty | Optional cached/configured broadcaster identity |
-| `TWITCH_BOT_USER_ID` | empty | Reserved for the EventSub chat step |
-| `TWITCH_POLL_INTERVAL_MS` | `30000` | Reserved polling interval configuration |
+| `TWITCH_USER_ACCESS_TOKEN` | empty | Required for EventSub; must include `user:read:chat` |
+| `TWITCH_REFRESH_TOKEN` | empty | Optional; used for in-memory user-token refresh |
+| `TWITCH_BROADCASTER_ID` | empty | Optional override; otherwise resolved from channel login |
+| `TWITCH_BOT_USER_ID` | empty | Optional safety check against the validated token user ID |
+| `TWITCH_POLL_INTERVAL_MS` | `30000` | Live Helix polling interval (minimum 1000 ms) |
 | `SUMMARY_PROVIDER` | `local` | `local` or deterministic `mock`; `openai` is only a placeholder |
 | `MOCK_SAMPLER_INTERVAL_MS` | `10000` | Demo sampler interval |
 | `MOCK_SAMPLER_AUTOSTART` | `false` | Start demo sampler with the backend |
@@ -175,7 +179,7 @@ Run the backend integration suite:
 npm test
 ```
 
-The suite covers health, database initialization, seeding, valid and invalid imports, summary generation, JSON/Markdown reports, and replay start/status/stop. Supertest runs against the Express app in-process. Every test creates and removes its own SQLite database in the operating-system temp directory.
+The suite covers health, database initialization, imports, reports, replay, Twitch metadata normalization, EventSub subscription setup, and Twitch SQLite aggregation. Twitch tests mock HTTP and WebSocket traffic and never contact Twitch.
 
 Recommended full verification:
 
@@ -194,14 +198,14 @@ Base URL: `http://localhost:3001`. See [docs/API.md](docs/API.md) for the comple
 - Cohesive analytics product rather than disconnected demo widgets.
 - Premium responsive visual system with restrained glass surfaces and accessible controls.
 - End-to-end local data flow from validated imports through SQLite to React adapters.
-- Clear provider/source boundaries for future Twitch integration without pretending it already exists.
+- Clear provider/source boundaries between mock mode, Helix metadata polling, and EventSub chat ingestion.
 - Replay scheduling and SSE lifecycle management with duplicate-session protection.
 - Deterministic local reports without paid or secret-dependent services.
 - Isolated integration tests that prove the backend without modifying local data.
 
 ## Future improvements
 
-- Add EventSub WebSocket chat ingestion using user authorization after metadata is verified against a real account.
+- Add an OAuth authorization UI and durable encrypted token storage if this moves beyond local operation.
 - Add migrations, structured logging, graceful shutdown, and deployment hardening.
 - Add authentication and rate limiting before exposing write endpoints publicly.
 - Add repository-owned portfolio screenshots.

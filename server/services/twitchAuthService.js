@@ -46,7 +46,7 @@ export function getConfiguredUserToken() {
 export async function refreshUserAccessToken() {
   const clientId = requiredEnv("TWITCH_CLIENT_ID");
   const clientSecret = requiredEnv("TWITCH_CLIENT_SECRET");
-  const refreshToken = process.env.TWITCH_REFRESH_TOKEN?.trim();
+  const refreshToken = refreshedUserToken?.refreshToken || process.env.TWITCH_REFRESH_TOKEN?.trim();
   if (!refreshToken) throw new HttpError(503, "Missing TWITCH_REFRESH_TOKEN");
 
   const query = new URLSearchParams({
@@ -57,7 +57,10 @@ export async function refreshUserAccessToken() {
   });
   const response = await fetch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
   const payload = await readJson(response, "Twitch user token refresh failed");
-  refreshedUserToken = { token: payload.access_token };
+  refreshedUserToken = {
+    token: payload.access_token,
+    refreshToken: payload.refresh_token || refreshToken,
+  };
   return payload.access_token;
 }
 

@@ -77,7 +77,7 @@ If the requested stream has no detailed events, seeded demo events are used with
 
 `twitchMetadataService` selects the unchanged mock provider by default or the real provider for `TWITCH_PROVIDER=twitch`. The auth service obtains and memory-caches an app token; the Helix client owns authenticated requests and safe upstream errors; the provider combines `/users`, `/channels`, and `/streams` into the frontend contract. Tokens are never persisted or returned by diagnostics.
 
-Optional user-token validation and refresh are foundations only. EventSub WebSocket chat ingestion is a separate next step and is not part of the metadata polling path.
+`twitchIngestService` owns user-token validation/refresh, the process-local EventSub connection, keepalive watchdog, reconnect handling, `channel.chat.message` subscription, and Helix poll timer. `twitchIngestRepository` writes live stream snapshots and idempotent chat events into the existing SQLite schema, then updates chatter, word, and stream aggregates. User tokens and refreshed tokens remain memory-only and are never returned by API routes.
 
 ## Test architecture
 
@@ -92,4 +92,4 @@ After each test the database singleton is closed, environment overrides are remo
 
 ## Current boundaries
 
-This is a local single-channel portfolio backend. It has no application authentication, multi-user isolation, public deployment hardening, rate-limit retry strategy, durable replay recovery, or EventSub chat connection. Write, diagnostic, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.
+This is a local single-channel portfolio backend. It has no OAuth UI, encrypted durable token store, application authentication, multi-user isolation, public deployment hardening, rate-limit retry strategy, or durable EventSub/replay recovery. EventSub reconnects while the process is alive, but ingest must be started again after restart. Write, diagnostic, ingest, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.

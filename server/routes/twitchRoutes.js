@@ -4,6 +4,12 @@ import { Router } from "express";
 
 import { routeHandler } from "../middleware/errorHandlers.js";
 import { getAppAccessToken, getConfiguredUserToken, validateUserToken } from "../services/twitchAuthService.js";
+import {
+  getTwitchIngestStatus,
+  pollTwitchStreamOnce,
+  startTwitchIngest,
+  stopTwitchIngest,
+} from "../services/twitchIngestService.js";
 import { getTwitchProviderName, loadTwitchChannelMetadata } from "../services/twitchMetadataService.js";
 
 const router = Router();
@@ -48,7 +54,19 @@ router.post("/fenya/poll-once", routeHandler(async (_req, res) => {
     res.json({ provider: "mock", message: "Mock mode is active; Twitch polling was skipped." });
     return;
   }
-  res.json(await loadTwitchChannelMetadata());
+  res.json(await pollTwitchStreamOnce());
 }, "Failed to poll Twitch metadata"));
+
+router.get("/fenya/ingest/status", (_req, res) => {
+  res.json(getTwitchIngestStatus());
+});
+
+router.post("/fenya/ingest/start", routeHandler(async (_req, res) => {
+  res.status(202).json(await startTwitchIngest());
+}, "Failed to start Twitch ingest"));
+
+router.post("/fenya/ingest/stop", (_req, res) => {
+  res.json(stopTwitchIngest());
+});
 
 export default router;

@@ -17,6 +17,7 @@ Malformed JSON returns `400` with `Request body contains invalid JSON.` No authe
 | GET | `/api/health` | Service, provider, and timestamp |
 | GET | `/api/twitch/fenya` | Mock or real normalized Twitch channel/live metadata |
 | GET | `/api/twitch/fenya/connection` | Secret-free local Twitch configuration diagnostics |
+| GET | `/api/twitch/fenya/ingest/status` | Process-local EventSub/poller state and safe counters |
 | GET | `/api/analytics/fenya/current-stream` | Viewer/chat timeline, segments, markers |
 | GET | `/api/chat/fenya/current-stream` | Chat totals and leaderboards |
 | GET | `/api/words/fenya/current-stream` | Frequent words and clusters |
@@ -124,9 +125,17 @@ These routes mutate/reset local demo data and are not public production operatio
 | POST | `/api/summary/fenya/regenerate` | Regenerate the compatibility summary |
 | POST | `/api/summary/fenya/reset` | Reset the compatibility summary |
 | POST | `/api/twitch/fenya/poll-once` | Fetch metadata once in Twitch mode; reports that polling is skipped in mock mode |
+| POST | `/api/twitch/fenya/ingest/start` | Validate credentials, poll once, connect EventSub, and subscribe to chat |
+| POST | `/api/twitch/fenya/ingest/stop` | Stop EventSub, reconnect watchdog, and polling timers |
 
 ## Twitch metadata
 
 `TWITCH_PROVIDER=mock` preserves the deterministic dashboard response. With `TWITCH_PROVIDER=twitch`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, and `TWITCH_CHANNEL_LOGIN`, the same endpoint resolves the user and reads channel/current-stream data from Helix. Offline responses use `isLive: false`, `streamId: null`, and `viewerCount: 0`.
 
 The connection route returns only presence flags, token validity/scopes, configured broadcaster ID, and a safe last error. It never returns token or client-secret values. These routes are local development diagnostics, not public authenticated operations.
+
+### EventSub ingest
+
+Ingest requires `TWITCH_PROVIDER=twitch`, valid client credentials, and `TWITCH_USER_ACCESS_TOKEN` with `user:read:chat`. On start, the backend resolves the broadcaster, creates a WebSocket `channel.chat.message` subscription using the validated token user ID, and begins Helix polling. Chat messages are deduplicated by Twitch message ID and update `chat_messages`, `chatters`, `word_stats`, and stream totals. Live polls update stream title/category/start time and append `viewer_samples`.
+
+The status response contains connection IDs, timestamps, counters, provider state, and a safe `lastError`; it contains no credentials. Ingest state, sockets, token refreshes, and timers are in memory and do not survive process restart. Mock mode remains available and refuses to start real ingest cleanly.
