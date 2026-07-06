@@ -8,7 +8,24 @@ All ordinary errors use:
 { "error": true, "message": "Human-readable message" }
 ```
 
-Malformed JSON returns `400` with `Request body contains invalid JSON.` No authentication is implemented; this API is intended for local portfolio use.
+Malformed JSON returns `400` with `Request body contains invalid JSON.` Twitch login and `/api/me` use database-backed authentication; legacy dashboard and write routes remain local-development endpoints and are not yet fully isolated per user.
+
+## Authentication
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/auth/twitch/login` | Start Twitch Authorization Code login |
+| GET | `/auth/twitch/callback` | Verify OAuth state and establish a session |
+| POST | `/auth/logout` | Delete the current session and clear its cookie |
+| GET | `/api/me` | Return safe current-user, channel, membership, and local `globalRoles` data |
+
+Browser callback failures are rendered as a small safe HTML retry page. An expired, unknown, or process-lost OAuth state does not return the global JSON error contract and never includes cookie, state, token, or client-secret values.
+
+The callback never returns Twitch or session tokens. `/api/me` requires an active HTTP-only session cookie and returns `401` for guests. A locally allowlisted platform administrator receives `roleSummary.isPlatformAdmin: true` and `globalRoles: ["platform_admin"]`; this is an application role only and does not grant Twitch permissions or bypass OAuth scopes.
+
+`GET /auth/twitch/login?format=json` returns `{ authorizationUrl }` for the onboarding panel. Configuration failures use a safe readable `message`; the direct browser route renders a local HTML explanation instead of raw JSON.
+
+Database-backed Twitch accounts refresh within ten minutes of expiration or once after an account-aware Helix `401`. A failed refresh marks the account for reauthorization. Token ciphertext, plaintext tokens, and refresh failure details are never part of API responses.
 
 ## Read endpoints
 
@@ -136,9 +153,27 @@ The connection route returns only presence flags, token validity/scopes, configu
 
 ### EventSub ingest
 
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/channels/:channelId/ingest/status` | Read one channel's pool status |
+| POST | `/api/channels/:channelId/ingest/start` | Start or reuse that channel's ingest |
+| POST | `/api/channels/:channelId/ingest/stop` | Idempotently stop that channel |
+| POST | `/api/channels/connect-my-channel` | Connect the logged-in user's own Twitch channel |
+| GET | `/api/channels/mine` | List the user's available channels and ingest status |
+| GET | `/api/channels/:channelId/moderators` | Read the stored moderator directory and scope availability |
+| POST | `/api/channels/:channelId/moderators/sync` | Owner/admin sync through Twitch Get Moderators |
+| GET | `/api/twitch/fenya/moderators` | Read legacy Fenya moderator directory state |
+| POST | `/api/twitch/fenya/moderators/sync` | Sync legacy Fenya moderators when the environment token has `moderation:read` |
+
+Channel routes require `channel_owner` or `channel_admin` membership through centralized middleware. Each channel has independent WebSocket, polling, watchdog, and reconnect state. The Fenya routes above remain unprotected local compatibility wrappers around the legacy configured channel.
+
+Moderator directory responses contain `available`, `missingScopes`, `message`, and `moderators`. Missing `moderation:read` returns a safe unavailable state rather than failing the dashboard. This endpoint does not report actions, bans, timeouts, or inferred performance.
+
+Legacy start resolves the broadcaster through `TWITCH_CHANNEL_LOGIN` and the chat reader through the validated configured user token. Safe failures distinguish invalid tokens, missing chat-reader or broadcaster IDs, missing `user:read:chat`, and EventSub subscription rejection.
+
 Ingest requires `TWITCH_PROVIDER=twitch`, valid client credentials, and `TWITCH_USER_ACCESS_TOKEN` with `user:read:chat`. On start, the backend resolves the broadcaster, creates a WebSocket `channel.chat.message` subscription using the validated token user ID, and begins Helix polling. Chat messages are deduplicated by Twitch message ID and update `chat_messages`, `chatters`, `word_stats`, and stream totals. Live polls update stream title/category/start time and append `viewer_samples`.
 
-The status response contains connection IDs, timestamps, counters, provider state, and a safe `lastError`; it contains no credentials. Ingest state, sockets, token refreshes, and timers are in memory and do not survive process restart. Mock mode remains available and refuses to start real ingest cleanly.
+Status responses contain connection IDs, timestamps, counters, provider state, and a safe `lastError`; they contain no credentials. Pool state, sockets, and timers are in memory and do not survive process restart. Mock mode remains available and refuses to start real ingest cleanly.
 
 When `TWITCH_PROVIDER=twitch`, dashboard read endpoints return only rows whose source is `twitch`. If no matching analytics, chat, words, moderation, or archive data exists, the corresponding endpoint returns `204 No Content`; it never falls back to demo JSON. In mock mode the existing deterministic contracts remain unchanged.
 

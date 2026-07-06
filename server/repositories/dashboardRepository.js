@@ -45,16 +45,21 @@ function timestampForTimeLabel(startedAt, timeLabel) {
   return timestamp.toISOString();
 }
 
-function currentStreamRow(database, tableName, source = null) {
-  const streamFilter = source ? "streams.source = ?" : "streams.is_current = 1";
+function currentStreamRow(database, tableName, source = null, channelId = null) {
+  const conditions = [source ? "streams.source = ?" : "streams.is_current = 1"];
+  const parameters = source ? [source] : [];
+  if (channelId !== null && channelId !== undefined) {
+    conditions.push("streams.channel_id = ?");
+    parameters.push(channelId);
+  }
   return database.prepare(`
     SELECT streams.*
     FROM streams
-    WHERE ${streamFilter}
+    WHERE ${conditions.join(" AND ")}
       AND EXISTS (SELECT 1 FROM ${tableName} WHERE ${tableName}.stream_id = streams.stream_id)
     ORDER BY streams.is_current DESC, streams.updated_at DESC
     LIMIT 1
-  `).get(...(source ? [source] : [])) ?? null;
+  `).get(...parameters) ?? null;
 }
 
 function insertBaseStream(database, data, isCurrent = false) {
@@ -410,9 +415,9 @@ export function saveSummaryToDatabase(summary) {
   getDatabase().transaction(() => saveSummary(getDatabase(), summary))();
 }
 
-export function loadCurrentStreamAnalyticsFromDatabase(source = null) {
+export function loadCurrentStreamAnalyticsFromDatabase(source = null, channelId = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "viewer_samples", source);
+  const stream = currentStreamRow(database, "viewer_samples", source, channelId);
 
   if (!stream) {
     return null;
@@ -446,9 +451,9 @@ export function loadCurrentStreamAnalyticsFromDatabase(source = null) {
   };
 }
 
-export function loadCurrentChatAnalyticsFromDatabase(source = null) {
+export function loadCurrentChatAnalyticsFromDatabase(source = null, channelId = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "chatters", source);
+  const stream = currentStreamRow(database, "chatters", source, channelId);
 
   if (!stream) {
     return null;
@@ -486,9 +491,9 @@ export function loadCurrentChatAnalyticsFromDatabase(source = null) {
   };
 }
 
-export function loadCurrentWordAnalyticsFromDatabase(source = null) {
+export function loadCurrentWordAnalyticsFromDatabase(source = null, channelId = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "word_stats", source);
+  const stream = currentStreamRow(database, "word_stats", source, channelId);
 
   if (!stream) {
     return null;
@@ -521,9 +526,9 @@ export function loadCurrentWordAnalyticsFromDatabase(source = null) {
   };
 }
 
-export function loadCurrentModerationAnalyticsFromDatabase(source = null) {
+export function loadCurrentModerationAnalyticsFromDatabase(source = null, channelId = null) {
   const database = getDatabase();
-  const stream = currentStreamRow(database, "moderation_actions", source);
+  const stream = currentStreamRow(database, "moderation_actions", source, channelId);
   const moderators = stream ? parseJson(stream.moderators_json, []) : [];
 
   if (!stream || !moderators.length) {
@@ -547,16 +552,19 @@ export function loadCurrentModerationAnalyticsFromDatabase(source = null) {
   };
 }
 
-export function loadStreamArchiveFromDatabase(source = null) {
+export function loadStreamArchiveFromDatabase(source = null, channelId = null) {
   const database = getDatabase();
-  const sourceFilter = source ? "AND source = ?" : "";
+  const filters = [];
+  const parameters = [];
+  if (source) { filters.push("source = ?"); parameters.push(source); }
+  if (channelId !== null && channelId !== undefined) { filters.push("channel_id = ?"); parameters.push(channelId); }
   const rows = database.prepare(`
     SELECT * FROM streams
     WHERE stream_date IS NOT NULL AND duration_minutes IS NOT NULL
-      ${sourceFilter}
+      ${filters.length ? `AND ${filters.join(" AND ")}` : ""}
     ORDER BY stream_date DESC, started_at DESC
     LIMIT 50
-  `).all(...(source ? [source] : []));
+  `).all(...parameters);
 
   if (!rows.length) {
     return null;

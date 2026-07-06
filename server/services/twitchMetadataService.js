@@ -19,7 +19,7 @@ function resolveTwitchProvider() {
   return getMockTwitchChannelMetadata;
 }
 
-export async function loadTwitchChannelMetadata() {
-  const channelLogin = process.env.TWITCH_CHANNEL_LOGIN || "fenya";
+export async function loadTwitchChannelMetadata(requestedChannelLogin) {
+  const channelLogin = requestedChannelLogin || process.env.TWITCH_CHANNEL_LOGIN || "fenya";
   return resolveTwitchProvider()(channelLogin);
 }

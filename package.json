@@ -9,6 +9,7 @@
     "db:seed": "node server/scripts/seedDatabase.js",
     "lint": "eslint .",
     "preview": "vite preview",
+    "start": "node server/index.js",
     "server": "node server/index.js",
     "test": "vitest run",
     "test:watch": "vitest"

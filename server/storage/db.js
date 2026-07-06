@@ -10,6 +10,22 @@ const defaultDatabasePath = fileURLToPath(new URL("../data/fenya-stream-lab.sqli
 
 let database = null;
 
+function applySafeMigrations(targetDatabase) {
+  const twitchAccountColumns = targetDatabase.prepare("PRAGMA table_info(twitch_accounts)").all();
+  if (!twitchAccountColumns.some((column) => column.name === "needs_reauth")) {
+    targetDatabase.exec("ALTER TABLE twitch_accounts ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0 CHECK (needs_reauth IN (0, 1))");
+  }
+  for (const table of ["streams", "viewer_samples", "chat_messages"]) {
+    const columns = targetDatabase.prepare(`PRAGMA table_info(${table})`).all();
+    if (!columns.some((column) => column.name === "channel_id")) {
+      targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN channel_id INTEGER REFERENCES channels(id) ON DELETE SET NULL`);
+    }
+    if (!columns.some((column) => column.name === "stream_session_id")) {
+      targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN stream_session_id TEXT`);
+    }
+  }
+}
+
 export function getDatabasePath() {
   const configuredPath = process.env.DATABASE_PATH?.trim();
 
@@ -33,6 +49,7 @@ export function getDatabase() {
   database.pragma("journal_mode = WAL");
   database.pragma("busy_timeout = 5000");
   database.exec(readFileSync(schemaPath, "utf8"));
+  applySafeMigrations(database);
 
   return database;
 }

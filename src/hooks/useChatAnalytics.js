@@ -62,10 +62,11 @@ function normalizeChatAnalytics(payload) {
   }
 }
 
-export function useChatAnalytics() {
+export function useChatAnalytics({ channelId = null } = {}) {
   const [analytics, setAnalytics] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const endpoint = channelId ? `/api/channels/${encodeURIComponent(channelId)}/chat/current-stream` : '/api/chat/fenya/current-stream'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -81,7 +82,7 @@ export function useChatAnalytics() {
       isRequestInFlight = true
 
       try {
-        const response = await fetch('/api/chat/fenya/current-stream', {
+        const response = await fetch(endpoint, {
           signal: controller.signal,
         })
 
@@ -131,7 +132,7 @@ export function useChatAnalytics() {
       window.clearInterval(pollingInterval)
       controller.abort()
     }
-  }, [])
+  }, [endpoint])
 
   return {
     analytics,

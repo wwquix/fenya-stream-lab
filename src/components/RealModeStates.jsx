@@ -1,4 +1,6 @@
 import { Reveal } from './MotionPrimitives.jsx'
+import EmptyPanel from './EmptyPanel.jsx'
+import { formatDashboardModeLabel } from '../utils/dashboardUi.js'
 
 export function RealModeNotice({ title, note }) {
   return (
@@ -12,7 +14,7 @@ export function RealModeNotice({ title, note }) {
   )
 }
 
-export function RealDataEmptySection({ id, title, note }) {
+export function RealDataEmptySection({ id, title, note, minHeight = 'medium' }) {
   return (
     <Reveal as="section" className="section-panel real-empty-section" id={id} aria-labelledby={`${id}-title`}>
       <div className="section-heading">
@@ -20,26 +22,29 @@ export function RealDataEmptySection({ id, title, note }) {
           <h2 id={`${id}-title`}>{title}</h2>
         </div>
       </div>
-      <div className="real-data-empty compact glass-panel" role="status">
-        <p>{note}</p>
-      </div>
+      <EmptyPanel message={note} minHeight={minHeight} />
     </Reveal>
   )
 }
 
-export function RealDataSummary({ connection, ingestStatus, metadata, chatAnalytics, wordAnalytics, t }) {
-  const connected = Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
+export function RealDataSummary({ connection, ingestStatus, metadata, chatAnalytics, wordAnalytics, vodArchive, dashboardMode, channelLogin, t }) {
+  const connected = dashboardMode === 'connected-channel'
+    ? !ingestStatus?.lastError
+    : Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
   const running = ingestStatus?.status === 'running'
   const totalMessages = chatAnalytics?.totalMessages ?? 0
   const totalChatters = chatAnalytics?.activeNow ?? 0
   const totalWords = wordAnalytics?.words?.length ?? 0
+  const totalVods = vodArchive?.comparison?.totalVods ?? vodArchive?.vods?.length ?? 0
   const cards = [
+    { label: t.modePrefix, value: formatDashboardModeLabel(dashboardMode, channelLogin, t).replace(`${t.modePrefix}: `, '') },
     { label: t.connectedLabel, value: connected ? t.yes : t.no },
     { label: t.ingestRunningLabel, value: running ? t.yes : t.no },
     { label: t.streamStateLabel, value: metadata?.isLive ? t.streamLive : t.offlineNow },
     { label: t.collectedMessages, value: totalMessages.toLocaleString() },
     { label: t.collectedChatters, value: totalChatters.toLocaleString() },
     { label: t.collectedWords, value: totalWords.toLocaleString() },
+    { label: t.vodCount, value: totalVods.toLocaleString() },
   ]
 
   return (
@@ -47,7 +52,6 @@ export function RealDataSummary({ connection, ingestStatus, metadata, chatAnalyt
       <div className="section-heading">
         <div>
           <h2 id="real-data-summary-title">{t.realSummaryTitle}</h2>
-          <p className="section-note">{t.realSummaryNote}</p>
         </div>
       </div>
       <div className="real-summary-grid">

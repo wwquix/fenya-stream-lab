@@ -10,21 +10,21 @@ const defaultHeroAsset = {
 }
 
 const navItems = [
-  { id: 'hero', labelKey: 'navTop' },
-  { id: 'stream-pulse', labelKey: 'navPulse' },
+  { id: 'top', labelKey: 'navTop' },
+  { id: 'pulse', labelKey: 'navPulse' },
   { id: 'chatters', labelKey: 'navChatters' },
-  { id: 'speech', labelKey: 'navSpeech' },
+  { id: 'words', labelKey: 'navSpeech' },
   { id: 'moderators', labelKey: 'navMods' },
   { id: 'archive', labelKey: 'navArchive' },
   { id: 'summary', labelKey: 'navSummary' },
 ]
 
-function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'hero', language, onToggleLanguage, t }) {
+function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'top', language, onToggleLanguage, t }) {
   const hasHeroAsset = Boolean(heroAsset?.src)
   const prefersReducedMotion = useReducedMotion()
 
   return (
-    <Reveal as="section" className="hero-wrap" id="hero" data-entity-type="stream" data-entity-id={stream.id}>
+    <Reveal as="section" className="hero-wrap" id="top" data-entity-type="stream" data-entity-id={stream.id}>
       <div className="hero-section">
         <div className="hero-background-slot" aria-label={heroAsset.alt}>
           {hasHeroAsset ? <img src={heroAsset.src} alt={heroAsset.alt} /> : null}
@@ -33,7 +33,7 @@ function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'hero', la
         <div className="hero-noise-layer" aria-hidden="true" />
 
         <nav className="hero-navbar" aria-label="Primary">
-          <a className="hero-logo" href="#hero" aria-label="Fenya Stream Lab home">
+          <a className="hero-logo" href="#top" aria-label="Fenya Stream Lab home">
             Fenya Lab
           </a>
           <div className="hero-nav-menu">
@@ -57,7 +57,7 @@ function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'hero', la
             <button className="language-toggle liquid-button" type="button" onClick={onToggleLanguage} aria-label="Switch language">
               {language === 'ru' ? 'RU' : 'EN'}
             </button>
-            <a className="hero-nav-cta liquid-button" href="#stream-pulse">
+            <a className="hero-nav-cta liquid-button" href="#pulse">
               {t.viewDashboard} <span aria-hidden="true">↗</span>
             </a>
           </div>

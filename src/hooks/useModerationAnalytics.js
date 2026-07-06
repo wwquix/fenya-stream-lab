@@ -114,10 +114,11 @@ function normalizeModerationAnalytics(payload) {
   }
 }
 
-export function useModerationAnalytics() {
+export function useModerationAnalytics({ channelId = null } = {}) {
   const [analytics, setAnalytics] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const endpoint = channelId ? `/api/channels/${encodeURIComponent(channelId)}/moderation/current-stream` : '/api/moderation/fenya/current-stream'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -133,7 +134,7 @@ export function useModerationAnalytics() {
       isRequestInFlight = true
 
       try {
-        const response = await fetch('/api/moderation/fenya/current-stream', { signal: controller.signal })
+        const response = await fetch(endpoint, { signal: controller.signal })
 
         if (response.status === 204) {
           if (isActive) {
@@ -181,7 +182,7 @@ export function useModerationAnalytics() {
       window.clearInterval(pollingInterval)
       controller.abort()
     }
-  }, [])
+  }, [endpoint])
 
   return { analytics, isLoading, error }
 }

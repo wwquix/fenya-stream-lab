@@ -79,10 +79,11 @@ function normalizeArchive(payload) {
   }
 }
 
-export function useStreamArchive() {
+export function useStreamArchive({ channelId = null } = {}) {
   const [archive, setArchive] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const endpoint = channelId ? `/api/channels/${encodeURIComponent(channelId)}/archive/streams` : '/api/archive/fenya/streams'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -90,7 +91,7 @@ export function useStreamArchive() {
 
     async function loadArchive() {
       try {
-        const response = await fetch('/api/archive/fenya/streams', { signal: controller.signal })
+        const response = await fetch(endpoint, { signal: controller.signal })
 
         if (response.status === 204) {
           if (isActive) {
@@ -133,7 +134,7 @@ export function useStreamArchive() {
       isActive = false
       controller.abort()
     }
-  }, [])
+  }, [endpoint])
 
   return { archive, isLoading, error }
 }

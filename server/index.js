@@ -4,6 +4,8 @@ import process from "node:process";
 import { createApp } from "./app.js";
 import { startMockLiveSampler } from "./services/mockLiveSampler.js";
 import { startTwitchIngest, stopTwitchIngest } from "./services/twitchIngestService.js";
+import { startTwitchTokenRefreshJob, stopTwitchTokenRefreshJob } from "./services/twitchTokenRefreshService.js";
+import { stopAllIngest } from "./services/twitchIngestPoolService.js";
 
 dotenv.config();
 
@@ -26,10 +28,17 @@ const server = app.listen(port, () => {
       .then(() => console.log("Twitch live ingest started automatically"))
       .catch((error) => console.error("Twitch live ingest autostart failed:", error.message));
   }
+
+  const tokenRefreshStatus = startTwitchTokenRefreshJob();
+  if (tokenRefreshStatus.running) {
+    console.log(`Twitch token refresh job started with a ${tokenRefreshStatus.intervalMs}ms interval`);
+  }
 });
 
 function shutdown() {
   stopTwitchIngest();
+  stopAllIngest();
+  stopTwitchTokenRefreshJob();
   server.close(() => process.exit(0));
 }
 

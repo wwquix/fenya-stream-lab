@@ -32,7 +32,7 @@ function formatStatusTime(value, isRussian) {
   }).format(date)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, isDataModeLoading, theme, onToggleTheme, replay, streamSummary, t }) {
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, isDataModeLoading, theme, onToggleTheme, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -58,7 +58,9 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   if (isDataModeLoading || isTwitchMode) {
     const connection = twitchIngest?.connection
     const ingestStatus = twitchIngest?.status
-    const connected = Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
+    const connected = dashboardMode === 'connected-channel'
+      ? Boolean(canManageChannel && !twitchIngest?.error)
+      : Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
     const ingestState = ingestStatus?.status ?? 'stopped'
     const ingestRunning = ingestState === 'running'
     const ingestBusy = ['connecting', 'subscribing', 'reconnecting'].includes(ingestState)
@@ -107,22 +109,22 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
         </div>
 
         <div className="twitch-ingest-actions">
-          <button
+          {canManageChannel ? <button
             className="liquid-button"
             type="button"
             disabled={isDataModeLoading || twitchIngest?.isPending || ingestRunning || ingestBusy || !connected}
             onClick={() => twitchIngest.start().catch(() => undefined)}
           >
             {startLabel}
-          </button>
-          <button
+          </button> : null}
+          {canManageChannel ? <button
             className="liquid-button"
             type="button"
             disabled={isDataModeLoading || twitchIngest?.isPending || (!ingestRunning && !ingestBusy)}
             onClick={() => twitchIngest.stop().catch(() => undefined)}
           >
             {stopLabel}
-          </button>
+          </button> : null}
           <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
             <span aria-hidden="true" />
             {theme === 'light' ? (isRussian ? 'Тёмная' : 'Dark') : (isRussian ? 'Светлая' : 'Light')}

@@ -1,6 +1,8 @@
 import ScannerTooltip from './ScannerTooltip.jsx'
 import { AnimatedNumber, Reveal, RippleSurface } from './MotionPrimitives.jsx'
 import { formatDominantWord } from '../i18n/translations.js'
+import TwitchVodArchive from './TwitchVodArchive.jsx'
+import EmptyPanel from './EmptyPanel.jsx'
 
 function formatPlainInteger(value) {
   return Math.round(value).toString()
@@ -62,7 +64,7 @@ function adaptBackendStreams(archive) {
   }))
 }
 
-function StreamArchive({ streams, archive, selectedStreamId, realDataMode = false, t }) {
+function StreamArchive({ streams, archive, selectedStreamId, realDataMode = false, vodArchive = null, canSyncVods = false, dashboardMode = 'mock', t }) {
   const activeStreams = adaptBackendStreams(archive) ?? (realDataMode ? [] : streams)
 
   return (
@@ -75,10 +77,12 @@ function StreamArchive({ streams, archive, selectedStreamId, realDataMode = fals
         </div>
       </div>
 
+      {realDataMode && vodArchive ? <TwitchVodArchive archive={vodArchive} canSync={canSyncVods} dashboardMode={dashboardMode} t={t} /> : null}
+
+      {realDataMode ? <div className="internal-archive-heading"><h3>{t.internalArchiveTitle}</h3><p className="section-note">{t.internalArchiveNote}</p></div> : null}
+
       {activeStreams.length === 0 ? (
-        <div className="real-data-empty compact" role="status">
-          <p>{t.noRealArchive}</p>
-        </div>
+        <EmptyPanel message={realDataMode ? t.internalArchiveEmpty : t.noRealArchive} minHeight={realDataMode ? 'medium' : 'small'} compact={!realDataMode} />
       ) : <div className="archive-bookshelf" aria-label="Stream archive bookshelf">
         <div className="archive-track">
         {activeStreams.map((stream, index) => (

@@ -138,10 +138,11 @@ export function adaptAnalyticsForStreamPulse(analytics, fallbackStream) {
   }
 }
 
-export function useStreamAnalytics() {
+export function useStreamAnalytics({ channelId = null } = {}) {
   const [analytics, setAnalytics] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const endpoint = channelId ? `/api/channels/${encodeURIComponent(channelId)}/analytics/current-stream` : '/api/analytics/fenya/current-stream'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -157,7 +158,7 @@ export function useStreamAnalytics() {
       isRequestInFlight = true
 
       try {
-        const response = await fetch('/api/analytics/fenya/current-stream', {
+        const response = await fetch(endpoint, {
           signal: controller.signal,
         })
 
@@ -208,7 +209,7 @@ export function useStreamAnalytics() {
       window.clearInterval(pollingInterval)
       controller.abort()
     }
-  }, [])
+  }, [endpoint])
 
   return {
     analytics,

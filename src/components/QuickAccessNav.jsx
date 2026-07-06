@@ -1,7 +1,7 @@
 const quickLinks = [
-  { href: '#stream-pulse', label: 'Stream Pulse' },
+  { href: '#pulse', label: 'Stream Pulse' },
   { href: '#chatters', label: 'Chatters' },
-  { href: '#speech', label: 'Speech' },
+  { href: '#words', label: 'Speech' },
   { href: '#moderators', label: 'Moderators' },
   { href: '#archive', label: 'Archive' },
   { href: '#summary', label: 'Summary' },

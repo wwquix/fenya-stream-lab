@@ -40,10 +40,11 @@ function normalizeMetadata(payload) {
   }
 }
 
-export function useTwitchMetadata() {
+export function useTwitchMetadata({ channelId = null } = {}) {
   const [metadata, setMetadata] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const endpoint = channelId ? `/api/channels/${encodeURIComponent(channelId)}/twitch` : '/api/twitch/fenya'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -51,7 +52,7 @@ export function useTwitchMetadata() {
 
     async function loadMetadata() {
       try {
-        const response = await fetch('/api/twitch/fenya', {
+        const response = await fetch(endpoint, {
           signal: controller.signal,
         })
 
@@ -87,7 +88,7 @@ export function useTwitchMetadata() {
       window.clearInterval(pollingInterval)
       controller.abort()
     }
-  }, [])
+  }, [endpoint])
 
   return {
     metadata,

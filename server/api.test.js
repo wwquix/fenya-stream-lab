@@ -57,6 +57,13 @@ describe("Fenya Stream Lab API", () => {
     expect(response.body).toMatchObject({ status: "ok", service: "fenya-stream-lab-api", provider: "mock" });
   });
 
+  test("GET /health returns the minimal production health contract", async () => {
+    const response = await request(app).get("/health");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ ok: true, service: "fenya-stream-lab" });
+  });
+
   test("database initialization creates the required SQLite tables", () => {
     const database = getDatabase();
     const tables = database.prepare(`

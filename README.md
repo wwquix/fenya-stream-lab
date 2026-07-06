@@ -53,7 +53,7 @@ Requirements: a current Node.js release and npm.
 npm install
 ```
 
-Create the optional local environment file:
+Create the optional local environment file (it is ignored by Git and must never be committed):
 
 ```bash
 cp .env.example .env
@@ -99,7 +99,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for lifecycle and boundary deta
 
 ## SQLite storage
 
-`server/storage/db.js` lazily opens the database configured by `DATABASE_PATH`, enables foreign keys and WAL mode, and applies `server/storage/schema.sql`. Runtime `*.sqlite`, WAL, and SHM files are ignored by Git.
+`server/storage/db.js` lazily opens the database configured by `DATABASE_PATH`, enables foreign keys, WAL mode, and a 5000 ms busy timeout, then applies `server/storage/schema.sql`. Runtime `*.sqlite`, WAL, and SHM files are ignored by Git.
+
+The schema also contains the foundation for future multi-user access: users, linked Twitch accounts, persistent sessions, channels, and role-based channel memberships. Opaque session tokens are stored only as SHA-256 hashes. Twitch access and refresh tokens are encrypted at rest with AES-256-GCM and are never returned from repository/API-shaped account results.
 
 `npm run db:seed` writes deterministic mock streams and analytics. Tests override `DATABASE_PATH` with a new temporary directory for every test and never open the developer database.
 
@@ -141,6 +143,24 @@ The backend uses Twitch Client Credentials, caches the app access token in memor
 
 Start real ingestion with `POST /api/twitch/fenya/ingest/start`. It validates the configured user token and its `user:read:chat` scope, opens Twitch EventSub WebSocket, subscribes to `channel.chat.message`, stores messages and aggregates in SQLite, and polls live metadata/viewer samples at `TWITCH_POLL_INTERVAL_MS`. Status and stop routes are documented in [docs/API.md](docs/API.md). The connection and timers are process-local and must be restarted after the backend restarts.
 
+The runtime ingest implementation is a channel-keyed connection pool. Authorized channel owners/admins can use `/api/channels/:channelId/ingest/*`; each channel owns an independent EventSub socket, polling timer, reconnect state, and runtime counters. Starting the same channel twice reuses its existing connection, while stopping one channel leaves others running. The historical `/api/twitch/fenya/ingest/*` routes remain wrappers around a dedicated legacy pool entry.
+
+### Twitch login
+
+Register `http://localhost:3001/auth/twitch/callback` as an OAuth redirect URL in the Twitch developer console, then set `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_REDIRECT_URI`, and `TOKEN_ENCRYPTION_KEY` in the ignored local `.env`. Start the backend and Vite, then open:
+
+In local development, the backend falls back to `http://localhost:3001/auth/twitch/callback` when `TWITCH_REDIRECT_URI` is absent. Production remains strict and requires the variable explicitly.
+
+```text
+http://localhost:3001/auth/twitch/login
+```
+
+Browser login always requests `user:read:chat` so a connected channel can collect chat. Roles are derived automatically: connecting your own Twitch identity creates the owner membership, while chatter status comes from login and collected chat data. A successful callback redirects to `AUTH_SUCCESS_REDIRECT_URI`, defaults to the local Vite app, and sets a persistent HTTP-only session cookie. `GET /api/me` returns the safe current-user/channel contract, and `POST /auth/logout` deletes the database session.
+
+OAuth attempts expire after ten minutes. Multiple browser attempts can remain pending independently; if an attempt expires or the backend restarts, the callback shows a safe retry page instead of raw JSON. Repeat the Twitch login from that page.
+
+Stored Twitch user tokens refresh through `twitchTokenRefreshService`. Tokens within ten minutes of expiration refresh proactively, while account-aware Helix requests also refresh and retry once after a `401`. Twitch refresh-token rotation is persisted atomically as new AES-256-GCM ciphertext. Failed refreshes set `needs_reauth`; no token values are included in errors or scheduler logs. The legacy environment-token EventSub flow remains unchanged.
+
 The dashboard keeps the two data modes explicit:
 
 - `TWITCH_PROVIDER=mock` shows the complete deterministic demo dashboard and archive.
@@ -154,12 +174,17 @@ In Twitch mode, use the compact dashboard status panel to start or stop ingest. 
 
 | Variable | Default/example | Purpose |
 | --- | --- | --- |
+| `NODE_ENV` | `development` | Set to `production` when Express serves the built frontend |
 | `PORT` | `3001` | Express port |
+| `APP_BASE_URL` | `http://localhost:5173` | Public application origin; used for the post-OAuth redirect |
 | `DATABASE_PATH` | `server/data/fenya-stream-lab.sqlite` | Local SQLite path |
+| `TOKEN_ENCRYPTION_KEY` | empty | 32-byte hex/base64 key; required when Twitch tokens are stored |
 | `TWITCH_PROVIDER` | `mock` | `mock` or real Helix metadata via `twitch` |
 | `TWITCH_CHANNEL_LOGIN` | `fenya` | Channel login to resolve |
 | `TWITCH_CLIENT_ID` | empty | Required in Twitch mode |
 | `TWITCH_CLIENT_SECRET` | empty | Required in Twitch mode; server-side only |
+| `TWITCH_REDIRECT_URI` | `http://localhost:3001/auth/twitch/callback` | Must exactly match the Twitch app OAuth redirect URL |
+| `AUTH_SUCCESS_REDIRECT_URI` | `http://localhost:5173/` | Legacy/local post-login fallback when `APP_BASE_URL` is absent |
 | `TWITCH_USER_ACCESS_TOKEN` | empty | Required for EventSub; must include `user:read:chat` |
 | `TWITCH_REFRESH_TOKEN` | empty | Configure for in-memory user-token refresh |
 | `TWITCH_BROADCASTER_ID` | empty | Optional override; otherwise resolved from channel login |
@@ -167,12 +192,20 @@ In Twitch mode, use the compact dashboard status panel to start or stop ingest. 
 | `TWITCH_POLL_INTERVAL_MS` | `30000` | Live Helix polling interval (minimum 1000 ms) |
 | `TWITCH_EVENTSUB_RECONNECT_MS` | `5000` | Delay before reconnecting a dropped EventSub session |
 | `TWITCH_LIVE_INGEST_AUTOSTART` | `false` | Start Twitch ingest with the backend when explicitly enabled |
+| `TWITCH_TOKEN_REFRESH_ENABLED` | `false` | Enable periodic refresh for encrypted database-backed user tokens |
+| `TWITCH_TOKEN_REFRESH_INTERVAL_MS` | `300000` | Stored-token refresh scan interval; minimum 1000 ms |
 | `SUMMARY_PROVIDER` | `local` | `local` or deterministic `mock`; `openai` is only a placeholder |
 | `MOCK_SAMPLER_INTERVAL_MS` | `10000` | Demo sampler interval |
 | `MOCK_SAMPLER_AUTOSTART` | `false` | Start demo sampler with the backend |
 | `REPLAY_MS_PER_STREAM_MINUTE` | `250` | Local replay timing scale before speed multiplier |
 
-No credentials are required in the default mock mode. Twitch mode requires client credentials and a user token with `user:read:chat`; configure a refresh token as well so the local process can refresh an expired user token. `.env` remains ignored and secrets must never be committed.
+No credentials are required in the default mock mode. Twitch mode requires client credentials and a user token with `user:read:chat`; configure a refresh token as well so the local process can refresh an expired user token. `TOKEN_ENCRYPTION_KEY` is required only when durable Twitch token storage is used. Generate and keep it in the ignored local `.env`; `.env` and all secrets must never be committed.
+
+Optional `PLATFORM_ADMIN_TWITCH_IDS` and `PLATFORM_ADMIN_TWITCH_LOGINS` comma-separated allowlists define local Fenya Stream Lab administrators independently from channel roles. `/api/me` exposes this only as `roleSummary.isPlatformAdmin` and `globalRoles: ["platform_admin"]`; it does not expose the allowlist itself. Platform admin never grants Twitch broadcaster/moderator permissions and never bypasses OAuth scopes. The archive can synchronize the latest 50 Twitch VOD metadata records; it does not invent chat, viewer, word, or moderation analytics for VOD-only entries.
+
+Channel roles are assigned automatically from Twitch identity and channel ownership; there is no manual role switch in the dashboard. The platform-admin badge is a local application role only. Twitch still requires the matching OAuth scopes for each protected operation. The VOD archive contains Twitch metadata only, while full chat, word, viewer, and moderation analytics exist only for streams collected live by Fenya Stream Lab.
+
+The current channel moderator list is optional and requires `moderation:read`. The dashboard asks for it only when an owner explicitly reconnects Twitch from the moderator section. This stage stores and displays the directory only; moderator actions, bans, timeouts, and moderation EventSub analytics remain future work.
 
 ## npm scripts
 
@@ -183,6 +216,7 @@ No credentials are required in the default mock mode. Twitch mode requires clien
 | `npm run db:seed` | Seed the configured SQLite database |
 | `npm run build` | Create the frontend production bundle |
 | `npm run preview` | Preview the built frontend |
+| `npm start` | Start the Express production service (serves `dist` when `NODE_ENV=production`) |
 | `npm run lint` | Run ESLint |
 | `npm test` | Run Vitest once |
 | `npm run test:watch` | Run Vitest in watch mode |
@@ -205,6 +239,32 @@ npm run lint
 npm run build
 ```
 
+## Ubuntu VPS deployment
+
+Install a current Node.js LTS release, copy the project, and keep the real `.env` only on the VPS. Build and start the single Express service:
+
+```bash
+npm ci
+npm run build
+NODE_ENV=production npm start
+```
+
+Set at least `NODE_ENV=production`, `PORT=3001`, `APP_BASE_URL=https://stats.example.com`, `TWITCH_REDIRECT_URI=https://stats.example.com/auth/twitch/callback`, and a writable absolute `DATABASE_PATH`. Add the exact callback URL to the Twitch developer console. Keep Twitch credentials, token encryption keys, and tokens only in the ignored `.env`. A systemd service can run `npm start` from the project directory with `EnvironmentFile=/path/to/app/.env`.
+
+Proxy the public origin to the one local service; Express serves `dist`, `/api/*`, `/auth/*`, and `/health`:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+Terminate HTTPS in nginx. Verify deployment with `curl https://stats.example.com/health`; it returns only `{ "ok": true, "service": "fenya-stream-lab" }`.
+
 ## API overview
 
 Base URL: `http://localhost:3001`. See [docs/API.md](docs/API.md) for the complete route table, request examples, responses, SSE events, and error behavior.
@@ -221,7 +281,7 @@ Base URL: `http://localhost:3001`. See [docs/API.md](docs/API.md) for the comple
 
 ## Future improvements
 
-- Add an OAuth authorization UI and durable encrypted token storage if this moves beyond local operation.
+- Add a user-facing OAuth/account UI around the implemented backend login flow.
 - Add migrations, structured logging, graceful shutdown, and deployment hardening.
 - Add authentication and rate limiting before exposing write endpoints publicly.
 - Add repository-owned portfolio screenshots.

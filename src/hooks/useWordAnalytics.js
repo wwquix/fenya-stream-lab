@@ -72,10 +72,11 @@ function normalizeWordAnalytics(payload) {
   }
 }
 
-export function useWordAnalytics() {
+export function useWordAnalytics({ channelId = null } = {}) {
   const [analytics, setAnalytics] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const endpoint = channelId ? `/api/channels/${encodeURIComponent(channelId)}/words/current-stream` : '/api/words/fenya/current-stream'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -91,7 +92,7 @@ export function useWordAnalytics() {
       isRequestInFlight = true
 
       try {
-        const response = await fetch('/api/words/fenya/current-stream', { signal: controller.signal })
+        const response = await fetch(endpoint, { signal: controller.signal })
 
         if (response.status === 204) {
           if (isActive) {
@@ -139,7 +140,7 @@ export function useWordAnalytics() {
       window.clearInterval(pollingInterval)
       controller.abort()
     }
-  }, [])
+  }, [endpoint])
 
   return { analytics, isLoading, error }
 }

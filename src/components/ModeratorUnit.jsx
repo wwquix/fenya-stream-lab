@@ -2,9 +2,16 @@ import { useState } from 'react'
 import ScannerTooltip from './ScannerTooltip.jsx'
 import { AnimatedNumber, MotionCard, Reveal } from './MotionPrimitives.jsx'
 import { formatStatusLabel } from '../i18n/translations.js'
+import EmptyPanel from './EmptyPanel.jsx'
 
 function formatPlainInteger(value) {
   return Math.round(value).toString()
+}
+
+function formatSyncedAt(value, isRussian) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return new Intl.DateTimeFormat(isRussian ? 'ru-RU' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
 function getBackendModeratorId(nickname, index) {
@@ -30,11 +37,78 @@ function adaptBackendModerators(moderationAnalytics) {
   }))
 }
 
-function ModeratorUnit({ moderators, events, moderationAnalytics, t }) {
+function ModeratorUnit({ moderators, events, moderationAnalytics, moderatorDirectory = null, realDataMode = false, canManageChannel = false, t }) {
   const [showAllModerators, setShowAllModerators] = useState(false)
   const backendModerators = adaptBackendModerators(moderationAnalytics)
   const activeModerators = backendModerators ?? moderators
   const visibleModerators = showAllModerators ? activeModerators : activeModerators.slice(0, 4)
+
+  async function requestModeratorScope() {
+    try {
+      const response = await fetch('/auth/twitch/login?format=json&reauth=1&scope=moderation:read')
+      const payload = await response.json()
+      if (!response.ok || !payload.authorizationUrl) throw new Error(payload.message || t.moderatorScopeError)
+      window.location.assign(payload.authorizationUrl)
+    } catch {
+      // The hook keeps dashboard data intact; the inline scope message remains actionable.
+    }
+  }
+
+  if (realDataMode) {
+    const directory = moderatorDirectory?.data
+    const syncedModerators = Array.isArray(directory?.moderators) ? directory.moderators : []
+    const isRussian = t.navTop === 'Топ'
+    return (
+      <Reveal as="section" className="section-panel moderator-unit moderator-directory" id="moderators" aria-labelledby="moderator-unit-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">{t.moderatorKicker}</p>
+            <h2 id="moderator-unit-title">{t.currentModerators}</h2>
+            <p className="section-note">{t.moderatorDirectoryNote}</p>
+          </div>
+          {directory?.available && canManageChannel ? (
+            <button className="moderator-toggle liquid-button" type="button" disabled={moderatorDirectory.isSyncing} onClick={() => moderatorDirectory.sync().catch(() => undefined)}>
+              {moderatorDirectory.isSyncing ? t.moderatorSyncing : t.syncModerators}
+            </button>
+          ) : null}
+        </div>
+        {moderatorDirectory?.error ? <p className="twitch-status-error" role="alert">{moderatorDirectory.error.message}</p> : null}
+        {moderatorDirectory?.isLoading ? <EmptyPanel message={t.channelLoading} minHeight="medium" compact /> : null}
+        {!moderatorDirectory?.isLoading && directory && !directory.available ? (
+          <EmptyPanel
+            title={t.moderatorUnavailableTitle}
+            message={t.moderatorScopeRequired}
+            detail={t.moderatorFutureShort}
+            minHeight="small"
+            compact
+            action={canManageChannel ? <button className="liquid-button" type="button" onClick={requestModeratorScope}>{t.reconnectForModerators}</button> : null}
+          />
+        ) : null}
+        {syncedModerators.length ? (
+          <div className="moderator-directory-list">
+            {syncedModerators.map((moderator) => (
+              <article className="moderator-directory-row glass-panel" key={moderator.twitchUserId}>
+                <span className="channel-avatar-fallback" aria-hidden="true">{moderator.displayName?.slice(0, 1) || 'M'}</span>
+                <div>
+                  <strong>{moderator.displayName}</strong>
+                  <span>@{moderator.login}</span>
+                  <small>{t.moderatorSyncedAt}: {formatSyncedAt(moderator.syncedAt, isRussian)}</small>
+                </div>
+                <span className="identity-role-badges"><span>{t.roleModerator}</span></span>
+              </article>
+            ))}
+          </div>
+        ) : !moderatorDirectory?.isLoading && directory?.available ? (
+          <EmptyPanel
+            message={t.noModeratorsReturned}
+            minHeight="medium"
+            action={canManageChannel ? <button className="liquid-button" type="button" disabled={moderatorDirectory.isSyncing} onClick={() => moderatorDirectory.sync().catch(() => undefined)}>{moderatorDirectory.isSyncing ? t.moderatorSyncing : t.syncModerators}</button> : null}
+          />
+        ) : null}
+        {directory?.available ? <p className="moderator-actions-note">{t.moderatorFutureShort}</p> : null}
+      </Reveal>
+    )
+  }
 
   return (
     <Reveal as="section" className="section-panel moderator-unit" id="moderators" aria-labelledby="moderator-unit-title">

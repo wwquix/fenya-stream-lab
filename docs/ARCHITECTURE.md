@@ -47,9 +47,51 @@ streams
 
 import_jobs
   +-- import_errors
+
+users
+  +-- twitch_accounts
+  +-- sessions
+  +-- channel_memberships -- channels
 ```
 
 Runtime database files are ignored. Schema migration/version tooling is not implemented yet.
+
+### Identity and secret storage foundation
+
+The additive identity schema does not alter the current single-channel routes. `users` can link to Twitch identities, `channels` can have an owner, and `channel_memberships` constrains roles to `channel_owner`, `channel_admin`, `moderator`, or `chatter`.
+
+Application sessions use random opaque tokens rather than JWTs. Only a SHA-256 token hash is persisted; lookup rejects expired rows. The raw token is intended only for an HTTP-only, `SameSite=Lax` cookie, with `Secure` enabled in production.
+
+`tokenCryptoService` encrypts durable Twitch access and refresh tokens using AES-256-GCM. `TOKEN_ENCRYPTION_KEY` must encode exactly 32 bytes as hex or base64 and is required whenever token storage or decryption is attempted. The ignored `.env` must never be committed. Repository/API-shaped Twitch account results exclude encrypted token columns; only service-level Twitch code should load and decrypt them when needed.
+
+### Access control boundary
+
+SQLite has no row-level security (RLS). All application access control therefore goes through shared Express middleware in `server/middleware/authMiddleware.js`:
+
+- `attachCurrentUser` reads the opaque session cookie, resolves only active database sessions, and attaches sanitized `req.user` and `req.session` values. Missing, malformed, expired, or unknown sessions continue as guests.
+- `requireUser` rejects guests with `401`.
+- `requireChannelRole([...])` resolves `req.params.channelId` through `channel_memberships`, rejects disallowed users with `403`, and attaches `req.channelRole`.
+- `requireSelfOrChannelRole(...)` permits the matching linked Twitch identity or one of the explicitly allowed channel roles.
+
+Protected route handlers must compose these guards and must not implement custom ad-hoc ownership or role checks. In particular, handlers must not compare owner IDs or membership roles with inline `if` statements. The current legacy single-channel Fenya routes remain public during the staged multi-user migration; passive session attachment and the new login flow do not change their behavior.
+
+### Twitch login flow
+
+`GET /auth/twitch/login` creates a short-lived, one-time OAuth state and binds it to an HTTP-only `SameSite=Lax` cookie before redirecting to Twitch's Authorization Code flow. Connected-channel login always requests `user:read:chat`. The optional `moderation:read` scope is allowlisted but requested only through the explicit moderator reconnect action.
+
+`TWITCH_REDIRECT_URI` is read from the environment. Local development falls back to `http://localhost:3001/auth/twitch/callback`; production requires an explicit value. The onboarding panel requests the authorization URL as JSON before navigating, so configuration errors remain readable inline. Direct browser requests receive a small local HTML error page rather than the API JSON error envelope.
+
+The callback verifies both state copies, exchanges the code, validates the resulting access token, and fetches the matching `/helix/users` profile. It then updates the local user/Twitch account, encrypts access and refresh tokens, creates the user's channel-owner membership, and issues the existing opaque database-backed session. Up to five browser attempts can coexist in one HTTP-only cookie while each state remains process-local and expires after ten minutes. A restart or expiry produces a friendly retry page rather than raw JSON.
+
+`GET /api/me` returns one normalized, safe identity contract for guests and authenticated users. It includes explicit channel roles, `globalRoles`, and chatter identity but never token, session, or allowlist material. Platform admin is a local app-only role sourced from separate environment allowlists (`PLATFORM_ADMIN_TWITCH_IDS` / `PLATFORM_ADMIN_TWITCH_LOGINS`); channel ownership never implies platform administration, and platform admin never bypasses Twitch OAuth scopes or grants Twitch permissions. `POST /auth/logout` deletes the current database session and clears its cookie.
+
+### Twitch token lifecycle
+
+`twitchTokenRefreshService` is the only stored-account refresh boundary. It decrypts the current refresh token only in memory, sends an encoded refresh grant, and atomically replaces encrypted access/refresh tokens, scopes, and expiration. Per-account in-flight refreshes are deduplicated so rotated refresh tokens cannot race within one process.
+
+Tokens expiring within ten minutes are considered expiring soon. `getValidUserAccessTokenForAccount` refreshes them before use. Account-aware `twitchHelixRequest` calls refresh and retry once after a `401`; another `401` marks `twitch_accounts.needs_reauth`. Refresh failures do the same while returning only a generic reauthorization error.
+
+When `TWITCH_TOKEN_REFRESH_ENABLED=true`, startup creates an unref'ed interval using `TWITCH_TOKEN_REFRESH_INTERVAL_MS` (default five minutes), immediately scans eligible accounts, and continues after failures with account counts only in logs. Shutdown clears the interval. This path applies only to database-backed OAuth accounts; the existing environment-token EventSub ingest lifecycle is intentionally unchanged.
 
 ## Import flow
 
@@ -75,11 +117,25 @@ If the requested stream has no detailed events, seeded demo events are used with
 
 ## Twitch provider boundary
 
-`twitchMetadataService` selects the unchanged mock provider by default or the real provider for `TWITCH_PROVIDER=twitch`. The auth service obtains and memory-caches an app token; the Helix client owns authenticated requests and safe upstream errors; the provider combines `/users`, `/channels`, and `/streams` into the frontend contract. Tokens are never persisted or returned by diagnostics.
+`twitchMetadataService` selects the unchanged mock provider by default or the real provider for `TWITCH_PROVIDER=twitch`. The auth service obtains and memory-caches an app token; the Helix client owns authenticated requests and safe upstream errors; the provider combines `/users`, `/channels`, and `/streams` into the frontend contract. Existing environment-based MVP tokens remain memory-only. The new durable account repository stores only AES-256-GCM ciphertext and no token is returned by diagnostics.
 
-`twitchIngestService` owns user-token validation/refresh, the process-local EventSub connection, keepalive watchdog, reconnect handling, `channel.chat.message` subscription, and Helix poll timer. `twitchIngestRepository` writes live stream snapshots and idempotent chat events into the existing SQLite schema, then updates chatter, word, and stream aggregates. User tokens and refreshed tokens remain memory-only and are never returned by API routes.
+`twitchIngestPoolService` owns ingest runtime state as `Map<channelId, ingestState>`. Every entry has its own socket, EventSub session/subscription IDs, poll/watchdog/reconnect timers, current stream session, counters, and error state. Per-channel start is duplicate-safe, stop is idempotent, reconnect/migration creation is serialized, and shutdown stops the full pool. `twitchIngestService` remains only as the Fenya compatibility facade.
+
+The compatibility facade resolves its broadcaster from `TWITCH_CHANNEL_LOGIN` through Helix and its chat reader from the validated environment user token; it does not require a browser session. The frontend ingest hook uses `/api/twitch/fenya/ingest/*` by default and switches to the RBAC-protected `/api/channels/:channelId/ingest/*` contract when given a channel ID. Actions have a bounded client timeout and always clear pending state.
+
+`twitchIngestRepository` resolves a concrete `channel_id` and writes `stream_session_id` on Twitch streams, viewer samples, and chat messages. Current-stream lookup and offline completion are channel-scoped, preventing one broadcaster from becoming another channel's chat target. Legacy configuration creates or resolves its channel record automatically.
 
 The dashboard can show collected chat and word aggregates while the channel is offline. Viewer samples, full stream analytics, and archive-ready sessions require the poller to observe a live stream. Process-local autostart and reconnect timing are configured with `TWITCH_LIVE_INGEST_AUTOSTART` and `TWITCH_EVENTSUB_RECONNECT_MS`.
+
+Current limitations: pool state is process-local and is not restored after restart; one Node process must own a channel connection; logged-in channel ingest requires the owner's stored Twitch grant to include `user:read:chat`; legacy dashboard read contracts are still Fenya-oriented even though ingest storage is multi-channel.
+
+### Dashboard modes and VOD archive
+
+The frontend has three explicit data modes: `mock`, `legacy-fenya`, and `connected-channel`. Legacy mode keeps the public compatibility endpoints; selecting an owned/available channel switches every data and ingest hook to channel-scoped endpoints. Real Twitch mode never fills missing panels with demo analytics: offline pages continue to show persisted chat, words, moderation events, completed internal sessions, and safe empty states.
+
+`twitch_vods` stores up to the latest 50 archive-type Twitch videos per channel. Sync follows Helix pagination and is restricted to channel owners/admins on channel routes. VOD responses contain metadata only; internal analytics is marked available only after a conservative channel/time/title match to a real stored stream session. Current limitations: matching is heuristic, Twitch retention may remove old videos, and VOD metadata does not reconstruct viewer timelines, chat, words, or moderation analytics.
+
+`channel_moderators` stores the latest explicitly synchronized Twitch moderator directory. Reads remain independent from moderation action analytics. Without `moderation:read`, the moderator service returns a structured unavailable state; it never substitutes demo moderators in Twitch modes. Full moderation EventSub actions and performance metrics are intentionally outside this stage.
 
 ## Test architecture
 
@@ -94,4 +150,4 @@ After each test the database singleton is closed, environment overrides are remo
 
 ## Current boundaries
 
-This is a local single-channel portfolio backend. It has no OAuth UI, encrypted durable token store, application authentication, multi-user isolation, public deployment hardening, rate-limit retry strategy, or durable EventSub/replay recovery. EventSub reconnects while the process is alive, but ingest must be started again after restart. Write, diagnostic, ingest, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.
+This remains a local single-channel portfolio dashboard at the UI level. It now has backend Twitch login, identity, encrypted-token, persistent-session, channel, membership, and authorization-middleware foundations, but no user-facing account pages, complete multi-user route isolation, public deployment hardening, rate-limit retry strategy, or durable EventSub/replay recovery. EventSub reconnects while the process is alive, but ingest must be started again after restart. Legacy write, diagnostic, ingest, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.

@@ -10,6 +10,7 @@ import ModeratorUnit from './components/ModeratorUnit.jsx'
 import StreamArchive from './components/StreamArchive.jsx'
 import DashboardOverview from './components/DashboardOverview.jsx'
 import ImportDataPanel from './components/ImportDataPanel.jsx'
+import ChannelOnboardingPanel from './components/ChannelOnboardingPanel.jsx'
 import { RealDataEmptySection, RealDataSummary, RealModeNotice } from './components/RealModeStates.jsx'
 import { currentStream, streams } from './data/mockStreams.js'
 import { chatters } from './data/mockChatters.js'
@@ -25,9 +26,14 @@ import { useModerationAnalytics } from './hooks/useModerationAnalytics.js'
 import { useStreamArchive } from './hooks/useStreamArchive.js'
 import { useStreamSummary } from './hooks/useStreamSummary.js'
 import { useReplay } from './hooks/useReplay.js'
+import { useIdentity } from './hooks/useIdentity.js'
+import { useTwitchVods } from './hooks/useTwitchVods.js'
+import { useTwitchModerators } from './hooks/useTwitchModerators.js'
 import { translations } from './i18n/translations.js'
+import AppErrorState from './components/AppErrorState.jsx'
+import { isBackendUnavailable } from './utils/dashboardUi.js'
 
-const sectionIds = ['hero', 'stream-pulse', 'chatters', 'speech', 'moderators', 'archive', 'summary', 'import-data']
+const allSectionIds = ['top', 'pulse', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
@@ -38,25 +44,46 @@ function App() {
       return 'light'
     }
   })
-  const [activeSection, setActiveSection] = useState('hero')
+  const [activeSection, setActiveSection] = useState('top')
   const [showBackToTop, setShowBackToTop] = useState(false)
   const [showSectionRail, setShowSectionRail] = useState(false)
   const [selectedStreamId, setSelectedStreamId] = useState(currentStream.id)
   const [compareStreamId, setCompareStreamId] = useState('')
+  const [selectedChannel, setSelectedChannel] = useState(null)
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
   const t = translations[language] ?? translations.ru
-  const streamAnalytics = useStreamAnalytics()
-  const chatAnalytics = useChatAnalytics()
-  const twitchMetadata = useTwitchMetadata()
-  const twitchIngest = useTwitchIngest()
-  const wordAnalytics = useWordAnalytics()
-  const moderationAnalytics = useModerationAnalytics()
-  const streamArchive = useStreamArchive()
+  const channelId = selectedChannel?.id ?? null
+  const identity = useIdentity()
+  const streamAnalytics = useStreamAnalytics({ channelId })
+  const chatAnalytics = useChatAnalytics({ channelId })
+  const twitchMetadata = useTwitchMetadata({ channelId })
+  const twitchIngest = useTwitchIngest({ channelId })
+  const wordAnalytics = useWordAnalytics({ channelId })
+  const moderationAnalytics = useModerationAnalytics({ channelId })
+  const streamArchive = useStreamArchive({ channelId })
   const streamSummary = useStreamSummary(selectedStream.id)
   const replay = useReplay(selectedStream.id)
-  const isTwitchMode = twitchIngest.connection?.provider === 'twitch'
-  const isDataModeLoading = twitchIngest.isLoading && !twitchIngest.connection
+  const dashboardMode = channelId ? 'connected-channel' : twitchIngest.connection?.provider === 'twitch' ? 'legacy-fenya' : 'mock'
+  const isTwitchMode = dashboardMode !== 'mock'
+  const isDataModeLoading = twitchIngest.isLoading && (channelId ? !twitchIngest.status : !twitchIngest.connection)
+  const channelRole = selectedChannel?.role ?? identity.identity?.memberships?.find((membership) => membership.channelId === channelId)?.role
+  const canManageChannel = dashboardMode === 'legacy-fenya' || ['channel_owner', 'channel_admin'].includes(channelRole)
+  const twitchVods = useTwitchVods({ channelId, enabled: isTwitchMode })
+  const twitchModerators = useTwitchModerators({ channelId, enabled: isTwitchMode })
+  const backendUnavailable = isBackendUnavailable({
+    identityError: identity.error,
+    ingestError: twitchIngest.error,
+    connection: twitchIngest.connection,
+    status: twitchIngest.status,
+  })
+  const dashboardRequestFailed = isTwitchMode && Boolean(
+    streamAnalytics.error
+    || chatAnalytics.error
+    || wordAnalytics.error
+    || moderationAnalytics.error
+    || streamArchive.error,
+  )
   const replayAnalytics = useMemo(() => {
     if (!replay.data.viewerSamples.length) return null
     return {
@@ -84,6 +111,13 @@ function App() {
     && twitchIngest.connection?.userTokenValid
     && !twitchIngest.connection?.lastError,
   )
+  const renderedSectionIds = useMemo(() => (
+    backendUnavailable || isDataModeLoading
+      ? ['top']
+      : isTwitchMode
+        ? allSectionIds.filter((id) => id !== 'import')
+        : allSectionIds
+  ), [backendUnavailable, isDataModeLoading, isTwitchMode])
   const replayChatAnalytics = useMemo(() => {
     if (!replay.data.chatMessages.length) return null
     const counts = new Map()
@@ -130,7 +164,7 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    const sections = sectionIds.map((id) => document.getElementById(id)).filter(Boolean)
+    const sections = renderedSectionIds.map((id) => document.getElementById(id)).filter(Boolean)
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -152,7 +186,7 @@ function App() {
 
     function handleScroll() {
       setShowBackToTop(window.scrollY > window.innerHeight * 0.65)
-      const hero = document.getElementById('hero')
+      const hero = document.getElementById('top')
       setShowSectionRail(Boolean(hero && hero.getBoundingClientRect().bottom <= 0))
     }
 
@@ -163,17 +197,25 @@ function App() {
       observer.disconnect()
       window.removeEventListener('scroll', handleScroll)
     }
-  }, [])
+  }, [renderedSectionIds])
 
   function handleStreamChange(streamId) {
     setSelectedStreamId(streamId)
     setCompareStreamId((currentCompareId) => (currentCompareId === streamId ? '' : currentCompareId))
   }
 
+  if (backendUnavailable) {
+    return (
+      <main className="app-shell app-error-shell">
+        <AppErrorState title={t.backendUnavailableTitle} message={t.backendUnavailableMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
+      </main>
+    )
+  }
+
   return (
     <main className="app-shell">
       <Hero stream={selectedStream} activeSection={activeSection} language={language} onToggleLanguage={() => setLanguage((current) => (current === 'ru' ? 'en' : 'ru'))} t={t} />
-      <SectionRail activeSection={activeSection} isVisible={showSectionRail} t={t} />
+      <SectionRail activeSection={activeSection} availableSectionIds={renderedSectionIds} isVisible={showSectionRail} t={t} />
       <BackToTop isVisible={showBackToTop} />
 
       <div className="content-grid" id="dashboard">
@@ -187,6 +229,8 @@ function App() {
           twitchIngest={twitchIngest}
           persistedMessageCount={chatAnalytics.analytics?.totalMessages ?? 0}
           isTwitchMode={isTwitchMode}
+          dashboardMode={dashboardMode}
+          canManageChannel={canManageChannel}
           isDataModeLoading={isDataModeLoading}
           theme={theme}
           onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
@@ -194,22 +238,43 @@ function App() {
           streamSummary={streamSummary}
           t={t}
         />
+        <ChannelOnboardingPanel
+          t={t}
+          identity={identity.identity}
+          dashboardMode={dashboardMode}
+          onIdentityRefresh={identity.refresh}
+          selectedChannel={selectedChannel}
+          onOpenLegacy={() => {
+            setSelectedChannel(null)
+            document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+          onOpenChannel={(channel) => {
+            setSelectedChannel(channel)
+            document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}
+        />
+        {dashboardRequestFailed ? (
+          <AppErrorState compact title={t.apiRequestFailedTitle} message={t.apiRequestFailedMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
+        ) : null}
         {isDataModeLoading ? (
           <section className="real-data-empty glass-panel" role="status">
             <p>{t.loadingRealMode}</p>
           </section>
         ) : isTwitchMode ? (
           <>
-            {twitchConnected && twitchMetadata.metadata?.isLive === false ? (
+            {dashboardMode === 'connected-channel' && !hasRealStream && !hasRealChat && !hasRealWords ? (
+              <RealModeNotice title={t.modeConnectedChannel} note={t.channelNoDataNotice} />
+            ) : twitchConnected && twitchMetadata.metadata?.isLive === false ? (
               <RealModeNotice title={t.offlineConnectedTitle} note={t.offlineConnectedNote} />
             ) : null}
             {hasRealStream ? (
               <StreamPulse stream={streamPulseStream} compareStream={null} events={backendPulseData?.events ?? []} t={t} />
             ) : (
               <RealDataEmptySection
-                id="stream-pulse"
+                id="pulse"
                 title={t.streamPulse}
-                note={hasRealChat ? t.pulseChatOnly : `${t.noRealData} ${t.pulseWaiting}`}
+                note={hasRealChat ? t.pulseChatOnly : t.pulseWaiting}
+                minHeight="chart"
               />
             )}
             {hasRealChat ? (
@@ -222,7 +287,7 @@ function App() {
                 t={t}
               />
             ) : (
-              <RealDataEmptySection id="chatters" title={t.viewersAndChat} note={t.noChatMessages} />
+              <RealDataEmptySection id="chatters" title={t.viewersAndChat} note={dashboardMode === 'connected-channel' ? t.channelChatEmpty : t.noChatMessages} minHeight="large" />
             )}
             {hasRealWords ? (
               <WordMutationCloud
@@ -234,20 +299,27 @@ function App() {
                 t={t}
               />
             ) : (
-              <RealDataEmptySection id="speech" title={t.chatWordsTitle} note={t.noChatWords} />
+              <RealDataEmptySection id="words" title={t.chatWordsTitle} note={t.noChatWords} minHeight="large" />
             )}
-            {moderationAnalytics.analytics ? (
-              <ModeratorUnit moderators={[]} events={[]} moderationAnalytics={moderationAnalytics.analytics} t={t} />
-            ) : (
-              <RealDataEmptySection id="moderators" title={t.moderatorPerformance} note={t.noModerationData} />
-            )}
-            <StreamArchive streams={[]} archive={streamArchive.archive} selectedStreamId="" realDataMode t={t} />
+            <ModeratorUnit
+              moderators={[]}
+              events={[]}
+              moderationAnalytics={moderationAnalytics.analytics}
+              moderatorDirectory={twitchModerators}
+              realDataMode
+              canManageChannel={canManageChannel}
+              t={t}
+            />
+            <StreamArchive streams={[]} archive={streamArchive.archive} selectedStreamId="" realDataMode vodArchive={twitchVods} canSyncVods={canManageChannel} dashboardMode={dashboardMode} t={t} />
             <RealDataSummary
               connection={twitchIngest.connection}
               ingestStatus={twitchIngest.status}
               metadata={twitchMetadata.metadata}
               chatAnalytics={chatAnalytics.analytics}
               wordAnalytics={wordAnalytics.analytics}
+              vodArchive={twitchVods}
+              dashboardMode={dashboardMode}
+              channelLogin={selectedChannel?.twitchLogin}
               t={t}
             />
           </>

@@ -104,6 +104,7 @@ describe("Twitch ingest pipeline", () => {
       provider: "mock",
       status: "stopped",
       running: false,
+      persistedMessagesStored: 0,
       reconnectIntervalMs: 5000,
     });
     expect(JSON.stringify(status.body)).not.toContain("must-not-appear-user-token");
@@ -207,6 +208,16 @@ describe("Twitch ingest pipeline", () => {
       transport: { method: "websocket", session_id: "session-1" },
     });
 
+    const compatibilityStart = await request(app).post("/api/twitch/fenya/ingest/start");
+    expect(compatibilityStart.status).toBe(202);
+    expect(compatibilityStart.body).toMatchObject({
+      channelId: "legacy:fenya",
+      running: true,
+      broadcasterId: "42",
+      chatReaderUserId: "77",
+      subscriptionId: "subscription-1",
+    });
+
     socket.emit("message", JSON.stringify({
       metadata: { message_type: "notification", message_timestamp: "2026-07-04T18:06:00Z" },
       payload: {
@@ -234,5 +245,45 @@ describe("Twitch ingest pipeline", () => {
       status: 403,
       message: "Twitch user token requires scope user:read:chat",
     });
+  });
+
+  test("start fails safely when the validated token has no chat reader id", async () => {
+    process.env.TWITCH_PROVIDER = "twitch";
+    process.env.TWITCH_USER_ACCESS_TOKEN = "user-token";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ scopes: ["user:read:chat"] })));
+
+    await expect(startTwitchIngest()).rejects.toMatchObject({
+      status: 401,
+      message: "Validated Twitch user token has no chat reader user id",
+    });
+  });
+
+  test("EventSub subscription failure returns a safe specific error", async () => {
+    process.env.TWITCH_PROVIDER = "twitch";
+    process.env.TWITCH_CLIENT_ID = "client-id";
+    process.env.TWITCH_CLIENT_SECRET = "client-secret";
+    process.env.TWITCH_USER_ACCESS_TOKEN = "user-token";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ user_id: "77", scopes: ["user:read:chat"] }))
+      .mockResolvedValueOnce(jsonResponse({ access_token: "app-token", expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "42", login: "fenya", display_name: "Fenya" }] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [{}] }))
+      .mockResolvedValueOnce(jsonResponse({ data: [] }))
+      .mockResolvedValueOnce(jsonResponse({ message: "subscription rejected" }, 403));
+    vi.stubGlobal("fetch", fetchMock);
+    const socket = new FakeWebSocket();
+    setTwitchWebSocketFactoryForTests(() => {
+      queueMicrotask(() => socket.emit("message", JSON.stringify({
+        metadata: { message_type: "session_welcome" },
+        payload: { session: { id: "failed-session", keepalive_timeout_seconds: 30 } },
+      })));
+      return socket;
+    });
+
+    await expect(startTwitchIngest()).rejects.toMatchObject({
+      status: 502,
+      message: "Twitch EventSub subscription failed",
+    });
+    expect(getTwitchIngestStatus()).toMatchObject({ status: "error", running: false, lastError: "Twitch EventSub subscription failed" });
   });
 });
