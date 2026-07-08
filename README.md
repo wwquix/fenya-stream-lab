@@ -1,17 +1,27 @@
-# Fenya Stream Lab
+<img width="1897" height="918" alt="image" src="https://github.com/user-attachments/assets/9aaf0f8a-3adc-432a-8ab9-94b822eb7b54" /># Fenya Stream Lab
 
 Fenya Stream Lab is a bilingual streamer analytics dashboard built as a portfolio project for streamer Fenya. It presents viewer momentum, chat activity, recurring words, moderation workload, archive context, replayed events, and locally generated stream reports in one premium dashboard.
 
 The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, local reports, real Twitch channel/live polling through Helix, and process-local EventSub WebSocket chat ingestion into SQLite.
 
 ## Screenshots
+<img width="1900" height="936" alt="image" src="https://github.com/user-attachments/assets/315213c1-4a9c-4d81-9461-fb4d56dcf321" />
 
 The repository is ready for project-specific screenshots, but no synthetic product screenshots are committed. Recommended portfolio captures:
 
 1. Full desktop dashboard with Stream Pulse and summary cards.
+<img width="1905" height="770" alt="image" src="https://github.com/user-attachments/assets/86016998-6d08-49d8-9781-b2b4ab7a8d7b" />
+
 2. Replay controls while an event session is running.
+<img width="1910" height="945" alt="image" src="https://github.com/user-attachments/assets/2d5ba37b-8993-4216-a57e-62477073c62b" />
+
 3. Top chatters, word cloud, and moderator workload sections.
+<img width="1908" height="938" alt="image" src="https://github.com/user-attachments/assets/b90869ac-0396-48cb-8c2d-d34b1f0b789d" />
+<img width="1897" height="918" alt="image" src="https://github.com/user-attachments/assets/1ccc114f-36eb-4ac2-a813-6a55a76657fc" />
+
 4. Stream archive and generated report state.
+<img width="1904" height="901" alt="image" src="https://github.com/user-attachments/assets/a9aec0f8-b9f3-484b-adef-4e196fcaf6f2" />
+<img width="1893" height="935" alt="image" src="https://github.com/user-attachments/assets/dc907159-e394-4b67-ad19-af35ef3c6259" />
 
 ## Key features
 
