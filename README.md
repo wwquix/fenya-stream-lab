@@ -5,8 +5,6 @@ Fenya Stream Lab is a bilingual streamer analytics dashboard built as a portfoli
 The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, local reports, real Twitch channel/live polling through Helix, and process-local EventSub WebSocket chat ingestion into SQLite.
 
 ## Screenshots
-<img width="1900" height="936" alt="image" src="https://github.com/user-attachments/assets/315213c1-4a9c-4d81-9461-fb4d56dcf321" />
-
 The repository is ready for project-specific screenshots, but no synthetic product screenshots are committed. Recommended portfolio captures:
 
 1. Full desktop dashboard with Stream Pulse and summary cards.
