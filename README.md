@@ -8,6 +8,8 @@ The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQL
 The repository is ready for project-specific screenshots, but no synthetic product screenshots are committed. Recommended portfolio captures:
 
 1. Full desktop dashboard with Stream Pulse and summary cards.
+<img width="1875" height="762" alt="image" src="https://github.com/user-attachments/assets/e10357e5-b585-41e3-a8d8-382dc91d61d2" />
+
 <img width="1905" height="770" alt="image" src="https://github.com/user-attachments/assets/86016998-6d08-49d8-9781-b2b4ab7a8d7b" />
 
 2. Replay controls while an event session is running.
