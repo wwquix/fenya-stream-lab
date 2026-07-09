@@ -68,7 +68,7 @@ describe("Twitch integration foundation", () => {
       .mockResolvedValueOnce(jsonResponse({ access_token: "app-token", expires_in: 3600 }))
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "42", login: "fenya", display_name: "Fenya", profile_image_url: "https://image.test/fenya.png", description: "Streamer" }] }))
       .mockResolvedValueOnce(jsonResponse({ data: [{ broadcaster_id: "42", broadcaster_language: "ru", game_id: "32399", game_name: "Counter-Strike 2", title: "Channel title" }] }))
-      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "stream-7", game_id: "32399", game_name: "Counter-Strike 2", title: "Live title", viewer_count: 777, started_at: "2026-07-04T18:00:00Z", language: "ru" }] }));
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: "stream-7", game_id: "32399", game_name: "Counter-Strike 2", title: "Live title", viewer_count: 777, thumbnail_url: "https://image.test/live-{width}x{height}.jpg", started_at: "2026-07-04T18:00:00Z", language: "ru" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await getTwitchChannelMetadata("Fenya");
@@ -84,6 +84,7 @@ describe("Twitch integration foundation", () => {
       categoryName: "Counter-Strike 2",
       categoryId: "32399",
       viewerCount: 777,
+      thumbnailUrl: "https://image.test/live-{width}x{height}.jpg",
       language: "ru",
     });
     expect(result.fetchedAt).toEqual(expect.any(String));

@@ -125,6 +125,8 @@ The compatibility facade resolves its broadcaster from `TWITCH_CHANNEL_LOGIN` th
 
 `twitchIngestRepository` resolves a concrete `channel_id` and writes `stream_session_id` on Twitch streams, viewer samples, and chat messages. Current-stream lookup and offline completion are channel-scoped, preventing one broadcaster from becoming another channel's chat target. Legacy configuration creates or resolves its channel record automatically.
 
+For live Twitch rows, `started_at` is the authoritative Twitch broadcast start and `collected_from` is the first timestamp observed by local ingest. Restarts continue the same Twitch stream row without moving the earliest collection boundary forward. EventSub does not backfill chat before that boundary, and VOD metadata sync remains separate from collected analytics.
+
 The dashboard can show collected chat and word aggregates while the channel is offline. Viewer samples, full stream analytics, and archive-ready sessions require the poller to observe a live stream. Process-local autostart and reconnect timing are configured with `TWITCH_LIVE_INGEST_AUTOSTART` and `TWITCH_EVENTSUB_RECONNECT_MS`.
 
 Current limitations: pool state is process-local and is not restored after restart; one Node process must own a channel connection; logged-in channel ingest requires the owner's stored Twitch grant to include `user:read:chat`; legacy dashboard read contracts are still Fenya-oriented even though ingest storage is multi-channel.

@@ -26,7 +26,7 @@ export function routeHandler(handler, failureMessage, options = {}) {
 }
 
 export function notFoundHandler(req, _res, next) {
-  next(new HttpError(404, `Route not found: ${req.method} ${req.originalUrl}`));
+  next(new HttpError(404, `Route not found: ${req.method} ${req.path}`));
 }
 
 export function errorHandler(error, _req, res, next) {
@@ -42,10 +42,11 @@ export function errorHandler(error, _req, res, next) {
     : typeof error.message === "string" && error.message
     ? error.message
     : "Internal server error";
+  const publicMessage = status >= 500 && !(error instanceof HttpError) ? "Internal server error" : message;
 
   if (status >= 500) {
     console.error(`${message}:`, error.cause ?? error);
   }
 
-  res.status(status).json({ error: true, message });
+  res.status(status).json({ error: true, message: publicMessage });
 }

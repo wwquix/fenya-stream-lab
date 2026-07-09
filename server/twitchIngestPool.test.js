@@ -34,6 +34,10 @@ let app;
 let channelA;
 let channelB;
 let outsiderCookie;
+let ownerCookie;
+let chatterCookie;
+let moderatorCookie;
+let platformAdminCookie;
 let sockets;
 
 function jsonResponse(payload, status = 200) {
@@ -97,6 +101,16 @@ beforeEach(() => {
   resetTwitchIngestPoolForTests();
   channelA = createChannel("A");
   channelB = createChannel("B");
+  ownerCookie = `${SESSION_COOKIE_NAME}=${startSession(channelA.owner.id).rawToken}`;
+  const chatter = findOrCreateUserFromTwitchProfile({ id: "chatter", login: "chatter", display_name: "Chatter" });
+  addOrUpdateChannelMembership(channelA.id, chatter.id, "chatter");
+  chatterCookie = `${SESSION_COOKIE_NAME}=${startSession(chatter.id).rawToken}`;
+  const moderator = findOrCreateUserFromTwitchProfile({ id: "moderator", login: "moderator", display_name: "Moderator" });
+  addOrUpdateChannelMembership(channelA.id, moderator.id, "moderator");
+  moderatorCookie = `${SESSION_COOKIE_NAME}=${startSession(moderator.id).rawToken}`;
+  const platformAdmin = findOrCreateUserFromTwitchProfile({ id: "platform-admin", login: "wwquix", display_name: "Platform Admin" });
+  platformAdminCookie = `${SESSION_COOKIE_NAME}=${startSession(platformAdmin.id).rawToken}`;
+  process.env.PLATFORM_ADMIN_TWITCH_LOGINS = "wwquix";
   const outsider = findOrCreateUserFromTwitchProfile({ id: "outsider", login: "outsider", display_name: "Outsider" });
   outsiderCookie = `${SESSION_COOKIE_NAME}=${startSession(outsider.id).rawToken}`;
   sockets = new Map();
@@ -118,7 +132,7 @@ afterEach(() => {
   resetTwitchAuthCache();
   vi.unstubAllGlobals();
   closeDatabase();
-  for (const name of ["DATABASE_PATH", "TOKEN_ENCRYPTION_KEY", "TWITCH_PROVIDER", "TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"]) {
+  for (const name of ["DATABASE_PATH", "TOKEN_ENCRYPTION_KEY", "TWITCH_PROVIDER", "TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET", "PLATFORM_ADMIN_TWITCH_LOGINS"]) {
     delete process.env[name];
   }
   rmSync(tempDirectory, { recursive: true, force: true });
@@ -182,7 +196,42 @@ describe("multi-channel Twitch ingest pool", () => {
   test("unauthorized user cannot start channel ingest", async () => {
     const response = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", outsiderCookie);
     expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "forbidden", message: "Insufficient permissions" });
     expect(getAllIngestStatuses()).toHaveLength(0);
+  });
+
+  test("chatter cannot start or stop channel ingest", async () => {
+    const startResponse = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", chatterCookie);
+    expect(startResponse.status).toBe(403);
+    expect(startResponse.body).toEqual({ error: "forbidden", message: "Insufficient permissions" });
+
+    await startChannelIngest(channelA.id);
+    const stopResponse = await request(app).post(`/api/channels/${channelA.id}/ingest/stop`).set("Cookie", chatterCookie);
+    expect(stopResponse.status).toBe(403);
+    expect(stopResponse.body).toEqual({ error: "forbidden", message: "Insufficient permissions" });
+    expect(getChannelIngestStatus(channelA.id).running).toBe(true);
+  });
+
+  test("moderator remains read-only for ingest controls", async () => {
+    const response = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", moderatorCookie);
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "forbidden", message: "Insufficient permissions" });
+  });
+
+  test("channel owner can control ingest", async () => {
+    const started = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", ownerCookie);
+    expect(started.status).toBe(202);
+    const stopped = await request(app).post(`/api/channels/${channelA.id}/ingest/stop`).set("Cookie", ownerCookie);
+    expect(stopped.status).toBe(200);
+    expect(stopped.body.running).toBe(false);
+  });
+
+  test("platform admin can control ingest without a channel membership", async () => {
+    const started = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", platformAdminCookie);
+    expect(started.status).toBe(202);
+    const stopped = await request(app).post(`/api/channels/${channelA.id}/ingest/stop`).set("Cookie", platformAdminCookie);
+    expect(stopped.status).toBe(200);
+    expect(stopped.body.running).toBe(false);
   });
 
   test("Fenya compatibility status route still works", async () => {

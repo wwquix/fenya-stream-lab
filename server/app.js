@@ -1,4 +1,3 @@
-import cors from "cors";
 import express from "express";
 import { dirname, extname, join } from "node:path";
 import process from "node:process";
@@ -20,7 +19,14 @@ import authRoutes from "./routes/authRoutes.js";
 import channelIngestRoutes from "./routes/channelIngestRoutes.js";
 import channelDataRoutes from "./routes/channelDataRoutes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandlers.js";
-import { attachCurrentUser } from "./middleware/authMiddleware.js";
+import { attachCurrentUser, requireApiMutationPermission } from "./middleware/authMiddleware.js";
+import {
+  blockProductionDemoWrites,
+  createCorsMiddleware,
+  createRateLimitMiddleware,
+  isSensitiveMutation,
+  securityHeaders,
+} from "./middleware/httpHardening.js";
 
 const defaultFrontendDistPath = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 
@@ -30,7 +36,9 @@ export function createApp({
 } = {}) {
   const app = express();
 
-  app.use(cors());
+  app.use(securityHeaders);
+  app.use(createCorsMiddleware());
+  app.use(createRateLimitMiddleware({ matcher: isSensitiveMutation }));
   app.use(express.json({ limit: "2mb" }));
   app.use(attachCurrentUser);
 
@@ -39,6 +47,8 @@ export function createApp({
   });
 
   app.use(authRoutes);
+  app.use("/api", blockProductionDemoWrites);
+  app.use("/api", requireApiMutationPermission);
   app.use("/api/health", healthRoutes);
   app.use("/api/channels", channelIngestRoutes);
   app.use("/api/channels", channelDataRoutes);

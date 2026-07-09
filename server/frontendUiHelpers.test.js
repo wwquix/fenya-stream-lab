@@ -2,9 +2,12 @@ import { describe, expect, test } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant } from "../src/utils/dashboardUi.js";
+import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialTheme } from "../src/utils/dashboardUi.js";
 import EmptyPanel from "../src/components/EmptyPanel.jsx";
 import TwitchVodArchive from "../src/components/TwitchVodArchive.jsx";
+import StreamPulse from "../src/components/StreamPulse.jsx";
+import StreamControlBar from "../src/components/StreamControlBar.jsx";
+import { translations } from "../src/i18n/translations.js";
 
 const t = { modePrefix: "Режим", myChannelMode: "мой канал" };
 
@@ -34,12 +37,32 @@ describe("frontend dashboard UI helpers", () => {
 
   test("derives visible role badges from role summary only", () => {
     expect(getRoleBadgeKeys({ isChannelOwner: true, isChatter: true, isModerator: false }))
-      .toEqual(["roleChannelOwner", "roleChatter"]);
+      .toEqual(["roleChannelOwner"]);
   });
 
   test("includes the local platform-admin badge without implying Twitch permissions", () => {
     expect(getRoleBadgeKeys({ isPlatformAdmin: true, isChannelOwner: true, isChatter: true }))
-      .toEqual(["rolePlatformAdmin", "roleChannelOwner", "roleChatter"]);
+      .toEqual(["rolePlatformAdmin", "roleChannelOwner"]);
+  });
+
+  test("normalizes the four permission roles and resolves contextual ingest control", () => {
+    expect(normalizeRole(" CHANNEL_OWNER ")).toBe("channel_owner");
+    expect(normalizeRole("unknown")).toBe("chatter");
+    expect(canControlIngest("platform_admin")).toBe(true);
+    expect(canControlIngest("moderator")).toBe(false);
+
+    const identity = {
+      isLoggedIn: true,
+      role: "channel_owner",
+      memberships: [
+        { channelId: 7, channelLogin: "fenya", role: "chatter" },
+        { channelId: 9, channelLogin: "own_channel", role: "channel_owner" },
+      ],
+    };
+    expect(resolveDashboardPermissions({ identity, dashboardMode: "connected-channel", selectedChannel: { id: 7, role: "chatter" } }))
+      .toEqual({ role: "chatter", canControlIngest: false, readOnly: true });
+    expect(resolveDashboardPermissions({ identity, dashboardMode: "connected-channel", selectedChannel: { id: 9, role: "channel_owner" } }))
+      .toEqual({ role: "channel_owner", canControlIngest: true, readOnly: false });
   });
 
   test("distinguishes supported frontend entry paths from unknown routes", () => {
@@ -53,6 +76,24 @@ describe("frontend dashboard UI helpers", () => {
     expect(isBackendUnavailable({ identityError: requestError, ingestError: requestError, connection: null, status: null })).toBe(true);
     expect(isBackendUnavailable({ identityError: requestError, ingestError: null, connection: null, status: null })).toBe(false);
     expect(isBackendUnavailable({ identityError: requestError, ingestError: requestError, connection: { provider: "mock" }, status: null })).toBe(false);
+  });
+
+  test("shows a collection gap only when Twitch was already live", () => {
+    expect(hasCollectionGap("2026-07-06T18:00:00Z", "2026-07-06T18:35:00Z")).toBe(true);
+    expect(hasCollectionGap("2026-07-06T18:35:00Z", "2026-07-06T18:35:00Z")).toBe(false);
+    expect(hasCollectionGap(null, "2026-07-06T18:35:00Z")).toBe(false);
+  });
+
+  test("normalizes Twitch thumbnail placeholders and rejects empty values", () => {
+    expect(normalizeTwitchThumbnailUrl("https://static.test/live-{width}x%{height}.jpg"))
+      .toBe("https://static.test/live-320x180.jpg");
+    expect(normalizeTwitchThumbnailUrl("  ")).toBeNull();
+  });
+
+  test("defaults new visitors to dark while preserving an explicit light preference", () => {
+    expect(resolveInitialTheme(null)).toBe("dark");
+    expect(resolveInitialTheme("dark")).toBe("dark");
+    expect(resolveInitialTheme("light")).toBe("light");
   });
 
   test("builds explicit VOD status and action fields", () => {
@@ -93,5 +134,51 @@ describe("frontend dashboard UI helpers", () => {
 
     expect(markup).toContain("Saved stream");
     expect(markup).not.toContain("Twitch returned no VODs");
+  });
+
+  test("does not render an empty replay rail when Pulse has no category segments", () => {
+    const pulseText = {
+      streamControls: "Controls", streamPulse: "Pulse", streamPulseNote: "Live samples",
+      viewers: "Viewers", chatPerMin: "Messages/min", compare: "Compare", streamPreview: "Preview",
+      previewSlot: "Stream", previewUnavailable: "Preview unavailable", time: "Time", event: "Event",
+      categoryOther: "Other", categoryJustChatting: "Just Chatting", categoryCs2: "CS2", categoryMinecraft: "Minecraft",
+    };
+    const stream = {
+      id: "real-stream", title: "Real stream", category: "CS2", thumbnailUrl: null,
+      categorySegments: [],
+      chartData: [
+        { time: "18:00", viewers: 100, chatMessagesPerMinute: 5, category: "CS2", previewLabel: "Start" },
+        { time: "18:10", viewers: 120, chatMessagesPerMinute: 8, category: "CS2", previewLabel: "Live" },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(StreamPulse, { stream, compareStream: null, events: [], t: pulseText }));
+    expect(markup).not.toContain("replay-strip");
+  });
+
+  test("read-only Twitch UI omits ingest mutation buttons", () => {
+    const stream = {
+      id: "stream-1", title: "Live", category: "CS2", summary: {}, chartData: [], categorySegments: [],
+    };
+    const markup = renderToStaticMarkup(createElement(StreamControlBar, {
+      streams: [stream], selectedStreamId: stream.id, compareStreamId: "",
+      onStreamChange: () => {}, onCompareChange: () => {},
+      twitchMetadata: { metadata: { isLive: true, streamTitle: "Live", categoryName: "CS2" } },
+      twitchIngest: {
+        connection: { appTokenAvailable: true, userTokenValid: true, channelLogin: "fenya" },
+        status: { status: "running", running: true, messagesStored: 10 },
+        start: () => Promise.resolve(), stop: () => Promise.resolve(),
+      },
+      persistedMessageCount: 25, isTwitchMode: true, dashboardMode: "legacy-fenya",
+      canManageChannel: false, readOnlyAccess: true, isDataModeLoading: false,
+      theme: "dark", onToggleTheme: () => {},
+      replay: { error: null, status: { isActive: false }, isPending: false },
+      streamSummary: { summary: null, isGenerating: false, isLoading: false, error: null },
+      t: translations.ru,
+    }));
+
+    expect(markup).toContain("Только просмотр");
+    expect(markup).not.toContain("Остановить сбор");
+    expect(markup).not.toContain("Сбор уже идёт");
   });
 });

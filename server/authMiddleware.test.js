@@ -88,7 +88,7 @@ describe("centralized authentication and channel authorization", () => {
   test("guest cannot access a protected route", async () => {
     const response = await request(app).get("/protected");
     expect(response.status).toBe(401);
-    expect(response.body).toEqual({ error: true, message: "Authentication required" });
+    expect(response.body).toEqual({ error: "unauthorized", message: "Authentication required" });
   });
 
   test("logged-in user can access their own user route", async () => {
@@ -106,6 +106,7 @@ describe("centralized authentication and channel authorization", () => {
   test("random user cannot access channel analytics", async () => {
     const response = await request(app).get(`/channels/${channel.id}/analytics`).set("Cookie", cookies.outsider);
     expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "forbidden", message: "Insufficient permissions" });
   });
 
   test("moderator can access a moderator-allowed route", async () => {

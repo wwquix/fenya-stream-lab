@@ -160,6 +160,17 @@ export function stopReplay(streamId) {
   return publicStatus(session);
 }
 
+export function stopAllReplays() {
+  for (const session of sessions.values()) {
+    if (session.status === "running") {
+      finish(session, "stopped");
+    } else if (session.timer) {
+      clearTimeout(session.timer);
+      session.timer = null;
+    }
+  }
+}
+
 export function getReplayStatus(streamId) {
   return publicStatus(sessions.get(normalizeStreamId(streamId)));
 }

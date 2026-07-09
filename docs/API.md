@@ -2,13 +2,14 @@
 
 Base URL: `http://localhost:3001`
 
-All ordinary errors use:
+Ordinary API errors use a safe JSON envelope. Authentication and authorization failures are stable:
 
 ```json
-{ "error": true, "message": "Human-readable message" }
+{ "error": "unauthorized", "message": "Authentication required" }
+{ "error": "forbidden", "message": "Insufficient permissions" }
 ```
 
-Malformed JSON returns `400` with `Request body contains invalid JSON.` Twitch login and `/api/me` use database-backed authentication; legacy dashboard and write routes remain local-development endpoints and are not yet fully isolated per user.
+Malformed JSON returns `400` with `Request body contains invalid JSON.` Twitch login and `/api/me` use database-backed authentication. Every mutating `/api` request is guarded server-side: a channel owner may mutate only their channel, platform admins may perform administrative mutations, and chatter/moderator access is read-only. Legacy Fenya mutations require the Fenya channel owner or a platform admin.
 
 ## Authentication
 
@@ -124,6 +125,14 @@ Summary generation uses `SUMMARY_PROVIDER=local` by default. It requires a strea
 
 These routes mutate/reset local demo data and are not public production operations:
 
+When `NODE_ENV=production`, legacy local demo mutation routes are blocked by default and return:
+
+```json
+{ "error": true, "message": "Local demo mutation endpoints are disabled in production." }
+```
+
+Set `ALLOW_DEMO_WRITES=true` only for a deliberately isolated demo environment. Read endpoints remain available.
+
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | POST | `/api/analytics/fenya/sample` | Append a mock timeline sample |
@@ -150,6 +159,8 @@ These routes mutate/reset local demo data and are not public production operatio
 `TWITCH_PROVIDER=mock` preserves the deterministic dashboard response. With `TWITCH_PROVIDER=twitch`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, and `TWITCH_CHANNEL_LOGIN`, the same endpoint resolves the user and reads channel/current-stream data from Helix. Offline responses use `isLive: false`, `streamId: null`, and `viewerCount: 0`.
 
 The connection route returns only presence flags, token validity/scopes, configured broadcaster ID, and a safe last error. It never returns token or client-secret values. These routes are local development diagnostics, not public authenticated operations.
+
+In production, legacy Fenya ingest/write helpers are disabled unless `ALLOW_DEMO_WRITES=true`. Prefer channel-scoped authenticated routes for real deployments.
 
 ### EventSub ingest
 
@@ -178,3 +189,5 @@ Status responses contain connection IDs, timestamps, counters, provider state, a
 When `TWITCH_PROVIDER=twitch`, dashboard read endpoints return only rows whose source is `twitch`. If no matching analytics, chat, words, moderation, or archive data exists, the corresponding endpoint returns `204 No Content`; it never falls back to demo JSON. In mock mode the existing deterministic contracts remain unchanged.
 
 `TWITCH_LIVE_INGEST_AUTOSTART=true` may start ingest with the backend. `TWITCH_POLL_INTERVAL_MS` controls Helix polling and `TWITCH_EVENTSUB_RECONNECT_MS` controls the reconnect delay. The default autostart value is `false`.
+
+Ingest status includes safe `streamStartedAt` and `collectedFrom` timestamps. When `streamStartedAt` is earlier, chat before `collectedFrom` was not observed and is not available. These fields never contain token or credential material.

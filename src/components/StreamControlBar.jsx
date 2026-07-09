@@ -1,6 +1,7 @@
 import CustomSelect from './CustomSelect.jsx'
 import { ProgressActionButton, Reveal } from './MotionPrimitives.jsx'
 import { formatCategory, formatStreamTitle } from '../i18n/translations.js'
+import { hasCollectionGap } from '../utils/dashboardUi.js'
 
 function createCsv(stream) {
   const rows = [
@@ -32,7 +33,18 @@ function formatStatusTime(value, isRussian) {
   }).format(date)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, isDataModeLoading, theme, onToggleTheme, replay, streamSummary, t }) {
+function formatCollectionTime(value, isRussian) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(isRussian ? 'ru-RU' : 'en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date)
+}
+
+function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, theme, onToggleTheme, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -47,9 +59,7 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   const liveLabel = hasLiveState ? (metadata.isLive ? t.liveNow : t.offlineNow) : t.mockFallback
   const metadataStateClass = metadata?.isLive ? 'is-live' : 'is-offline'
   const isRussian = t.navTop === 'Топ'
-  const themeLabel = theme === 'light'
-    ? (isRussian ? 'Тёмная тема' : 'Dark theme')
-    : (isRussian ? 'Светлая тема' : 'Light theme')
+  const themeLabel = theme === 'light' ? t.switchToDarkTheme : t.switchToLightTheme
   const replayOptions = [1, 5, 20].map((value) => ({ value, label: `${value}x` }))
   const replayStatus = replay.error
     ? t.replayError
@@ -59,7 +69,7 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
     const connection = twitchIngest?.connection
     const ingestStatus = twitchIngest?.status
     const connected = dashboardMode === 'connected-channel'
-      ? Boolean(canManageChannel && !twitchIngest?.error)
+      ? Boolean(!twitchIngest?.error)
       : Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
     const ingestState = ingestStatus?.status ?? 'stopped'
     const ingestRunning = ingestState === 'running'
@@ -73,18 +83,23 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
       : ingestRunning
         ? t.ingestRunning
         : ingestBusy ? t.ingestConnecting : t.ingestStopped
-    const themeLabel = theme === 'light'
-      ? (isRussian ? 'Тёмная тема' : 'Dark theme')
-      : (isRussian ? 'Светлая тема' : 'Light theme')
     const lastEventLabel = formatStatusTime(ingestStatus?.lastEventAt, isRussian) ?? t.noEventsYet
     const lastPollLabel = formatStatusTime(ingestStatus?.lastPollAt, isRussian) ?? '—'
+    const collectionStartLabel = formatCollectionTime(ingestStatus?.collectedFrom, isRussian)
+    const collectionGapNotice = collectionStartLabel && hasCollectionGap(ingestStatus?.streamStartedAt, ingestStatus?.collectedFrom)
+      ? t.collectionGapNotice.replace('{time}', collectionStartLabel)
+      : null
     const startLabel = twitchIngest?.isPending
       ? t.ingestRequestPending
       : ingestRunning || ingestBusy ? t.ingestAlreadyRunning : t.startIngest
     const stopLabel = twitchIngest?.isPending ? t.ingestRequestPending : t.stopIngest
+    const runAuthorizedAction = (action) => {
+      if (!canManageChannel) return Promise.resolve(null)
+      return action()
+    }
 
     return (
-      <Reveal as="section" className="stream-control-bar twitch-control-bar glass-panel soft-glow" aria-label="Twitch ingest controls">
+      <Reveal as="section" className="stream-control-bar twitch-control-bar glass-panel soft-glow" aria-label={t.streamControls}>
         <div className="twitch-status-panel" aria-busy={isDataModeLoading || twitchIngest?.isPending ? 'true' : 'false'}>
           <div className="twitch-status-badges" aria-live="polite">
             <span className={`twitch-state-badge ${isDataModeLoading ? '' : connected ? 'is-connected' : statusError ? 'is-error' : ''}`}>
@@ -106,6 +121,8 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
             <div><dt>{t.lastPoll}</dt><dd>{lastPollLabel}</dd></div>
           </dl>
           {statusError ? <p className="twitch-status-error" role="alert">{statusError}</p> : null}
+          {collectionGapNotice ? <p className="twitch-collection-notice" role="status">{collectionGapNotice}</p> : null}
+          {readOnlyAccess ? <span className="twitch-read-only-badge">{t.readOnlyAccess}</span> : null}
         </div>
 
         <div className="twitch-ingest-actions">
@@ -113,7 +130,7 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
             className="liquid-button"
             type="button"
             disabled={isDataModeLoading || twitchIngest?.isPending || ingestRunning || ingestBusy || !connected}
-            onClick={() => twitchIngest.start().catch(() => undefined)}
+            onClick={() => runAuthorizedAction(twitchIngest.start).catch(() => undefined)}
           >
             {startLabel}
           </button> : null}
@@ -121,13 +138,13 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
             className="liquid-button"
             type="button"
             disabled={isDataModeLoading || twitchIngest?.isPending || (!ingestRunning && !ingestBusy)}
-            onClick={() => twitchIngest.stop().catch(() => undefined)}
+            onClick={() => runAuthorizedAction(twitchIngest.stop).catch(() => undefined)}
           >
             {stopLabel}
           </button> : null}
           <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
             <span aria-hidden="true" />
-            {theme === 'light' ? (isRussian ? 'Тёмная' : 'Dark') : (isRussian ? 'Светлая' : 'Light')}
+            {themeLabel}
           </button>
         </div>
       </Reveal>
@@ -142,7 +159,7 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
   }
 
   return (
-    <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label="Stream controls">
+    <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label={t.streamControls}>
       <div className="stream-live-meta" aria-busy={twitchMetadata?.isLoading ? 'true' : 'false'}>
         <span className={`stream-live-status ${metadataStateClass} ${metadata?.isLive ? 'live-pulse' : ''}`}>
           {twitchMetadata?.isLoading ? t.loadingMetadata : liveLabel}
@@ -173,7 +190,7 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
       <div className="export-actions">
         <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
           <span aria-hidden="true" />
-          {theme === 'light' ? (isRussian ? 'Тёмная' : 'Dark') : (isRussian ? 'Светлая' : 'Light')}
+          {themeLabel}
         </button>
         <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
           {t.exportCsv}

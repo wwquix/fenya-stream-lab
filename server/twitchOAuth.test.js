@@ -252,6 +252,8 @@ describe("Twitch Authorization Code login", () => {
         isChatter: true,
         isPlatformAdmin: false,
       },
+      role: "channel_owner",
+      permissions: { canControlIngest: true, readOnly: false },
     });
   });
 

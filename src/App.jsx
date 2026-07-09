@@ -31,7 +31,7 @@ import { useTwitchVods } from './hooks/useTwitchVods.js'
 import { useTwitchModerators } from './hooks/useTwitchModerators.js'
 import { translations } from './i18n/translations.js'
 import AppErrorState from './components/AppErrorState.jsx'
-import { isBackendUnavailable } from './utils/dashboardUi.js'
+import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
 
 const allSectionIds = ['top', 'pulse', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
 
@@ -39,9 +39,9 @@ function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
   const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem('fenya-theme') === 'dark' ? 'dark' : 'light'
+      return resolveInitialTheme(localStorage.getItem('fenya-theme'))
     } catch {
-      return 'light'
+      return 'dark'
     }
   })
   const [activeSection, setActiveSection] = useState('top')
@@ -67,8 +67,14 @@ function App() {
   const dashboardMode = channelId ? 'connected-channel' : twitchIngest.connection?.provider === 'twitch' ? 'legacy-fenya' : 'mock'
   const isTwitchMode = dashboardMode !== 'mock'
   const isDataModeLoading = twitchIngest.isLoading && (channelId ? !twitchIngest.status : !twitchIngest.connection)
-  const channelRole = selectedChannel?.role ?? identity.identity?.memberships?.find((membership) => membership.channelId === channelId)?.role
-  const canManageChannel = dashboardMode === 'legacy-fenya' || ['channel_owner', 'channel_admin'].includes(channelRole)
+  const permissions = resolveDashboardPermissions({
+    identity: identity.identity,
+    dashboardMode,
+    selectedChannel,
+    legacyChannelLogin: twitchIngest.connection?.channelLogin,
+  })
+  const canManageChannel = permissions.canControlIngest
+  const hasReadOnlyAccess = permissions.readOnly
   const twitchVods = useTwitchVods({ channelId, enabled: isTwitchMode })
   const twitchModerators = useTwitchModerators({ channelId, enabled: isTwitchMode })
   const backendUnavailable = isBackendUnavailable({
@@ -101,7 +107,12 @@ function App() {
     : replayAnalytics
       ? adaptAnalyticsForStreamPulse(replayAnalytics, selectedStream)
       : selectedStream.id === currentStream.id ? adaptAnalyticsForStreamPulse(streamAnalytics.analytics, selectedStream) : null
-  const streamPulseStream = backendPulseData?.stream ?? selectedStream
+  const pulseStreamBase = backendPulseData?.stream ?? selectedStream
+  const streamPulseStream = {
+    ...pulseStreamBase,
+    thumbnailUrl: twitchMetadata.metadata?.thumbnailUrl ?? pulseStreamBase.thumbnailUrl ?? null,
+    isLive: twitchMetadata.metadata?.isLive ?? null,
+  }
   const streamPulseEvents = backendPulseData?.events ?? streamEvents
   const hasRealStream = Boolean(streamAnalytics.analytics?.points?.length)
   const hasRealChat = Boolean(chatAnalytics.analytics?.leaderboards?.messages?.length)
@@ -231,6 +242,7 @@ function App() {
           isTwitchMode={isTwitchMode}
           dashboardMode={dashboardMode}
           canManageChannel={canManageChannel}
+          readOnlyAccess={hasReadOnlyAccess}
           isDataModeLoading={isDataModeLoading}
           theme={theme}
           onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
@@ -241,6 +253,8 @@ function App() {
         <ChannelOnboardingPanel
           t={t}
           identity={identity.identity}
+          canConnectChannel={Boolean(identity.identity?.permissions?.canControlIngest)}
+          permissions={permissions}
           dashboardMode={dashboardMode}
           onIdentityRefresh={identity.refresh}
           selectedChannel={selectedChannel}

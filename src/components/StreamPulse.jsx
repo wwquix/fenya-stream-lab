@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "motion/react"
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Reveal } from './MotionPrimitives.jsx'
 import { formatCategory, formatEventLabel, formatStreamTitle } from '../i18n/translations.js'
+import { normalizeTwitchThumbnailUrl } from '../utils/dashboardUi.js'
 
 function minutesFromTime(time) {
   const [hours, minutes] = time.split(':').map(Number)
@@ -128,32 +129,17 @@ function getSegmentForElapsed(elapsedMinute, stream) {
   })
 }
 
-function getPreviewTone(category) {
-  if (category === 'CS2') {
-    return 'cs2'
-  }
-
-  if (category === 'Minecraft') {
-    return 'minecraft'
-  }
-
-  if (category === 'Just Chatting') {
-    return 'chatting'
-  }
-
-  return 'other'
-}
-
-function getPreviewStyle(frameIndex, point) {
-  return {
-    '--preview-pan-x': `${(frameIndex % 9) - 4}px`,
-    '--preview-pan-y': `${(Math.floor(frameIndex / 3) % 7) - 3}px`,
-    '--preview-scan': `${12 + (frameIndex % 11) * 7}%`,
-    '--preview-heat': `${Math.min(1, point.chatMessagesPerMinute / 6000)}`,
-  }
+function StreamPreviewImage({ thumbnailUrl, time, onError }) {
+  return (
+    <div className="stream-tooltip-preview has-image">
+      <img src={thumbnailUrl} alt="" onError={onError} />
+      <span>{time}</span>
+    </div>
+  )
 }
 
 function StreamPulseTooltip({ active, label, payload, stream, events, t }) {
+  const [failedThumbnail, setFailedThumbnail] = useState(null)
   if (!active || !payload?.length) {
     return null
   }
@@ -163,17 +149,17 @@ function StreamPulseTooltip({ active, label, payload, stream, events, t }) {
   const point = payload.find((item) => item.dataKey === 'viewers')?.payload
   const category = point?.category ?? getActiveCategory(label, stream.categorySegments)
   const event = point ? getEventForPoint(point, events) : null
+  const thumbnailUrl = normalizeTwitchThumbnailUrl(stream.thumbnailUrl)
+  const hasThumbnail = Boolean(thumbnailUrl && thumbnailUrl !== failedThumbnail)
 
   return (
-    <div className="stream-tooltip">
-      <div className="stream-tooltip-preview">
-        <span>{point?.time ?? label}</span>
-        <strong>{point?.previewLabel ?? t.previewSlot}</strong>
-      </div>
+    <div className={`stream-tooltip ${hasThumbnail ? 'has-media' : 'is-text-only'}`}>
+      {hasThumbnail ? <StreamPreviewImage thumbnailUrl={thumbnailUrl} time={point?.time ?? label} onError={() => setFailedThumbnail(thumbnailUrl)} /> : null}
       <div className="stream-tooltip-body">
-        <span className="stream-tooltip-kicker">{t.streamPreview}</span>
+        <span className="stream-tooltip-kicker">{stream.isLive ? t.liveNow : t.streamPreview}</span>
         <strong>{point?.previewLabel ?? t.previewSlot}</strong>
         <span>{formatCategory(category, t)}</span>
+        {!hasThumbnail ? <small className="stream-preview-unavailable">{t.previewUnavailable}</small> : null}
         <dl>
           <div>
             <dt>{t.time}</dt>
@@ -197,6 +183,7 @@ function StreamPulseTooltip({ active, label, payload, stream, events, t }) {
 function StreamPulse({ stream, compareStream, events, t }) {
   const [selectedSegmentId, setSelectedSegmentId] = useState(null)
   const [replayPreview, setReplayPreview] = useState(null)
+  const [failedThumbnail, setFailedThumbnail] = useState(null)
   const prefersReducedMotion = useReducedMotion()
   const streamEvents = events.filter((event) => event.streamId === stream.id)
   const streamDuration = getStreamDuration(stream.chartData)
@@ -226,6 +213,8 @@ function StreamPulse({ stream, compareStream, events, t }) {
       }
     : null
   const compareLabel = compareStream ? `${t.compare}: ${formatStreamTitle(compareStream, t)}` : null
+  const thumbnailUrl = normalizeTwitchThumbnailUrl(stream.thumbnailUrl)
+  const hasThumbnail = Boolean(thumbnailUrl && thumbnailUrl !== failedThumbnail)
 
   function handleSegmentSelect(segment) {
     const isSelected = activeSelectedSegmentId === segment.id
@@ -241,17 +230,15 @@ function StreamPulse({ stream, compareStream, events, t }) {
     const segment = getSegmentForElapsed(elapsedMinute, stream)
     const category = segment?.category ?? point.category
     const eventForFrame = getEventForElapsed(elapsedMinute, streamEvents, stream.chartData) ?? getEventForPoint(point, streamEvents)
-    const frameIndex = Math.round(roundedSeconds / 3)
+    const previewHalfWidth = 215
+    const previewX = Math.min(rect.width - previewHalfWidth - 8, Math.max(previewHalfWidth + 8, progress * rect.width))
 
     setReplayPreview({
       point,
       category,
       event: eventForFrame,
-      frameIndex,
-      style: getPreviewStyle(frameIndex, point),
       timecode: formatTimecodeFromOffset(roundedSeconds, stream.chartData),
-      tone: getPreviewTone(category),
-      x: `${Math.min(86, Math.max(14, progress * 100))}%`,
+      x: `${previewX}px`,
     })
   }
 
@@ -335,7 +322,7 @@ function StreamPulse({ stream, compareStream, events, t }) {
           </ComposedChart>
         </ResponsiveContainer>
 
-        <div className="replay-strip" aria-label="Stream replay timeline" onMouseMove={handleReplayHover} onMouseLeave={() => setReplayPreview(null)}>
+        {stream.categorySegments.length > 0 ? <div className="replay-strip" aria-label="Stream replay timeline" onMouseMove={handleReplayHover} onMouseLeave={() => setReplayPreview(null)}>
           <div className="replay-strip-rail">
           {stream.categorySegments.map((segment) => {
             const isSegmentActive = activeSelectedSegmentId === segment.id
@@ -366,23 +353,13 @@ function StreamPulse({ stream, compareStream, events, t }) {
           })}
           </div>
           {replayPreview ? (
-            <div className="replay-preview-card stream-tooltip" style={{ left: replayPreview.x }}>
-              <div className={`replay-preview-frame is-${replayPreview.tone}`} style={replayPreview.style}>
-                <div className="preview-scene">
-                  <span className="preview-live">LIVE</span>
-                  <span className="preview-timecode">{replayPreview.timecode}</span>
-                  <strong>{replayPreview.point.previewLabel ?? t.previewSlot}</strong>
-                  <div className="preview-chat">
-                    <span>{formatCompactNumber(replayPreview.point.viewers)} {t.viewers}</span>
-                    <span>{formatCompactNumber(replayPreview.point.chatMessagesPerMinute)}/min</span>
-                    <span>{replayPreview.event ? formatEventLabel(replayPreview.event.label, t) : formatCategory(replayPreview.category, t)}</span>
-                  </div>
-                </div>
-              </div>
+            <div className={`replay-preview-card stream-tooltip ${hasThumbnail ? 'has-media' : 'is-text-only'}`} style={{ left: replayPreview.x }}>
+              {hasThumbnail ? <StreamPreviewImage thumbnailUrl={thumbnailUrl} time={replayPreview.timecode} onError={() => setFailedThumbnail(thumbnailUrl)} /> : null}
               <div className="stream-tooltip-body">
-                <span className="stream-tooltip-kicker">{t.streamPreview}</span>
+                <span className="stream-tooltip-kicker">{stream.isLive ? t.liveNow : t.streamPreview}</span>
                 <strong>{replayPreview.point.previewLabel ?? t.previewSlot}</strong>
                 <span>{formatCategory(replayPreview.category, t)}</span>
+                {!hasThumbnail ? <small className="stream-preview-unavailable">{t.previewUnavailable}</small> : null}
                 <dl>
                   <div>
                     <dt>{t.time}</dt>
@@ -401,7 +378,7 @@ function StreamPulse({ stream, compareStream, events, t }) {
               </div>
             </div>
           ) : null}
-        </div>
+        </div> : null}
       </div>
 
     </Reveal>

@@ -37,6 +37,8 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 - Static mock-data fallback when the local API is unavailable.
 - Backend integration tests that use temporary SQLite databases.
 - Twitch viewer samples plus EventSub chat, chatter, word, and stream-total ingestion.
+- Production safety defaults for env validation, CORS, security headers, safe error envelopes, and blocked legacy demo writes.
+- GitHub Actions CI for test, lint, and build verification.
 
 ## Tech stack
 
@@ -54,6 +56,26 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 | Tooling | ESLint, npm |
 
 The project intentionally does not use TypeScript, Tailwind, a real Twitch SDK, or an OpenAI dependency.
+
+## Demo/mock mode
+
+Mock mode is the default portfolio experience. It requires no secrets, no Twitch account, and no backend credentials. It shows a complete deterministic dashboard with viewer timelines, chat leaderboards, word analytics, moderator workload, archive data, imports, replay, summaries, and local reports.
+
+If the local backend is unavailable during frontend development, the UI keeps a safe static mock fallback for the demo dashboard.
+
+## Real Twitch mode
+
+Real Twitch mode is opt-in with `TWITCH_PROVIDER=twitch`. It supports OAuth login, channel ownership derived from Twitch identity, Helix metadata, EventSub chat ingest, channel-scoped ingest controls, moderator directory sync, VOD metadata sync, token refresh, and persisted chat/word/viewer rows when collection is running.
+
+Real mode never uses mock analytics as fallback. When no rows have been collected, the backend returns empty/`204` responses and the UI shows honest empty states.
+
+## Known limitations
+
+- Live Twitch analytics exist only for events collected while the backend and ingest are running.
+- Runtime ingest, replay, and mock sampler state is process-local and resets after restart.
+- SQLite is intended for local/demo deployment and single-process production experiments, not horizontal scale.
+- VOD sync is metadata-only unless a real internally collected stream session exists.
+- Moderator action analytics are not implemented yet; the current Twitch moderator feature syncs the directory only.
 
 ## Run locally
 
@@ -176,6 +198,7 @@ The dashboard keeps the two data modes explicit:
 - `TWITCH_PROVIDER=mock` shows the complete deterministic demo dashboard and archive.
 - `TWITCH_PROVIDER=twitch` shows only Twitch rows actually collected into SQLite. Demo charts, leaderboards, summaries, moderation data, and archive sessions are not used as fallback in this mode.
 - EventSub chat ingestion works only while the backend process and ingest are running. Offline collection may still produce limited real chat and word data; viewer graphs and real archive sessions require ingest to run during a live stream.
+- With `TWITCH_LIVE_INGEST_AUTOSTART=true`, the backend starts legacy Fenya ingest on startup. A live session keeps Twitch `started_at` as the broadcast start and stores `collected_from` separately as the first local collection time. Chat before `collected_from` is never reconstructed or implied; VOD synchronization remains metadata-only.
 - If nothing has been collected yet, each dashboard section explains what is missing instead of showing demo content.
 
 In Twitch mode, use the compact dashboard status panel to start or stop ingest. The buttons call the local ingest routes; no credentials are sent to or displayed by the browser.
@@ -207,6 +230,7 @@ In Twitch mode, use the compact dashboard status panel to start or stop ingest. 
 | `SUMMARY_PROVIDER` | `local` | `local` or deterministic `mock`; `openai` is only a placeholder |
 | `MOCK_SAMPLER_INTERVAL_MS` | `10000` | Demo sampler interval |
 | `MOCK_SAMPLER_AUTOSTART` | `false` | Start demo sampler with the backend |
+| `ALLOW_DEMO_WRITES` | `false` | Allow legacy demo mutation/reset endpoints in production; keep `false` for public deployments |
 | `REPLAY_MS_PER_STREAM_MINUTE` | `250` | Local replay timing scale before speed multiplier |
 
 No credentials are required in the default mock mode. Twitch mode requires client credentials and a user token with `user:read:chat`; configure a refresh token as well so the local process can refresh an expired user token. `TOKEN_ENCRYPTION_KEY` is required only when durable Twitch token storage is used. Generate and keep it in the ignored local `.env`; `.env` and all secrets must never be committed.
@@ -214,6 +238,8 @@ No credentials are required in the default mock mode. Twitch mode requires clien
 Optional `PLATFORM_ADMIN_TWITCH_IDS` and `PLATFORM_ADMIN_TWITCH_LOGINS` comma-separated allowlists define local Fenya Stream Lab administrators independently from channel roles. `/api/me` exposes this only as `roleSummary.isPlatformAdmin` and `globalRoles: ["platform_admin"]`; it does not expose the allowlist itself. Platform admin never grants Twitch broadcaster/moderator permissions and never bypasses OAuth scopes. The archive can synchronize the latest 50 Twitch VOD metadata records; it does not invent chat, viewer, word, or moderation analytics for VOD-only entries.
 
 Channel roles are assigned automatically from Twitch identity and channel ownership; there is no manual role switch in the dashboard. The platform-admin badge is a local application role only. Twitch still requires the matching OAuth scopes for each protected operation. The VOD archive contains Twitch metadata only, while full chat, word, viewer, and moderation analytics exist only for streams collected live by Fenya Stream Lab.
+
+Server-side RBAC protects every mutating `/api` request. Channel owners may control and synchronize only their own channel, while locally allowlisted platform admins can perform administrative mutations. Chatter and moderator roles are read-only; hiding controls in the frontend is only a UX layer and is not the security boundary.
 
 The current channel moderator list is optional and requires `moderation:read`. The dashboard asks for it only when an owner explicitly reconnects Twitch from the moderator section. This stage stores and displays the directory only; moderator actions, bans, timeouts, and moderation EventSub analytics remain future work.
 
@@ -248,6 +274,8 @@ npm test
 npm run lint
 npm run build
 ```
+
+CI runs the same `npm ci`, `npm test`, `npm run lint`, and `npm run build` sequence on push and pull requests.
 
 ## Ubuntu VPS deployment
 
@@ -291,9 +319,9 @@ Base URL: `http://localhost:3001`. See [docs/API.md](docs/API.md) for the comple
 
 ## Future improvements
 
-- Add a user-facing OAuth/account UI around the implemented backend login flow.
-- Add migrations, structured logging, graceful shutdown, and deployment hardening.
-- Add authentication and rate limiting before exposing write endpoints publicly.
+- Add explicit migrations and schema versioning.
+- Add structured logging, request IDs, monitoring, and backups for a chosen host.
+- Tune rate limits for the final public deployment target.
 - Add repository-owned portfolio screenshots.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for scope and ordering.

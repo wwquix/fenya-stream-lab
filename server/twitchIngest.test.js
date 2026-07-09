@@ -17,6 +17,8 @@ import {
   startTwitchIngest,
 } from "./services/twitchIngestService.js";
 import { closeDatabase, getDatabase } from "./storage/db.js";
+import { findOrCreateUserFromTwitchProfile } from "./repositories/userRepository.js";
+import { SESSION_COOKIE_NAME, startSession } from "./services/sessionService.js";
 
 const app = createApp();
 let temporaryDirectory;
@@ -49,12 +51,14 @@ afterEach(async () => {
   resetTwitchIngestForTests();
   resetTwitchAuthCache();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   closeDatabase();
   for (const name of [
     "DATABASE_PATH", "TWITCH_PROVIDER", "TWITCH_CHANNEL_LOGIN", "TWITCH_CLIENT_ID",
     "TWITCH_CLIENT_SECRET", "TWITCH_USER_ACCESS_TOKEN", "TWITCH_REFRESH_TOKEN",
     "TWITCH_BROADCASTER_ID", "TWITCH_BOT_USER_ID", "TWITCH_POLL_INTERVAL_MS",
     "TWITCH_EVENTSUB_RECONNECT_MS", "TWITCH_LIVE_INGEST_AUTOSTART",
+    "PLATFORM_ADMIN_TWITCH_LOGINS",
   ]) delete process.env[name];
   await rm(temporaryDirectory, { recursive: true, force: true });
 });
@@ -90,8 +94,36 @@ describe("Twitch ingest pipeline", () => {
     expect(database.prepare("SELECT COUNT(*) AS count FROM chat_messages").get().count).toBe(1);
     expect(database.prepare("SELECT message_count FROM chatters WHERE nickname = 'viewer77'").get().message_count).toBe(1);
     expect(database.prepare("SELECT count FROM word_stats WHERE word_text = 'красивый'").get().count).toBe(2);
-    expect(database.prepare("SELECT total_messages, unique_chatters FROM streams WHERE stream_id = 'live-1'").get())
-      .toMatchObject({ total_messages: 1, unique_chatters: 1 });
+    expect(database.prepare("SELECT total_messages, unique_chatters, started_at, collected_from FROM streams WHERE stream_id = 'live-1'").get())
+      .toMatchObject({
+        total_messages: 1,
+        unique_chatters: 1,
+        started_at: "2026-07-04T18:00:00.000Z",
+        collected_from: "2026-07-04T18:05:00.000Z",
+      });
+  });
+
+  test("continuing the same live stream preserves its earliest collection boundary", () => {
+    const metadata = {
+      provider: "twitch",
+      channelLogin: "fenya",
+      broadcasterId: "42",
+      isLive: true,
+      streamId: "continued-live",
+      streamTitle: "Already live",
+      categoryName: "Twitch",
+      viewerCount: 100,
+      startedAt: "2026-07-04T18:00:00.000Z",
+    };
+
+    saveTwitchStreamSnapshot(metadata, "2026-07-04T18:30:00.000Z", { collectedFrom: "2026-07-04T18:30:00.000Z" });
+    saveTwitchStreamSnapshot(metadata, "2026-07-04T18:45:00.000Z", { collectedFrom: "2026-07-04T18:45:00.000Z" });
+
+    expect(getDatabase().prepare("SELECT started_at, collected_from FROM streams WHERE stream_id = 'continued-live'").get())
+      .toEqual({
+        started_at: "2026-07-04T18:00:00.000Z",
+        collected_from: "2026-07-04T18:30:00.000Z",
+      });
   });
 
   test("ingest routes stay safe and mock mode does not open EventSub", async () => {
@@ -110,7 +142,10 @@ describe("Twitch ingest pipeline", () => {
     expect(JSON.stringify(status.body)).not.toContain("must-not-appear-user-token");
     expect(JSON.stringify(status.body)).not.toContain("must-not-appear-refresh-token");
 
-    const started = await request(app).post("/api/twitch/fenya/ingest/start");
+    const platformAdmin = findOrCreateUserFromTwitchProfile({ id: "mock-admin", login: "wwquix", display_name: "Admin" });
+    process.env.PLATFORM_ADMIN_TWITCH_LOGINS = "wwquix";
+    const adminCookie = `${SESSION_COOKIE_NAME}=${startSession(platformAdmin.id).rawToken}`;
+    const started = await request(app).post("/api/twitch/fenya/ingest/start").set("Cookie", adminCookie);
     expect(started.status).toBe(409);
     expect(started.body.message).toBe("Twitch ingest requires TWITCH_PROVIDER=twitch");
   });
@@ -189,6 +224,7 @@ describe("Twitch ingest pipeline", () => {
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "live-2", game_id: "32399", game_name: "Counter-Strike 2", title: "Live", viewer_count: 1000, started_at: "2026-07-04T18:00:00Z", language: "ru" }] }))
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "subscription-1", status: "enabled" }] }, 202));
     vi.stubGlobal("fetch", fetchMock);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     const socket = new FakeWebSocket();
     setTwitchWebSocketFactoryForTests(() => {
@@ -200,7 +236,21 @@ describe("Twitch ingest pipeline", () => {
     });
 
     const started = await startTwitchIngest();
-    expect(started).toMatchObject({ status: "running", subscriptionId: "subscription-1", broadcasterId: "42", chatUserId: "77" });
+    expect(started).toMatchObject({
+      status: "running",
+      subscriptionId: "subscription-1",
+      broadcasterId: "42",
+      chatUserId: "77",
+      streamStartedAt: "2026-07-04T18:00:00Z",
+      collectedFrom: expect.any(String),
+    });
+    const safeLogs = logSpy.mock.calls.flat().join(" ");
+    expect(safeLogs).toContain("channel=@fenya");
+    expect(safeLogs).toContain("collectedFrom=");
+    expect(safeLogs).not.toContain("user-token");
+    expect(safeLogs).not.toContain("client-secret");
+    expect(getDatabase().prepare("SELECT collected_from FROM streams WHERE stream_id = 'live-2'").get().collected_from)
+      .toBe(started.collectedFrom);
     expect(fetchMock.mock.calls[5][1]).toMatchObject({ method: "POST" });
     expect(JSON.parse(fetchMock.mock.calls[5][1].body)).toMatchObject({
       type: "channel.chat.message",
@@ -208,7 +258,10 @@ describe("Twitch ingest pipeline", () => {
       transport: { method: "websocket", session_id: "session-1" },
     });
 
-    const compatibilityStart = await request(app).post("/api/twitch/fenya/ingest/start");
+    const platformAdmin = findOrCreateUserFromTwitchProfile({ id: "legacy-admin", login: "wwquix", display_name: "Admin" });
+    process.env.PLATFORM_ADMIN_TWITCH_LOGINS = "wwquix";
+    const adminCookie = `${SESSION_COOKIE_NAME}=${startSession(platformAdmin.id).rawToken}`;
+    const compatibilityStart = await request(app).post("/api/twitch/fenya/ingest/start").set("Cookie", adminCookie);
     expect(compatibilityStart.status).toBe(202);
     expect(compatibilityStart.body).toMatchObject({
       channelId: "legacy:fenya",

@@ -5,11 +5,15 @@ import { getUserMemberships } from "../repositories/membershipRepository.js";
 import { findTwitchIdentityByUserId } from "../repositories/twitchAccountRepository.js";
 import { getDatabase } from "../storage/db.js";
 
-function configuredPlatformAdmin(identity) {
+export function configuredPlatformAdmin(identity) {
   if (!identity) return false;
   const ids = new Set(String(process.env.PLATFORM_ADMIN_TWITCH_IDS || "").split(",").map((value) => value.trim()).filter(Boolean));
   const logins = new Set(String(process.env.PLATFORM_ADMIN_TWITCH_LOGINS || "").split(",").map((value) => value.trim().toLowerCase()).filter(Boolean));
   return ids.has(identity.twitch_user_id) || logins.has(identity.twitch_login.toLowerCase());
+}
+
+export function userIsPlatformAdmin(userId, database = getDatabase()) {
+  return configuredPlatformAdmin(findTwitchIdentityByUserId(userId, database));
 }
 
 function channelContract(channel) {
@@ -26,7 +30,8 @@ function channelContract(channel) {
 export function getIdentitySummary(user, database = getDatabase()) {
   if (!user) {
     return {
-      isLoggedIn: false, user: null, twitchAccount: null, ownedChannels: [], memberships: [], globalRoles: [],
+      isLoggedIn: false, user: null, twitchAccount: null, ownedChannels: [], memberships: [], globalRoles: [], role: "chatter",
+      permissions: { canControlIngest: false, readOnly: true },
       roleSummary: {
         isGuest: true, isChatter: false, isChannelOwner: false, isChannelAdmin: false,
         isModerator: false, isPlatformAdmin: false,
@@ -56,6 +61,12 @@ export function getIdentitySummary(user, database = getDatabase()) {
     SELECT 1 FROM channel_moderators WHERE twitch_user_id = ? LIMIT 1
   `).get(identity.twitch_user_id)) : false;
   const isPlatformAdmin = configuredPlatformAdmin(identity);
+  const role = isPlatformAdmin
+    ? "platform_admin"
+    : roles.has("channel_owner") ? "channel_owner"
+    : roles.has("moderator") || isSyncedModerator ? "moderator"
+    : "chatter";
+  const canControlIngest = role === "platform_admin" || role === "channel_owner";
   return {
     isLoggedIn: true,
     user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl },
@@ -74,6 +85,8 @@ export function getIdentitySummary(user, database = getDatabase()) {
       channelDisplayName: membership.display_name,
     })),
     globalRoles: isPlatformAdmin ? ["platform_admin"] : [],
+    role,
+    permissions: { canControlIngest, readOnly: !canControlIngest },
     roleSummary: {
       isGuest: false,
       isChatter: true,

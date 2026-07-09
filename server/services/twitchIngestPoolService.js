@@ -39,6 +39,8 @@ function createState(channelId) {
     sessionId: null,
     subscriptionId: null,
     currentStreamId: null,
+    streamStartedAt: null,
+    collectedFrom: null,
     connectedAt: null,
     lastEventAt: null,
     lastPollAt: null,
@@ -81,6 +83,7 @@ function publicStatus(state) {
   return {
     provider: getTwitchProviderName(),
     channelId: state.channelId,
+    channelLogin: state.channelLogin,
     broadcasterId: state.broadcasterId,
     chatReaderUserId: state.chatReaderUserId,
     chatUserId: state.chatReaderUserId,
@@ -89,6 +92,8 @@ function publicStatus(state) {
     sessionId: state.sessionId,
     subscriptionId: state.subscriptionId,
     currentStreamId: state.currentStreamId,
+    streamStartedAt: state.streamStartedAt,
+    collectedFrom: state.collectedFrom,
     connectedAt: state.connectedAt,
     lastEventAt: state.lastEventAt,
     lastPollAt: state.lastPollAt,
@@ -157,7 +162,13 @@ async function pollOnce(state) {
   state.currentStreamId = saveTwitchStreamSnapshot(metadata, timestamp, {
     channelId: state.legacy ? null : state.channelId,
     streamSessionId: metadata.streamId,
+    collectedFrom: state.collectedFrom ?? timestamp,
   });
+  state.streamStartedAt = metadata.startedAt ?? null;
+  if (state.currentStreamId) {
+    const storedWindow = getDatabase().prepare("SELECT collected_from FROM streams WHERE stream_id = ?").get(state.currentStreamId);
+    state.collectedFrom = storedWindow?.collected_from ?? state.collectedFrom ?? timestamp;
+  }
   return metadata;
 }
 
@@ -214,6 +225,7 @@ export function processChannelEventSubNotification(channelId, message) {
   const result = saveTwitchChatMessage(message.payload.event, timestamp, {
     channelId: state.legacy ? null : state.channelId,
     streamSessionId: state.currentStreamId,
+    collectedFrom: state.collectedFrom ?? timestamp,
   });
   state.currentStreamId = result.streamId;
   state.lastEventAt = timestamp;
@@ -336,10 +348,13 @@ export async function startChannelIngest(channelId, options = {}) {
   state.startPromise = (async () => {
     try {
       await resolveIdentity(state, options);
+      state.collectedFrom = new Date().toISOString();
+      console.log(`Twitch ingest starting: channel=@${state.channelLogin}, collectedFrom=${state.collectedFrom}`);
       const metadata = await pollOnce(state);
       state.broadcasterId = state.broadcasterId || metadata.broadcasterId;
       if (!state.broadcasterId) throw new HttpError(404, "Twitch broadcaster id is missing");
       if (!state.chatReaderUserId) throw new HttpError(401, "Twitch chat reader user id is missing");
+      console.log(`Twitch ingest listening: channel=@${state.channelLogin}, streamStartedAt=${state.streamStartedAt ?? "offline"}, collectedFrom=${state.collectedFrom}`);
       return await openSocket(state, EVENTSUB_URL, true);
     } catch (error) {
       state.desiredRunning = false;

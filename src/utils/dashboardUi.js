@@ -13,7 +13,39 @@ const ROLE_BADGES = [
 ]
 
 export function getRoleBadgeKeys(roleSummary) {
-  return ROLE_BADGES.filter(([flag]) => Boolean(roleSummary?.[flag])).map(([, labelKey]) => labelKey)
+  const badges = ROLE_BADGES.filter(([flag]) => Boolean(roleSummary?.[flag])).map(([, labelKey]) => labelKey)
+  return badges.some((key) => key !== 'roleChatter') ? badges.filter((key) => key !== 'roleChatter') : badges
+}
+
+export function normalizeRole(role) {
+  const normalized = String(role || 'chatter').trim().toLowerCase()
+  return ['platform_admin', 'channel_owner', 'moderator', 'chatter'].includes(normalized) ? normalized : 'chatter'
+}
+
+export function canControlIngest(role) {
+  return ['platform_admin', 'channel_owner'].includes(normalizeRole(role))
+}
+
+export function resolveDashboardPermissions({ identity, dashboardMode, selectedChannel, legacyChannelLogin }) {
+  if (!identity?.isLoggedIn) return { role: 'chatter', canControlIngest: false, readOnly: true }
+  if (normalizeRole(identity.role) === 'platform_admin') {
+    return { role: 'platform_admin', canControlIngest: true, readOnly: false }
+  }
+
+  let contextualRole = 'chatter'
+  if (dashboardMode === 'connected-channel') {
+    contextualRole = normalizeRole(
+      selectedChannel?.role
+      ?? identity.memberships?.find((membership) => membership.channelId === selectedChannel?.id)?.role,
+    )
+  } else if (dashboardMode === 'legacy-fenya') {
+    contextualRole = normalizeRole(identity.memberships?.find((membership) => (
+      membership.channelLogin?.toLowerCase() === String(legacyChannelLogin || 'fenya').toLowerCase()
+    ))?.role)
+  }
+
+  const controlAllowed = canControlIngest(contextualRole)
+  return { role: contextualRole, canControlIngest: controlAllowed, readOnly: !controlAllowed }
 }
 
 export function formatDashboardModeLabel(mode, login, t) {
@@ -49,4 +81,23 @@ export function isKnownFrontendPath(pathname) {
 
 export function isBackendUnavailable({ identityError, ingestError, connection, status }) {
   return Boolean(identityError && ingestError && !connection && !status)
+}
+
+export function hasCollectionGap(streamStartedAt, collectedFrom) {
+  const streamStart = Date.parse(streamStartedAt)
+  const collectionStart = Date.parse(collectedFrom)
+  return Number.isFinite(streamStart) && Number.isFinite(collectionStart) && streamStart < collectionStart
+}
+
+export function normalizeTwitchThumbnailUrl(value, width = 320, height = 180) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  return value.trim()
+    .replaceAll('%{width}', String(width))
+    .replaceAll('%{height}', String(height))
+    .replaceAll('{width}', String(width))
+    .replaceAll('{height}', String(height))
+}
+
+export function resolveInitialTheme(storedTheme) {
+  return storedTheme === 'light' ? 'light' : 'dark'
 }

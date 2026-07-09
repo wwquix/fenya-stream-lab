@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS streams (
   title TEXT NOT NULL,
   category_name TEXT,
   started_at TEXT,
+  collected_from TEXT,
   ended_at TEXT,
   duration_minutes INTEGER,
   average_viewers INTEGER,

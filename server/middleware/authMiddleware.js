@@ -1,6 +1,9 @@
 import { CHANNEL_ROLES, getUserChannelRole } from "../repositories/membershipRepository.js";
+import process from "node:process";
 import { findTwitchIdentityByUserId } from "../repositories/twitchAccountRepository.js";
 import { findSessionByRawToken, SESSION_COOKIE_NAME } from "../services/sessionService.js";
+import { userIsPlatformAdmin } from "../services/identityService.js";
+import { getDatabase } from "../storage/db.js";
 import { HttpError } from "./errorHandlers.js";
 
 function readCookie(cookieHeader, name) {
@@ -18,11 +21,24 @@ function readCookie(cookieHeader, name) {
 }
 
 function unauthorized(res) {
-  return res.status(401).json({ error: true, message: "Authentication required" });
+  return res.status(401).json({ error: "unauthorized", message: "Authentication required" });
 }
 
 function forbidden(res) {
-  return res.status(403).json({ error: true, message: "Insufficient channel permissions" });
+  return res.status(403).json({ error: "forbidden", message: "Insufficient permissions" });
+}
+
+function userOwnsChannel(userId, channelId, database = getDatabase()) {
+  return database.prepare(`
+    SELECT 1 FROM channel_memberships
+    WHERE user_id = ? AND channel_id = ? AND role = 'channel_owner'
+  `).get(userId, channelId) !== undefined;
+}
+
+function userOwnsAnyChannel(userId, database = getDatabase()) {
+  return database.prepare(`
+    SELECT 1 FROM channel_memberships WHERE user_id = ? AND role = 'channel_owner' LIMIT 1
+  `).get(userId) !== undefined;
 }
 
 function validateRoles(roles) {
@@ -80,6 +96,11 @@ export function requireChannelRole(roles) {
       return;
     }
     try {
+      if (userIsPlatformAdmin(req.user.id)) {
+        req.globalRole = "platform_admin";
+        next();
+        return;
+      }
       const role = getUserChannelRole(req.params.channelId, req.user.id);
       if (!role || !allowedRoles.has(role)) {
         forbidden(res);
@@ -91,6 +112,52 @@ export function requireChannelRole(roles) {
       next(new HttpError(500, "Authorization unavailable", { cause: error }));
     }
   };
+}
+
+export function requireApiMutationPermission(req, res, next) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    next();
+    return;
+  }
+  if (!req.user) {
+    unauthorized(res);
+    return;
+  }
+
+  try {
+    if (userIsPlatformAdmin(req.user.id)) {
+      req.globalRole = "platform_admin";
+      next();
+      return;
+    }
+
+    const channelMatch = req.path.match(/^\/channels\/(\d+)(?:\/|$)/);
+    if (channelMatch && userOwnsChannel(req.user.id, Number(channelMatch[1]))) {
+      req.channelRole = "channel_owner";
+      next();
+      return;
+    }
+
+    if (req.path === "/channels/connect-my-channel" && userOwnsAnyChannel(req.user.id)) {
+      req.channelRole = "channel_owner";
+      next();
+      return;
+    }
+
+    if (req.path.startsWith("/twitch/fenya/")) {
+      const login = process.env.TWITCH_CHANNEL_LOGIN?.trim() || "fenya";
+      const channel = getDatabase().prepare("SELECT id FROM channels WHERE twitch_login = ? COLLATE NOCASE").get(login);
+      if (channel && userOwnsChannel(req.user.id, channel.id)) {
+        req.channelRole = "channel_owner";
+        next();
+        return;
+      }
+    }
+
+    forbidden(res);
+  } catch (error) {
+    next(new HttpError(500, "Authorization unavailable", { cause: error }));
+  }
 }
 
 export function requireSelfOrChannelRole({ roles, twitchUserIdParam = "twitchUserId" }) {

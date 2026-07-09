@@ -30,6 +30,7 @@ export async function getTwitchChannelMetadata(channelLogin) {
     categoryName: stream?.game_name ?? channel.game_name ?? "",
     categoryId: stream?.game_id ?? channel.game_id ?? null,
     viewerCount: stream?.viewer_count ?? 0,
+    thumbnailUrl: stream?.thumbnail_url ?? null,
     startedAt: stream?.started_at ?? null,
     language: stream?.language ?? channel.broadcaster_language ?? null,
     fetchedAt: new Date().toISOString(),

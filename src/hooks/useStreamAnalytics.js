@@ -89,6 +89,7 @@ function normalizeAnalytics(payload) {
     title: normalizeString(payload.title),
     categoryName: normalizeString(payload.categoryName),
     startedAt: normalizeString(payload.startedAt),
+    collectedFrom: normalizeString(payload.collectedFrom),
     points,
     segments,
     events,

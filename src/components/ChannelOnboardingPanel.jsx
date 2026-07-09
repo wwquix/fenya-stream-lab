@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Reveal } from './MotionPrimitives.jsx'
 import { formatDataSourceDescription, getRoleBadgeKeys } from '../utils/dashboardUi.js'
 
-function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedChannel = null, onIdentityRefresh, onOpenChannel, onOpenLegacy }) {
+function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedChannel = null, canConnectChannel = false, permissions = null, onIdentityRefresh, onOpenChannel, onOpenLegacy }) {
   const [channels, setChannels] = useState([])
   const [state, setState] = useState('loading')
   const [message, setMessage] = useState(t.channelLoading)
@@ -98,9 +98,14 @@ function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedC
             {identity?.isLoggedIn && identity.twitchAccount ? (
               <span className="role-helper">{t.rolesAutomaticHint}</span>
             ) : null}
+            {identity?.isLoggedIn && permissions ? (
+              <span className={`account-access-state ${permissions.readOnly ? 'is-read-only' : 'can-control'}`}>
+                {permissions.readOnly ? t.viewMode : t.controlAvailable}
+              </span>
+            ) : null}
           </div>
         </div>
-        {state === 'guest' || channels.length === 0 ? <button className="liquid-button channel-connect-button" type="button" disabled={state === 'loading' || state === 'connecting'} onClick={handleConnect}>
+        {state === 'guest' || (channels.length === 0 && canConnectChannel) ? <button className="liquid-button channel-connect-button" type="button" disabled={state === 'loading' || state === 'connecting'} onClick={handleConnect}>
           {state === 'connecting' ? t.channelConnecting : t.connectMyTwitchChannel}
         </button> : null}
       </div>

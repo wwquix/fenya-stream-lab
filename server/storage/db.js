@@ -24,6 +24,10 @@ function applySafeMigrations(targetDatabase) {
       targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN stream_session_id TEXT`);
     }
   }
+  const streamColumns = targetDatabase.prepare("PRAGMA table_info(streams)").all();
+  if (!streamColumns.some((column) => column.name === "collected_from")) {
+    targetDatabase.exec("ALTER TABLE streams ADD COLUMN collected_from TEXT");
+  }
 }
 
 export function getDatabasePath() {

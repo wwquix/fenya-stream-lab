@@ -14,10 +14,14 @@ import { getCurrentModerationAnalytics } from "./providers/mockModerationProvide
 import { getCurrentStreamSummary } from "./providers/mockSummaryProvider.js";
 import { getCurrentWordAnalytics } from "./providers/mockWordsProvider.js";
 import { seedDashboardData } from "./repositories/dashboardRepository.js";
+import { findOrCreateUserFromTwitchProfile } from "./repositories/userRepository.js";
+import { SESSION_COOKIE_NAME, startSession } from "./services/sessionService.js";
 import { closeDatabase, getDatabase } from "./storage/db.js";
 
 const app = createApp();
 let temporaryDirectory;
+let adminCookie;
+let readOnlyCookie;
 
 async function seedTemporaryDatabase() {
   const [analytics, archive, chat, moderation, summary, words] = await Promise.all([
@@ -38,6 +42,11 @@ beforeEach(async () => {
   process.env.TWITCH_PROVIDER = "mock";
   process.env.SUMMARY_PROVIDER = "local";
   process.env.REPLAY_MS_PER_STREAM_MINUTE = "1";
+  process.env.PLATFORM_ADMIN_TWITCH_LOGINS = "wwquix";
+  const admin = findOrCreateUserFromTwitchProfile({ id: "api-admin", login: "wwquix", display_name: "Admin" });
+  adminCookie = `${SESSION_COOKIE_NAME}=${startSession(admin.id).rawToken}`;
+  const chatter = findOrCreateUserFromTwitchProfile({ id: "api-chatter", login: "api_chatter", display_name: "Chatter" });
+  readOnlyCookie = `${SESSION_COOKIE_NAME}=${startSession(chatter.id).rawToken}`;
 });
 
 afterEach(async () => {
@@ -46,10 +55,17 @@ afterEach(async () => {
   delete process.env.TWITCH_PROVIDER;
   delete process.env.SUMMARY_PROVIDER;
   delete process.env.REPLAY_MS_PER_STREAM_MINUTE;
+  delete process.env.PLATFORM_ADMIN_TWITCH_LOGINS;
   await rm(temporaryDirectory, { recursive: true, force: true });
 });
 
 describe("Fenya Stream Lab API", () => {
+  test("read-only chatter cannot mutate shared API state", async () => {
+    const response = await request(app).post("/api/import/json").set("Cookie", readOnlyCookie).send([]);
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "forbidden", message: "Insufficient permissions" });
+  });
+
   test("GET /api/health reports the local service status", async () => {
     const response = await request(app).get("/api/health");
 
@@ -86,7 +102,7 @@ describe("Fenya Stream Lab API", () => {
   });
 
   test("valid normalized JSON events are imported into SQLite", async () => {
-    const response = await request(app).post("/api/import/json").send([
+    const response = await request(app).post("/api/import/json").set("Cookie", adminCookie).send([
       {
         eventId: "test-viewer-001",
         type: "viewer_sample",
@@ -113,7 +129,7 @@ describe("Fenya Stream Lab API", () => {
   });
 
   test("invalid normalized JSON events return clear row-level errors", async () => {
-    const response = await request(app).post("/api/import/json").send([
+    const response = await request(app).post("/api/import/json").set("Cookie", adminCookie).send([
       { type: "viewer_sample", streamId: "invalid-stream", viewers: -1 },
     ]);
 
@@ -128,6 +144,7 @@ describe("Fenya Stream Lab API", () => {
   test("malformed JSON receives a stable 400 error envelope", async () => {
     const response = await request(app)
       .post("/api/import/json")
+      .set("Cookie", adminCookie)
       .set("Content-Type", "application/json")
       .send('{"type":');
 
@@ -137,7 +154,7 @@ describe("Fenya Stream Lab API", () => {
 
   test("a local stream summary can be generated without external providers", async () => {
     await seedTemporaryDatabase();
-    const response = await request(app).post("/api/streams/2026-06-23/summary/generate");
+    const response = await request(app).post("/api/streams/2026-06-23/summary/generate").set("Cookie", adminCookie);
 
     expect(response.status).toBe(201);
     expect(response.body.provider).toBe("local");
@@ -168,7 +185,7 @@ describe("Fenya Stream Lab API", () => {
 
   test("replay start, status, and stop use one isolated stream session", async () => {
     await seedTemporaryDatabase();
-    const started = await request(app).post("/api/replay/2026-06-23/start").send({ speed: 20 });
+    const started = await request(app).post("/api/replay/2026-06-23/start").set("Cookie", adminCookie).send({ speed: 20 });
 
     expect(started.status).toBe(201);
     expect(started.body).toMatchObject({ streamId: "2026-06-23", status: "running", speed: 20, isActive: true });
@@ -177,7 +194,7 @@ describe("Fenya Stream Lab API", () => {
     expect(status.status).toBe(200);
     expect(status.body.sessionId).toBe(started.body.sessionId);
 
-    const stopped = await request(app).post("/api/replay/2026-06-23/stop");
+    const stopped = await request(app).post("/api/replay/2026-06-23/stop").set("Cookie", adminCookie);
     expect(stopped.status).toBe(200);
     expect(stopped.body).toMatchObject({ status: "stopped", isActive: false });
   });

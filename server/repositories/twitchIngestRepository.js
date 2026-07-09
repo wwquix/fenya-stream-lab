@@ -74,9 +74,9 @@ export function saveTwitchStreamSnapshot(metadata, timestamp = new Date().toISOS
     `).run(metadata.streamId, channelId, channelId);
     database.prepare(`
       INSERT INTO streams (
-        stream_id, channel_id, stream_session_id, channel_login, stream_date, title, category_name, started_at,
+        stream_id, channel_id, stream_session_id, channel_login, stream_date, title, category_name, started_at, collected_from,
         status, source, is_current, created_at, updated_at, analytics_updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'live', 'twitch', 1, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', 'twitch', 1, ?, ?, ?)
       ON CONFLICT(stream_id) DO UPDATE SET
         channel_id = excluded.channel_id,
         stream_session_id = excluded.stream_session_id,
@@ -84,6 +84,7 @@ export function saveTwitchStreamSnapshot(metadata, timestamp = new Date().toISOS
         title = excluded.title,
         category_name = excluded.category_name,
         started_at = excluded.started_at,
+        collected_from = COALESCE(streams.collected_from, excluded.collected_from),
         status = 'live', source = 'twitch', is_current = 1,
         analytics_updated_at = excluded.analytics_updated_at,
         updated_at = excluded.updated_at
@@ -96,6 +97,7 @@ export function saveTwitchStreamSnapshot(metadata, timestamp = new Date().toISOS
       metadata.streamTitle || "Twitch stream",
       metadata.categoryName || "Twitch",
       metadata.startedAt,
+      context.collectedFrom ?? timestamp,
       timestamp,
       timestamp,
       timestamp,
@@ -137,9 +139,9 @@ function ensureChatStream(database, event, timestamp, context) {
   const streamId = context.streamSessionId || `twitch-chat-${event.broadcaster_user_id}-${timestamp.slice(0, 10)}`;
   database.prepare(`
     INSERT OR IGNORE INTO streams (
-      stream_id, channel_id, stream_session_id, channel_login, stream_date, title, category_name, started_at,
+      stream_id, channel_id, stream_session_id, channel_login, stream_date, title, category_name, started_at, collected_from,
       status, source, is_current, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'Twitch Chat', ?, 'chat-only', 'twitch', 1, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, 'Twitch Chat', ?, ?, 'chat-only', 'twitch', 1, ?, ?)
   `).run(
     streamId,
     channelId,
@@ -148,6 +150,7 @@ function ensureChatStream(database, event, timestamp, context) {
     timestamp.slice(0, 10),
     `Twitch chat ${timestamp.slice(0, 10)}`,
     timestamp,
+    context.collectedFrom ?? timestamp,
     timestamp,
     timestamp,
   );

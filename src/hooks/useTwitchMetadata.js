@@ -10,6 +10,7 @@ const EMPTY_METADATA = {
   streamTitle: null,
   categoryName: null,
   viewerCount: null,
+  thumbnailUrl: null,
   startedAt: null,
 }
 
@@ -36,6 +37,7 @@ function normalizeMetadata(payload) {
     streamTitle: normalizeString(payload.streamTitle),
     categoryName: normalizeString(payload.categoryName),
     viewerCount: normalizeNumber(payload.viewerCount),
+    thumbnailUrl: normalizeString(payload.thumbnailUrl),
     startedAt: normalizeString(payload.startedAt),
   }
 }

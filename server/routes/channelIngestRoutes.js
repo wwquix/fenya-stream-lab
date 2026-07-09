@@ -15,7 +15,7 @@ import { syncTwitchVods } from "../services/twitchVodService.js";
 import { getChannelModeratorDirectory } from "../services/twitchModeratorService.js";
 
 const router = Router();
-const manageIngest = requireChannelRole(["channel_owner", "channel_admin"]);
+const manageIngest = requireChannelRole(["channel_owner"]);
 
 router.post("/connect-my-channel", requireUser, routeHandler(async (req, res) => {
   res.json({ channel: connectMyTwitchChannel(req.user.id) });
@@ -71,7 +71,7 @@ router.post("/:channelId/moderators/sync", manageIngest, routeHandler(async (req
   res.json(result);
 }, "Failed to synchronize Twitch moderators"));
 
-router.get("/:channelId/ingest/status", manageIngest, (req, res) => {
+router.get("/:channelId/ingest/status", requireUser, (req, res) => {
   res.json(getChannelIngestStatus(req.params.channelId));
 });
 

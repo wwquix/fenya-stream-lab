@@ -8518,6 +8518,148 @@ dt,
   }
 }
 
+.twitch-collection-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 34%, var(--theme-border));
+  border-radius: 14px;
+  color: var(--theme-text-secondary);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.twitch-read-only-badge {
+  justify-self: start;
+  padding: 6px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  color: var(--theme-text-secondary);
+  background: color-mix(in srgb, var(--theme-card-elevated) 84%, transparent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* Honest Pulse preview: real Twitch media or a compact, explicit fallback. */
+.stream-tooltip-preview {
+  position: relative;
+  min-height: 92px;
+  overflow: hidden;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--theme-card) 90%, var(--theme-page));
+}
+
+.stream-tooltip-preview::before,
+.stream-tooltip-preview::after {
+  display: none;
+}
+
+.stream-tooltip-preview.has-image {
+  align-content: end;
+  padding: 9px;
+  background: var(--theme-card);
+}
+
+.stream-tooltip-preview.has-image img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stream-tooltip-preview.has-image::after {
+  position: absolute;
+  inset: 45% 0 0;
+  display: block;
+  content: "";
+  background: linear-gradient(transparent, rgba(4, 8, 11, 0.78));
+}
+
+.stream-tooltip-preview.has-image span {
+  position: relative;
+  z-index: 1;
+  justify-self: start;
+  padding: 3px 6px;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.94);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.stream-tooltip-preview.is-fallback {
+  display: grid;
+  min-height: 92px;
+  align-content: center;
+  justify-items: start;
+  gap: 4px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at 90% 10%, var(--theme-accent-soft), transparent 65%),
+    color-mix(in srgb, var(--theme-card) 90%, var(--theme-page));
+}
+
+.stream-tooltip-preview.is-fallback span,
+.stream-tooltip-preview.is-fallback strong,
+.stream-tooltip-preview.is-fallback small {
+  position: static;
+  margin: 0;
+  text-align: left;
+}
+
+.stream-tooltip-preview.is-fallback strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--theme-text-primary);
+  font-size: 0.82rem;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.stream-tooltip-preview.is-fallback small,
+.stream-tooltip-preview.is-fallback span {
+  color: var(--theme-text-secondary);
+  font-size: 0.68rem;
+}
+
+.stream-pulse .recharts-tooltip-wrapper {
+  z-index: 20;
+}
+
+.stream-tooltip.is-text-only,
+.replay-preview-card.stream-tooltip.is-text-only {
+  width: min(310px, calc(100vw - 40px));
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stream-preview-unavailable {
+  display: block;
+  margin-top: 4px;
+  color: var(--theme-text-secondary);
+  font-size: 0.68rem;
+}
+
+.account-access-state {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 5px 9px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  color: var(--theme-text-secondary);
+  background: color-mix(in srgb, var(--theme-card-elevated) 88%, transparent);
+  font-size: 0.7rem;
+  font-weight: 720;
+}
+
+.account-access-state.can-control {
+  border-color: color-mix(in srgb, var(--theme-accent) 30%, var(--theme-border));
+  color: var(--theme-accent);
+  background: var(--theme-accent-soft);
+}
+
 /* Compact hierarchy pass: preserve the glass system while reducing empty visual weight. */
 .hero-wrap .hero-section {
   min-height: clamp(560px, 76vh, 720px) !important;
