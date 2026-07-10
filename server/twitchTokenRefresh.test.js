@@ -65,6 +65,13 @@ afterEach(() => {
 });
 
 describe("stored Twitch token refresh lifecycle", () => {
+  test("a valid database-backed token is reused without a network request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await getValidUserAccessTokenForAccount(account.id)).toBe("old-access-secret");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("an account expiring within ten minutes refreshes", async () => {
     account = createStoredAccount({ expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
@@ -126,6 +133,43 @@ describe("stored Twitch token refresh lifecycle", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer old-access-secret");
     expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer retry-access-secret");
+  });
+
+  test("a second Helix 401 marks the account for reauthorization and stops retrying", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ message: "Unauthorized" }, 401))
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: "retry-access-secret",
+        refresh_token: "retry-refresh-secret",
+        expires_in: 3600,
+        scope: ["user:read:chat"],
+      }))
+      .mockResolvedValueOnce(jsonResponse({ message: "Unauthorized" }, 401));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(twitchHelixRequest("/users", { twitchAccountId: account.id })).rejects.toMatchObject({
+      status: 401,
+      message: "Twitch account requires reauthorization",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(findTwitchAccountById(account.id).needs_reauth).toBe(1);
+  });
+
+  test("concurrent refreshes for one account share one external refresh request", async () => {
+    let resolveRefresh;
+    const fetchMock = vi.fn(() => new Promise((resolve) => { resolveRefresh = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const first = refreshTwitchAccountToken(account.id);
+    const second = refreshTwitchAccountToken(account.id);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    resolveRefresh(jsonResponse({
+      access_token: "deduplicated-access",
+      refresh_token: "deduplicated-refresh",
+      expires_in: 3600,
+      scope: ["user:read:chat"],
+    }));
+    await expect(Promise.all([first, second])).resolves.toEqual(["deduplicated-access", "deduplicated-access"]);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   test("a failed refresh marks the account as needing reauthorization", async () => {

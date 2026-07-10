@@ -3,7 +3,6 @@ import process from "node:process";
 import { Router } from "express";
 
 import { routeHandler } from "../middleware/errorHandlers.js";
-import { getAppAccessToken, getConfiguredUserToken, validateUserToken } from "../services/twitchAuthService.js";
 import {
   getTwitchIngestStatus,
   pollTwitchStreamOnce,
@@ -16,6 +15,7 @@ import { getVodComparisonStats, listVodsByChannel } from "../repositories/twitch
 import { toVodComparisonContract, toVodContract } from "../services/twitchVodContractService.js";
 import { syncTwitchVods } from "../services/twitchVodService.js";
 import { getLegacyModeratorDirectory } from "../services/twitchModeratorService.js";
+import { getConfiguredChannelConnectionStatus } from "../services/twitchConnectionStatusService.js";
 
 const router = Router();
 
@@ -24,34 +24,7 @@ router.get("/fenya", routeHandler(async (_req, res) => {
 }, "Failed to load Twitch metadata"));
 
 router.get("/fenya/connection", routeHandler(async (_req, res) => {
-  const provider = getTwitchProviderName();
-  let appTokenAvailable = false;
-  let userTokenInfo = null;
-  let lastError = null;
-
-  if (provider === "twitch") {
-    try {
-      await getAppAccessToken();
-      appTokenAvailable = true;
-      userTokenInfo = await validateUserToken();
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : "Twitch connection check failed";
-    }
-  }
-
-  res.json({
-    provider,
-    channelLogin: process.env.TWITCH_CHANNEL_LOGIN?.trim() || "fenya",
-    hasClientId: Boolean(process.env.TWITCH_CLIENT_ID?.trim()),
-    hasClientSecret: Boolean(process.env.TWITCH_CLIENT_SECRET?.trim()),
-    hasUserAccessToken: Boolean(getConfiguredUserToken()),
-    hasRefreshToken: Boolean(process.env.TWITCH_REFRESH_TOKEN?.trim()),
-    appTokenAvailable,
-    userTokenValid: Boolean(userTokenInfo),
-    userTokenScopes: userTokenInfo?.scopes ?? [],
-    broadcasterId: process.env.TWITCH_BROADCASTER_ID?.trim() || null,
-    lastError,
-  });
+  res.json(await getConfiguredChannelConnectionStatus());
 }, "Failed to inspect Twitch connection"));
 
 router.post("/fenya/poll-once", routeHandler(async (_req, res) => {

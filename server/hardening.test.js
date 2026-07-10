@@ -58,6 +58,21 @@ describe("environment validation", () => {
       TOKEN_ENCRYPTION_KEY: validTokenKey,
     })).toMatchObject({ isProduction: true, twitchProvider: "twitch" });
   });
+
+  test("production Twitch autostart does not require legacy environment tokens", () => {
+    expect(validateEnv({
+      NODE_ENV: "production",
+      TWITCH_PROVIDER: "twitch",
+      TWITCH_LIVE_INGEST_AUTOSTART: "true",
+      APP_BASE_URL: "https://stats.example.com",
+      TWITCH_REDIRECT_URI: "https://stats.example.com/auth/twitch/callback",
+      TWITCH_CLIENT_ID: "client-id",
+      TWITCH_CLIENT_SECRET: "client-secret",
+      TWITCH_CHANNEL_LOGIN: "fenya",
+      DATABASE_PATH: "/srv/fenya.sqlite",
+      TOKEN_ENCRYPTION_KEY: validTokenKey,
+    })).toMatchObject({ isProduction: true, twitchProvider: "twitch" });
+  });
 });
 
 describe("HTTP hardening", () => {
@@ -103,14 +118,14 @@ describe("HTTP hardening", () => {
     });
   });
 
-  test("blocks legacy demo Twitch ingest controls in production before auth", async () => {
+  test("legacy Twitch ingest controls still require authentication in production", async () => {
     process.env.NODE_ENV = "production";
     const response = await request(createApp({ serveFrontend: false }))
       .post("/api/twitch/fenya/ingest/start")
       .send({});
 
-    expect(response.status).toBe(403);
-    expect(response.body.message).toBe("Local demo mutation endpoints are disabled in production.");
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe("Authentication required");
   });
 
   test("keeps mock read endpoints available in production", async () => {

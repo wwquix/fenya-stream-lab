@@ -54,7 +54,6 @@ function createState(channelId) {
     socketOpenPromise: null,
     channelLogin: null,
     twitchAccountId: null,
-    accessToken: null,
     legacy: false,
   };
 }
@@ -127,7 +126,6 @@ async function resolveIdentity(state, options) {
         throw new HttpError(401, "Configured Twitch user token is invalid", { cause: refreshError });
       }
     }
-    state.accessToken = getConfiguredUserToken();
     state.legacy = true;
     state.channelLogin = options.channelLogin || process.env.TWITCH_CHANNEL_LOGIN || "fenya";
     state.broadcasterId = options.broadcasterId || process.env.TWITCH_BROADCASTER_ID?.trim() || null;
@@ -151,6 +149,22 @@ async function resolveIdentity(state, options) {
   state.broadcasterId = channel.twitch_broadcaster_id;
   state.chatReaderUserId = tokenInfo.user_id;
   state.twitchAccountId = account.id;
+}
+
+async function getLegacyValidUserToken(state) {
+  let tokenInfo;
+  try {
+    tokenInfo = await validateUserToken();
+  } catch (error) {
+    if (!process.env.TWITCH_REFRESH_TOKEN?.trim()) throw error;
+    await refreshUserAccessToken();
+    tokenInfo = await validateUserToken();
+  }
+  if (!tokenInfo?.user_id || !tokenInfo.scopes?.includes(REQUIRED_CHAT_SCOPE)) {
+    throw new HttpError(401, "Legacy Twitch authorization must be reconnected");
+  }
+  state.chatReaderUserId = tokenInfo.user_id;
+  return getConfiguredUserToken();
 }
 
 async function pollOnce(state) {
@@ -188,7 +202,13 @@ function schedulePolling(state) {
 }
 
 async function createSubscription(state, sessionId) {
-  const auth = state.twitchAccountId ? { twitchAccountId: state.twitchAccountId } : { token: state.accessToken };
+  let auth;
+  if (state.twitchAccountId) {
+    auth = { twitchAccountId: state.twitchAccountId };
+  } else {
+    let token = await getLegacyValidUserToken(state);
+    auth = { token };
+  }
   let payload;
   try {
     payload = await twitchHelixRequest("/eventsub/subscriptions", {
@@ -202,7 +222,24 @@ async function createSubscription(state, sessionId) {
       },
     });
   } catch (error) {
-    throw new HttpError(502, "Twitch EventSub subscription failed", { cause: error });
+    if (!state.twitchAccountId && error?.status === 401) {
+      await refreshUserAccessToken();
+      const token = await getLegacyValidUserToken(state);
+      payload = await twitchHelixRequest("/eventsub/subscriptions", {
+        token,
+        method: "POST",
+        body: {
+          type: "channel.chat.message",
+          version: "1",
+          condition: { broadcaster_user_id: state.broadcasterId, user_id: state.chatReaderUserId },
+          transport: { method: "websocket", session_id: sessionId },
+        },
+      });
+    } else {
+      throw new HttpError(error?.status === 401 ? 401 : 502, error?.status === 401
+        ? "Twitch account requires reauthorization"
+        : "Twitch EventSub subscription failed", { cause: error });
+    }
   }
   state.subscriptionId = payload.data?.[0]?.id ?? null;
   if (!state.subscriptionId) throw new HttpError(502, "Twitch EventSub subscription failed");

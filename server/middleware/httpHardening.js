@@ -9,7 +9,7 @@ const DEMO_WRITE_PATTERNS = [
   /^\/moderation\/fenya\/(?:sample|reset)$/,
   /^\/archive\/fenya\/(?:sample|reset)$/,
   /^\/summary\/fenya\/(?:regenerate|reset)$/,
-  /^\/twitch\/fenya\/(?:poll-once|archive\/sync-vods|moderators\/sync|ingest\/(?:start|stop))$/,
+  /^\/twitch\/fenya\/(?:poll-once|archive\/sync-vods|moderators\/sync)$/,
 ];
 
 function originFrom(value) {

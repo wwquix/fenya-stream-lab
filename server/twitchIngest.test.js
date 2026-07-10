@@ -45,6 +45,7 @@ beforeEach(async () => {
   process.env.DATABASE_PATH = join(temporaryDirectory, "test.sqlite");
   process.env.TWITCH_PROVIDER = "mock";
   process.env.TWITCH_CHANNEL_LOGIN = "fenya";
+  process.env.TWITCH_LEGACY_ENV_TOKEN_MODE = "true";
 });
 
 afterEach(async () => {
@@ -58,7 +59,7 @@ afterEach(async () => {
     "TWITCH_CLIENT_SECRET", "TWITCH_USER_ACCESS_TOKEN", "TWITCH_REFRESH_TOKEN",
     "TWITCH_BROADCASTER_ID", "TWITCH_BOT_USER_ID", "TWITCH_POLL_INTERVAL_MS",
     "TWITCH_EVENTSUB_RECONNECT_MS", "TWITCH_LIVE_INGEST_AUTOSTART",
-    "PLATFORM_ADMIN_TWITCH_LOGINS",
+    "PLATFORM_ADMIN_TWITCH_LOGINS", "TWITCH_LEGACY_ENV_TOKEN_MODE",
   ]) delete process.env[name];
   await rm(temporaryDirectory, { recursive: true, force: true });
 });
@@ -222,6 +223,7 @@ describe("Twitch ingest pipeline", () => {
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "42", login: "fenya", display_name: "Fenya" }] }))
       .mockResolvedValueOnce(jsonResponse({ data: [{ broadcaster_id: "42", game_id: "32399", game_name: "Counter-Strike 2", title: "Channel title" }] }))
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "live-2", game_id: "32399", game_name: "Counter-Strike 2", title: "Live", viewer_count: 1000, started_at: "2026-07-04T18:00:00Z", language: "ru" }] }))
+      .mockResolvedValueOnce(jsonResponse({ user_id: "77", login: "bot", scopes: ["user:read:chat"], expires_in: 3600 }))
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "subscription-1", status: "enabled" }] }, 202));
     vi.stubGlobal("fetch", fetchMock);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
@@ -251,8 +253,8 @@ describe("Twitch ingest pipeline", () => {
     expect(safeLogs).not.toContain("client-secret");
     expect(getDatabase().prepare("SELECT collected_from FROM streams WHERE stream_id = 'live-2'").get().collected_from)
       .toBe(started.collectedFrom);
-    expect(fetchMock.mock.calls[5][1]).toMatchObject({ method: "POST" });
-    expect(JSON.parse(fetchMock.mock.calls[5][1].body)).toMatchObject({
+    expect(fetchMock.mock.calls[6][1]).toMatchObject({ method: "POST" });
+    expect(JSON.parse(fetchMock.mock.calls[6][1].body)).toMatchObject({
       type: "channel.chat.message",
       condition: { broadcaster_user_id: "42", user_id: "77" },
       transport: { method: "websocket", session_id: "session-1" },
@@ -322,6 +324,7 @@ describe("Twitch ingest pipeline", () => {
       .mockResolvedValueOnce(jsonResponse({ data: [{ id: "42", login: "fenya", display_name: "Fenya" }] }))
       .mockResolvedValueOnce(jsonResponse({ data: [{}] }))
       .mockResolvedValueOnce(jsonResponse({ data: [] }))
+      .mockResolvedValueOnce(jsonResponse({ user_id: "77", scopes: ["user:read:chat"] }))
       .mockResolvedValueOnce(jsonResponse({ message: "subscription rejected" }, 403));
     vi.stubGlobal("fetch", fetchMock);
     const socket = new FakeWebSocket();

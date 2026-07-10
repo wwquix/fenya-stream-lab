@@ -86,8 +86,10 @@ export function validateEnv(env = process.env) {
     }
   }
 
-  if (isTwitchMode && isEnabled(env.TWITCH_LIVE_INGEST_AUTOSTART) && !read(env, "TWITCH_USER_ACCESS_TOKEN")) {
-    errors.push("TWITCH_USER_ACCESS_TOKEN is required when TWITCH_LIVE_INGEST_AUTOSTART=true.");
+  if (isEnabled(env.TWITCH_LEGACY_ENV_TOKEN_MODE)) {
+    if (isProduction) errors.push("TWITCH_LEGACY_ENV_TOKEN_MODE is development-only and must be false in production.");
+    if (!read(env, "TWITCH_USER_ACCESS_TOKEN")) errors.push("TWITCH_USER_ACCESS_TOKEN is required in legacy development token mode.");
+    if (!read(env, "TWITCH_REFRESH_TOKEN")) errors.push("TWITCH_REFRESH_TOKEN is required in legacy development token mode.");
   }
 
   if (errors.length) {

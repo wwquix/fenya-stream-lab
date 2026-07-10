@@ -37,12 +37,16 @@ export async function twitchHelixRequest(endpoint, { token, twitchAccountId, met
   if (result.response.status === 401 && twitchAccountId !== undefined) {
     accessToken = await refreshTwitchAccountToken(twitchAccountId);
     result = await sendHelixRequest(endpoint, { token: accessToken, method, body });
-    if (result.response.status === 401) markTwitchAccountNeedsReauth(twitchAccountId);
+    if (result.response.status === 401) {
+      markTwitchAccountNeedsReauth(twitchAccountId);
+      throw new HttpError(401, "Twitch account requires reauthorization");
+    }
+  } else if (result.response.status === 401) {
+    throw new HttpError(401, "Twitch user authorization is invalid");
   }
 
   if (!result.response.ok) {
-    const twitchMessage = typeof result.payload.message === "string" ? result.payload.message : "Unknown Twitch error";
-    throw new HttpError(502, `Twitch Helix ${result.normalizedEndpoint} failed (${result.response.status}): ${twitchMessage}`);
+    throw new HttpError(502, `Twitch Helix ${result.normalizedEndpoint} failed (${result.response.status})`);
   }
   return result.payload;
 }

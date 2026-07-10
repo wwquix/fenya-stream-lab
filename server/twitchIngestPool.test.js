@@ -39,6 +39,8 @@ let chatterCookie;
 let moderatorCookie;
 let platformAdminCookie;
 let sockets;
+let socketInstances;
+let twitchFetchMock;
 
 function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
@@ -114,8 +116,10 @@ beforeEach(() => {
   const outsider = findOrCreateUserFromTwitchProfile({ id: "outsider", login: "outsider", display_name: "Outsider" });
   outsiderCookie = `${SESSION_COOKIE_NAME}=${startSession(outsider.id).rawToken}`;
   sockets = new Map();
+  socketInstances = [];
   setTwitchIngestPoolWebSocketFactoryForTests((_url, channelId) => {
     const socket = new FakeWebSocket();
+    socketInstances.push(socket);
     sockets.set(String(channelId), socket);
     queueMicrotask(() => socket.emit("message", JSON.stringify({
       metadata: { message_type: "session_welcome" },
@@ -123,7 +127,7 @@ beforeEach(() => {
     })));
     return socket;
   });
-  installTwitchMocks();
+  twitchFetchMock = installTwitchMocks();
   app = createApp();
 });
 
@@ -132,7 +136,7 @@ afterEach(() => {
   resetTwitchAuthCache();
   vi.unstubAllGlobals();
   closeDatabase();
-  for (const name of ["DATABASE_PATH", "TOKEN_ENCRYPTION_KEY", "TWITCH_PROVIDER", "TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET", "PLATFORM_ADMIN_TWITCH_LOGINS"]) {
+  for (const name of ["DATABASE_PATH", "TOKEN_ENCRYPTION_KEY", "TWITCH_PROVIDER", "TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET", "PLATFORM_ADMIN_TWITCH_LOGINS", "TWITCH_CHANNEL_LOGIN", "NODE_ENV"]) {
     delete process.env[name];
   }
   rmSync(tempDirectory, { recursive: true, force: true });
@@ -143,6 +147,9 @@ describe("multi-channel Twitch ingest pool", () => {
     await startChannelIngest(channelA.id);
     expect(getAllIngestStatuses()).toHaveLength(1);
     expect(getChannelIngestStatus(channelA.id)).toMatchObject({ channelId: channelA.id, running: true });
+    const subscriptionCall = twitchFetchMock.mock.calls.find(([url]) => String(url).includes("/helix/eventsub/subscriptions"));
+    expect(subscriptionCall[1].headers.Authorization).toBe("Bearer access-A");
+    expect(JSON.stringify(getChannelIngestStatus(channelA.id))).not.toContain("access-A");
   });
 
   test("starting channel A twice does not create a duplicate connection", async () => {
@@ -151,6 +158,49 @@ describe("multi-channel Twitch ingest pool", () => {
     await startChannelIngest(channelA.id);
     expect(getAllIngestStatuses()).toHaveLength(1);
     expect(sockets.get(String(channelA.id))).toBe(firstSocket);
+  });
+
+  test("production Fenya compatibility start reuses the numeric channel ingest", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.TWITCH_CHANNEL_LOGIN = channelA.twitch_login;
+    await startChannelIngest(channelA.id);
+    const response = await request(app)
+      .post("/api/twitch/fenya/ingest/start")
+      .set("Cookie", ownerCookie);
+    expect(response.status).toBe(202);
+    expect(response.body.channelId).toBe(channelA.id);
+    expect(socketInstances).toHaveLength(1);
+    expect(getAllIngestStatuses()).toHaveLength(1);
+  });
+
+  test("production Fenya compatibility status delegates to the numeric channel", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.TWITCH_CHANNEL_LOGIN = channelA.twitch_login;
+    await startChannelIngest(channelA.id);
+    const response = await request(app).get("/api/twitch/fenya/ingest/status");
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ channelId: channelA.id, running: true });
+    expect(socketInstances).toHaveLength(1);
+  });
+
+  test("Fenya connection diagnostics report database OAuth without exposing token values", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.TWITCH_CHANNEL_LOGIN = channelA.twitch_login;
+    const response = await request(app).get("/api/twitch/fenya/connection");
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      channelFound: true,
+      channelHasOwner: true,
+      oauthAccountFound: true,
+      hasUserAccessToken: true,
+      hasRefreshToken: true,
+      userTokenValid: true,
+      needsReauth: false,
+      tokenSource: "database_oauth",
+    });
+    expect(response.text).not.toContain("access-A");
+    expect(response.text).not.toContain("refresh-A");
+    expect(response.text).not.toContain("client-secret");
   });
 
   test("channels A and B run as independent pool entries", async () => {

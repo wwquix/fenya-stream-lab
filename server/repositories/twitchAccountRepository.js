@@ -88,3 +88,13 @@ export function markTwitchAccountNeedsReauth(id, database = getDatabase()) {
     UPDATE twitch_accounts SET needs_reauth = 1, updated_at = ? WHERE id = ?
   `).run(new Date().toISOString(), id).changes > 0;
 }
+
+export function getSafeTwitchAccountStatus(id, database = getDatabase()) {
+  return database.prepare(`
+    SELECT id, user_id, twitch_user_id, twitch_login, scopes_json, expires_at,
+      needs_reauth,
+      access_token_encrypted IS NOT NULL AS has_access_token,
+      refresh_token_encrypted IS NOT NULL AS has_refresh_token
+    FROM twitch_accounts WHERE id = ?
+  `).get(id) ?? null;
+}
