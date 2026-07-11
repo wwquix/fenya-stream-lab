@@ -17,6 +17,7 @@ import {
   getValidUserAccessTokenForAccount,
   refreshTokensExpiringSoon,
   refreshTwitchAccountToken,
+  shutdownTwitchTokenRefreshJob,
   stopTwitchTokenRefreshJob,
 } from "./services/twitchTokenRefreshService.js";
 import { closeDatabase } from "./storage/db.js";
@@ -170,6 +171,26 @@ describe("stored Twitch token refresh lifecycle", () => {
     }));
     await expect(Promise.all([first, second])).resolves.toEqual(["deduplicated-access", "deduplicated-access"]);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("shutdown waits for an in-flight token refresh before returning", async () => {
+    let resolveRefresh;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((resolve) => { resolveRefresh = resolve; })));
+    const refresh = refreshTwitchAccountToken(account.id);
+    let shutdownFinished = false;
+    const shutdown = shutdownTwitchTokenRefreshJob().then(() => { shutdownFinished = true; });
+
+    await Promise.resolve();
+    expect(shutdownFinished).toBe(false);
+    resolveRefresh(jsonResponse({
+      access_token: "shutdown-access",
+      refresh_token: "shutdown-refresh",
+      expires_in: 3600,
+      scope: ["user:read:chat"],
+    }));
+
+    await expect(Promise.all([refresh, shutdown])).resolves.toEqual(["shutdown-access", undefined]);
+    expect(shutdownFinished).toBe(true);
   });
 
   test("a failed refresh marks the account as needing reauthorization", async () => {

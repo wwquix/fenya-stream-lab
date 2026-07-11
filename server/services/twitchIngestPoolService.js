@@ -16,8 +16,10 @@ import { getDatabase } from "../storage/db.js";
 const EVENTSUB_URL = "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30";
 const REQUIRED_CHAT_SCOPE = "user:read:chat";
 const START_TIMEOUT_MS = 15_000;
+const WEBSOCKET_CLOSE_TIMEOUT_MS = 1_500;
 const ingestPool = new Map();
 let createWebSocket = (url) => new WebSocket(url);
+let ingestPoolShuttingDown = false;
 
 function interval(name, fallback) {
   const value = Number(process.env[name] || fallback);
@@ -55,6 +57,7 @@ function createState(channelId) {
     channelLogin: null,
     twitchAccountId: null,
     legacy: false,
+    closingSockets: new Set(),
   };
 }
 
@@ -172,6 +175,9 @@ async function getLegacyValidUserToken(state) {
 
 async function pollOnce(state) {
   const metadata = await loadTwitchChannelMetadata(state.channelLogin);
+  if (ingestPoolShuttingDown || !state.desiredRunning) {
+    throw new HttpError(503, "Twitch ingest stopped before polling completed");
+  }
   const timestamp = new Date().toISOString();
   state.lastPollAt = timestamp;
   state.broadcasterId = state.broadcasterId || metadata.broadcasterId;
@@ -191,15 +197,16 @@ async function pollOnce(state) {
 
 function schedulePolling(state) {
   clearStateTimer(state, "poll");
+  if (ingestPoolShuttingDown || !state.desiredRunning) return;
   state.timers.poll = setTimeout(async () => {
-    if (!state.desiredRunning) return;
+    if (ingestPoolShuttingDown || !state.desiredRunning) return;
     try {
       await pollOnce(state);
       state.lastError = null;
     } catch (error) {
       state.lastError = safeError(error, "Twitch stream polling failed");
     }
-    schedulePolling(state);
+    if (!ingestPoolShuttingDown && state.desiredRunning) schedulePolling(state);
   }, interval("TWITCH_POLL_INTERVAL_MS", 30_000));
   state.timers.poll.unref?.();
 }
@@ -258,7 +265,7 @@ function armWatchdog(state, socket, timeoutSeconds) {
 
 export function processChannelEventSubNotification(channelId, message) {
   const state = ingestPool.get(String(channelId));
-  if (!state || message?.metadata?.message_type !== "notification") return null;
+  if (ingestPoolShuttingDown || !state?.desiredRunning || message?.metadata?.message_type !== "notification") return null;
   if (message.payload?.subscription?.type !== "channel.chat.message") return null;
   if (message.payload.event?.broadcaster_user_id !== state.broadcasterId) return null;
   const timestamp = message.metadata.message_timestamp || new Date().toISOString();
@@ -274,7 +281,7 @@ export function processChannelEventSubNotification(channelId, message) {
 }
 
 function scheduleReconnect(state) {
-  if (!state.desiredRunning || state.timers.reconnect) return;
+  if (ingestPoolShuttingDown || !state.desiredRunning || state.timers.reconnect) return;
   state.status = "reconnecting";
   state.running = false;
   state.reconnectAttempts += 1;
@@ -289,6 +296,9 @@ function scheduleReconnect(state) {
 }
 
 function openSocket(state, url, shouldSubscribe) {
+  if (ingestPoolShuttingDown || !state.desiredRunning) {
+    return Promise.reject(new HttpError(503, "Twitch ingest is shutting down"));
+  }
   if (state.socketOpenPromise) return state.socketOpenPromise;
   const operation = new Promise((resolve, reject) => {
     const previousSocket = state.websocket;
@@ -305,12 +315,17 @@ function openSocket(state, url, shouldSubscribe) {
     startTimeout.unref?.();
 
     socket.on("message", async (raw) => {
+      if (ingestPoolShuttingDown || !state.desiredRunning) return;
       let message;
       try { message = JSON.parse(raw.toString()); } catch { state.lastError = "Received invalid Twitch EventSub JSON"; return; }
       const session = message.payload?.session;
       armWatchdog(state, socket, session?.keepalive_timeout_seconds);
       try {
         if (message.metadata?.message_type === "session_welcome") {
+          if (ingestPoolShuttingDown || !state.desiredRunning) {
+            socket.close(1000, "Twitch ingest stopping");
+            return;
+          }
           state.websocket = socket;
           state.pendingWebsocket = null;
           state.sessionId = session.id;
@@ -354,6 +369,17 @@ function openSocket(state, url, shouldSubscribe) {
       if (!settled) { settled = true; clearTimeout(startTimeout); reject(new HttpError(502, state.lastError)); }
     });
     socket.on("close", () => {
+      if (state.closingSockets.has(socket)) {
+        state.closingSockets.delete(socket);
+        if (state.websocket === socket) state.websocket = null;
+        if (state.pendingWebsocket === socket) state.pendingWebsocket = null;
+        if (!settled) {
+          settled = true;
+          clearTimeout(startTimeout);
+          resolve(publicStatus(state));
+        }
+        return;
+      }
       if (!settled) {
         settled = true;
         clearTimeout(startTimeout);
@@ -379,6 +405,7 @@ function openSocket(state, url, shouldSubscribe) {
 }
 
 export async function startChannelIngest(channelId, options = {}) {
+  if (ingestPoolShuttingDown) throw new HttpError(503, "Twitch ingest is shutting down");
   if (getTwitchProviderName() !== "twitch") throw new HttpError(409, "Twitch ingest requires TWITCH_PROVIDER=twitch");
   const state = stateFor(channelId);
   if (state.desiredRunning) return state.startPromise || publicStatus(state);
@@ -409,19 +436,56 @@ export async function startChannelIngest(channelId, options = {}) {
   return state.startPromise;
 }
 
-export function stopChannelIngest(channelId) {
-  const state = ingestPool.get(String(channelId));
-  if (!state) return publicStatus(createState(channelId));
+function prepareStateForStop(state) {
   state.desiredRunning = false;
   state.running = false;
+  state.status = "stopped";
   for (const name of Object.keys(state.timers)) clearStateTimer(state, name);
-  if (state.websocket) state.websocket.close(1000, "Twitch ingest stopped");
-  if (state.pendingWebsocket && state.pendingWebsocket !== state.websocket) state.pendingWebsocket.close(1000, "Twitch ingest stopped");
-  state.websocket = null;
-  state.pendingWebsocket = null;
+  const sockets = [...new Set([state.websocket, state.pendingWebsocket].filter(Boolean))];
+  for (const socket of sockets) state.closingSockets.add(socket);
+  return sockets;
+}
+
+function finishStateStop(state, sockets) {
+  for (const socket of sockets) state.closingSockets.delete(socket);
+  if (sockets.includes(state.websocket)) state.websocket = null;
+  if (sockets.includes(state.pendingWebsocket)) state.pendingWebsocket = null;
   state.sessionId = null;
   state.subscriptionId = null;
   state.status = "stopped";
+}
+
+function closeWebSocketGracefully(socket, timeoutMs) {
+  if (!socket || socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket.removeListener?.("close", finish);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      try { socket.terminate(); } catch { /* The socket is already unavailable. */ }
+      finish();
+    }, timeoutMs);
+    socket.once?.("close", finish);
+    try {
+      if (socket.readyState !== WebSocket.CLOSING) socket.close(1000, "Twitch ingest stopped");
+    } catch {
+      try { socket.terminate(); } catch { /* The socket is already unavailable. */ }
+      finish();
+    }
+  });
+}
+
+export function stopChannelIngest(channelId) {
+  const state = ingestPool.get(String(channelId));
+  if (!state) return publicStatus(createState(channelId));
+  const sockets = prepareStateForStop(state);
+  void Promise.all(sockets.map((socket) => closeWebSocketGracefully(socket, WEBSOCKET_CLOSE_TIMEOUT_MS)))
+    .then(() => finishStateStop(state, sockets));
   return publicStatus(state);
 }
 
@@ -445,12 +509,35 @@ export function stopAllIngest() {
   return [...ingestPool.values()].map((state) => stopChannelIngest(state.channelId));
 }
 
+export async function shutdownAllIngest({ timeoutMs = WEBSOCKET_CLOSE_TIMEOUT_MS } = {}) {
+  ingestPoolShuttingDown = true;
+  const states = [...ingestPool.values()];
+  const closing = states.map((state) => {
+    const sockets = prepareStateForStop(state);
+    return Promise.all(sockets.map((socket) => closeWebSocketGracefully(socket, timeoutMs)))
+      .then(() => finishStateStop(state, sockets));
+  });
+  await Promise.all(closing);
+}
+
 export function setTwitchIngestPoolWebSocketFactoryForTests(factory) {
   createWebSocket = factory || ((url) => new WebSocket(url));
+}
+
+export function getTwitchIngestPoolDebugStateForTests(channelId) {
+  const state = ingestPool.get(String(channelId));
+  if (!state) return null;
+  return {
+    desiredRunning: state.desiredRunning,
+    hasWebSocket: Boolean(state.websocket),
+    hasPendingWebSocket: Boolean(state.pendingWebsocket),
+    timers: Object.fromEntries(Object.entries(state.timers).map(([name, timer]) => [name, Boolean(timer)])),
+  };
 }
 
 export function resetTwitchIngestPoolForTests() {
   stopAllIngest();
   ingestPool.clear();
+  ingestPoolShuttingDown = false;
   createWebSocket = (url) => new WebSocket(url);
 }

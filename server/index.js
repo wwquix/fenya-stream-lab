@@ -3,12 +3,12 @@ import process from "node:process";
 
 import { createApp } from "./app.js";
 import { validateEnv } from "./config/validateEnv.js";
-import { startMockLiveSampler, stopMockLiveSampler } from "./services/mockLiveSampler.js";
-import { stopTwitchIngest } from "./services/twitchIngestService.js";
+import { shutdownMockLiveSampler, startMockLiveSampler } from "./services/mockLiveSampler.js";
 import { startConfiguredTwitchIngest } from "./services/twitchIngestAutostartService.js";
-import { startTwitchTokenRefreshJob, stopTwitchTokenRefreshJob } from "./services/twitchTokenRefreshService.js";
-import { stopAllIngest } from "./services/twitchIngestPoolService.js";
+import { shutdownTwitchTokenRefreshJob, startTwitchTokenRefreshJob } from "./services/twitchTokenRefreshService.js";
+import { shutdownAllIngest } from "./services/twitchIngestPoolService.js";
 import { stopAllReplays } from "./services/replayService.js";
+import { createApplicationStopServices, createShutdownHandler } from "./services/gracefulShutdownService.js";
 import { closeDatabase } from "./storage/db.js";
 
 dotenv.config();
@@ -39,25 +39,19 @@ const server = app.listen(port, () => {
   }
 });
 
-let shutdownStarted = false;
-
-function shutdown(signal) {
-  if (shutdownStarted) return;
-  shutdownStarted = true;
-  console.log(`Received ${signal}; shutting down Fenya Stream Lab backend.`);
-  stopMockLiveSampler();
-  stopTwitchIngest();
-  stopAllIngest();
-  stopAllReplays();
-  stopTwitchTokenRefreshJob();
-  const forceExit = setTimeout(() => process.exit(1), 8000);
-  forceExit.unref();
-  server.close(() => {
-    closeDatabase();
-    clearTimeout(forceExit);
-    process.exit(0);
-  });
-}
+const shutdown = createShutdownHandler({
+  server,
+  stopServices: createApplicationStopServices({
+    stopReplays: stopAllReplays,
+    shutdownMockSampler: shutdownMockLiveSampler,
+    shutdownTokenRefresh: shutdownTwitchTokenRefreshJob,
+    shutdownIngest: shutdownAllIngest,
+  }),
+  closeDatabase,
+  exit: (code) => process.exit(code),
+  logger: console,
+  timeoutMs: 8_000,
+});
 
 process.once("SIGINT", () => shutdown("SIGINT"));
 process.once("SIGTERM", () => shutdown("SIGTERM"));

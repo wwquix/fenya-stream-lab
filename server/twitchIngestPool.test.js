@@ -16,8 +16,10 @@ import { resetTwitchAuthCache } from "./services/twitchAuthService.js";
 import {
   getAllIngestStatuses,
   getChannelIngestStatus,
+  getTwitchIngestPoolDebugStateForTests,
   resetTwitchIngestPoolForTests,
   setTwitchIngestPoolWebSocketFactoryForTests,
+  shutdownAllIngest,
   startChannelIngest,
   stopChannelIngest,
 } from "./services/twitchIngestPoolService.js";
@@ -25,8 +27,22 @@ import { SESSION_COOKIE_NAME, startSession } from "./services/sessionService.js"
 import { closeDatabase, getDatabase } from "./storage/db.js";
 
 class FakeWebSocket extends EventEmitter {
-  close() { this.emit("close"); }
-  terminate() { this.emit("close"); }
+  constructor() {
+    super();
+    this.closeCalls = 0;
+    this.terminateCalls = 0;
+    this.deferClose = false;
+    this.onClose = null;
+  }
+  close() {
+    this.closeCalls += 1;
+    this.onClose?.();
+    if (!this.deferClose) this.emit("close");
+  }
+  terminate() {
+    this.terminateCalls += 1;
+    this.emit("close");
+  }
 }
 
 let tempDirectory;
@@ -208,6 +224,119 @@ describe("multi-channel Twitch ingest pool", () => {
     await startChannelIngest(channelA.id);
     expect(getAllIngestStatuses()).toHaveLength(1);
     expect(sockets.get(String(channelA.id))).toBe(firstSocket);
+  });
+
+  test("shutdown waits for graceful WebSocket close without terminating it", async () => {
+    await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+    let stateWhenCloseStarted = null;
+    socket.onClose = () => {
+      stateWhenCloseStarted = getTwitchIngestPoolDebugStateForTests(channelA.id);
+    };
+
+    await shutdownAllIngest({ timeoutMs: 25 });
+
+    expect(stateWhenCloseStarted).toEqual(expect.objectContaining({
+      desiredRunning: false,
+      timers: { poll: false, reconnect: false, watchdog: false },
+    }));
+    expect(socket.closeCalls).toBe(1);
+    expect(socket.terminateCalls).toBe(0);
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({ running: false, status: "stopped" });
+    await expect(startChannelIngest(channelB.id)).rejects.toMatchObject({ status: 503 });
+    expect(socketInstances).toHaveLength(1);
+
+    const messageCount = getDatabase().prepare("SELECT COUNT(*) AS count FROM chat_messages").get().count;
+    socket.emit("message", JSON.stringify({
+      metadata: { message_type: "notification", message_timestamp: "2026-07-04T18:06:00Z" },
+      payload: {
+        subscription: { type: "channel.chat.message" },
+        event: {
+          broadcaster_user_id: channelA.twitch_broadcaster_id,
+          chatter_user_login: "late-viewer",
+          message_id: "late-message",
+          message: { text: "late message" },
+        },
+      },
+    }));
+    expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM chat_messages").get().count).toBe(messageCount);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers).toEqual({ poll: false, reconnect: false, watchdog: false });
+  });
+
+  test("shutdown closes a pending WebSocket and settles its startup operation", async () => {
+    let pendingSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests(() => {
+      pendingSocket = new FakeWebSocket();
+      return pendingSocket;
+    });
+    const starting = startChannelIngest(channelA.id);
+    for (let attempt = 0; attempt < 20 && !pendingSocket; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(pendingSocket).not.toBeNull();
+
+    await shutdownAllIngest({ timeoutMs: 25 });
+
+    await expect(starting).resolves.toMatchObject({ channelId: channelA.id, running: false, status: "stopped" });
+    expect(pendingSocket.closeCalls).toBe(1);
+    expect(pendingSocket.terminateCalls).toBe(0);
+  });
+
+  test("shutdown terminates a WebSocket only after its graceful close timeout", async () => {
+    await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+    socket.deferClose = true;
+
+    await shutdownAllIngest({ timeoutMs: 10 });
+
+    expect(socket.closeCalls).toBe(1);
+    expect(socket.terminateCalls).toBe(1);
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({ running: false, status: "stopped" });
+  });
+
+  test("shutdown closes every channel socket and remains idempotent", async () => {
+    await startChannelIngest(channelA.id);
+    await startChannelIngest(channelB.id);
+    const socketA = sockets.get(String(channelA.id));
+    const socketB = sockets.get(String(channelB.id));
+
+    const first = shutdownAllIngest({ timeoutMs: 25 });
+    const second = shutdownAllIngest({ timeoutMs: 25 });
+    await Promise.all([first, second]);
+
+    expect(socketA.closeCalls).toBe(1);
+    expect(socketB.closeCalls).toBe(1);
+    expect(getChannelIngestStatus(channelA.id).status).toBe("stopped");
+    expect(getChannelIngestStatus(channelB.id).status).toBe("stopped");
+  });
+
+  test("shutdown clears an already scheduled reconnect and never opens a replacement socket", async () => {
+    await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+    socket.emit("close");
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.reconnect).toBe(true);
+
+    await shutdownAllIngest({ timeoutMs: 25 });
+
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.reconnect).toBe(false);
+    expect(socketInstances).toHaveLength(1);
+  });
+
+  test("shutdown handles sockets that are already closing or closed", async () => {
+    await startChannelIngest(channelA.id);
+    await startChannelIngest(channelB.id);
+    const closingSocket = sockets.get(String(channelA.id));
+    const closedSocket = sockets.get(String(channelB.id));
+    closingSocket.readyState = 2;
+    closingSocket.deferClose = true;
+    closedSocket.readyState = 3;
+
+    await shutdownAllIngest({ timeoutMs: 10 });
+
+    expect(closingSocket.closeCalls).toBe(0);
+    expect(closingSocket.terminateCalls).toBe(1);
+    expect(closedSocket.closeCalls).toBe(0);
+    expect(closedSocket.terminateCalls).toBe(0);
   });
 
   test("production Fenya compatibility start reuses the numeric channel ingest", async () => {

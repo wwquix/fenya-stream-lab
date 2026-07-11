@@ -12,6 +12,7 @@ const SAFE_FALLBACK_MESSAGES_PER_MINUTE = 2_500;
 
 let samplerTimer = null;
 let samplerTickInProgress = false;
+let samplerTickPromise = null;
 let activeIntervalMs = DEFAULT_INTERVAL_MS;
 
 function clamp(value, minimum, maximum) {
@@ -102,7 +103,12 @@ export function startMockLiveSampler() {
   }
 
   activeIntervalMs = getConfiguredIntervalMs();
-  samplerTimer = setInterval(appendMockLivePoint, activeIntervalMs);
+  samplerTimer = setInterval(() => {
+    if (samplerTickPromise) return;
+    samplerTickPromise = appendMockLivePoint().finally(() => {
+      samplerTickPromise = null;
+    });
+  }, activeIntervalMs);
   samplerTimer.unref();
 
   return {
@@ -118,6 +124,11 @@ export function stopMockLiveSampler() {
   }
 
   return { running: false };
+}
+
+export async function shutdownMockLiveSampler() {
+  stopMockLiveSampler();
+  if (samplerTickPromise) await samplerTickPromise;
 }
 
 export async function getMockLiveSamplerStatus() {

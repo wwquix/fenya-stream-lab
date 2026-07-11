@@ -133,3 +133,8 @@ export function stopTwitchTokenRefreshJob() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = null;
 }
+
+export async function shutdownTwitchTokenRefreshJob() {
+  stopTwitchTokenRefreshJob();
+  await Promise.allSettled([...refreshesInFlight.values()]);
+}
