@@ -70,7 +70,7 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
     const ingestStatus = twitchIngest?.status
     const connected = dashboardMode === 'connected-channel'
       ? Boolean(!twitchIngest?.error)
-      : Boolean(connection?.appTokenAvailable && connection?.userTokenValid && !connection?.lastError)
+      : Boolean(connection?.channelFound && connection?.ingestAccountFound && !connection?.needsReauth)
     const ingestState = ingestStatus?.status ?? 'stopped'
     const ingestRunning = ingestState === 'running'
     const ingestBusy = ['connecting', 'subscribing', 'reconnecting'].includes(ingestState)

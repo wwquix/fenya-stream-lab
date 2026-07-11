@@ -5,7 +5,7 @@ import WebSocket from "ws";
 import { HttpError } from "../middleware/errorHandlers.js";
 import { findChannelById } from "../repositories/channelRepository.js";
 import { saveTwitchChatMessage, saveTwitchStreamSnapshot } from "../repositories/twitchIngestRepository.js";
-import { findTwitchAccountByUserId } from "../repositories/twitchAccountRepository.js";
+import { findTwitchAccountById } from "../repositories/twitchAccountRepository.js";
 import { getConfiguredUserToken, refreshUserAccessToken, validateUserToken } from "./twitchAuthService.js";
 import { twitchHelixRequest } from "./twitchHelixClient.js";
 import { getTwitchProviderName, loadTwitchChannelMetadata } from "./twitchMetadataService.js";
@@ -140,14 +140,17 @@ async function resolveIdentity(state, options) {
 
   const channel = findChannelById(state.channelId);
   if (!channel) throw new HttpError(404, "Channel not found");
-  const account = findTwitchAccountByUserId(channel.owner_user_id);
-  if (!account) throw new HttpError(409, "Channel owner has no linked Twitch account");
+  const account = channel.ingest_twitch_account_id ? findTwitchAccountById(channel.ingest_twitch_account_id) : null;
+  if (!account) throw new HttpError(409, "Channel has no linked Twitch chat reader account");
   const token = await getValidUserAccessTokenForAccount(account.id);
   const tokenInfo = await validateOAuthAccessToken(token);
   if (!tokenInfo.scopes?.includes(REQUIRED_CHAT_SCOPE)) throw new HttpError(403, `Twitch user token requires scope ${REQUIRED_CHAT_SCOPE}`);
+  if (String(tokenInfo.user_id) !== String(account.twitch_user_id)) {
+    throw new HttpError(401, "Twitch chat reader token does not match the linked account");
+  }
   state.channelLogin = channel.twitch_login;
   state.broadcasterId = channel.twitch_broadcaster_id;
-  state.chatReaderUserId = tokenInfo.user_id;
+  state.chatReaderUserId = account.twitch_user_id;
   state.twitchAccountId = account.id;
 }
 

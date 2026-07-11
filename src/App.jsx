@@ -118,9 +118,9 @@ function App() {
   const hasRealChat = Boolean(chatAnalytics.analytics?.leaderboards?.messages?.length)
   const hasRealWords = Boolean(wordAnalytics.analytics?.words?.length)
   const twitchConnected = Boolean(
-    twitchIngest.connection?.appTokenAvailable
-    && twitchIngest.connection?.userTokenValid
-    && !twitchIngest.connection?.lastError,
+    twitchIngest.connection?.channelFound
+    && twitchIngest.connection?.ingestAccountFound
+    && !twitchIngest.connection?.needsReauth,
   )
   const renderedSectionIds = useMemo(() => (
     backendUnavailable || isDataModeLoading
@@ -258,6 +258,7 @@ function App() {
           dashboardMode={dashboardMode}
           onIdentityRefresh={identity.refresh}
           selectedChannel={selectedChannel}
+          legacyChannelLogin={twitchIngest.connection?.channelLogin || 'fenya'}
           onOpenLegacy={() => {
             setSelectedChannel(null)
             document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })

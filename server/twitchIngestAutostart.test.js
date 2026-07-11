@@ -2,7 +2,13 @@ import { describe, expect, test, vi } from "vitest";
 
 import { startConfiguredTwitchIngest } from "./services/twitchIngestAutostartService.js";
 
-const channel = { id: 42, owner_user_id: 7, twitch_login: "fenya" };
+const channel = {
+  id: 42,
+  owner_user_id: null,
+  ingest_twitch_account_id: 9,
+  twitch_broadcaster_id: "broadcaster-fenya",
+  twitch_login: "fenya",
+};
 const account = {
   id: 9,
   access_token_encrypted: "encrypted-access",
@@ -36,7 +42,7 @@ describe("Twitch ingest autostart", () => {
       ...deps,
     });
     expect(deps.findChannel).toHaveBeenCalledWith("fenya");
-    expect(deps.findAccount).toHaveBeenCalledWith(7);
+    expect(deps.findAccount).toHaveBeenCalledWith(9);
     expect(startIngest).toHaveBeenCalledWith(42);
     expect(result).toMatchObject({ enabled: true, started: true, channelId: 42 });
   });
@@ -78,7 +84,7 @@ describe("Twitch ingest autostart", () => {
       ...dependencies({ findAccount: vi.fn().mockReturnValue(null) }),
     });
     expect(result).toMatchObject({ enabled: true, started: false, channelId: 42, error: "twitch-connection-required" });
-    expect(logger.error.mock.calls.flat().join(" ")).toContain("connect or reauthorize Twitch");
+    expect(logger.error.mock.calls.flat().join(" ")).toContain("chat reader account");
   });
 
   test("autostart logs never include thrown token values", async () => {

@@ -7,7 +7,8 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createApp } from "./app.js";
-import { findTwitchAccountWithEncryptedTokens } from "./repositories/twitchAccountRepository.js";
+import { findOrCreateChannelFromBroadcaster, setChannelIngestTwitchAccount } from "./repositories/channelRepository.js";
+import { findTwitchAccountWithEncryptedTokens, upsertTwitchAccount } from "./repositories/twitchAccountRepository.js";
 import { findOrCreateUserFromTwitchProfile } from "./repositories/userRepository.js";
 import { decryptToken } from "./services/tokenCryptoService.js";
 import { resetTwitchOAuthStateStore } from "./services/twitchOAuthService.js";
@@ -59,6 +60,14 @@ async function completeLogin(agent, profileOverrides = {}) {
   return { login, callback };
 }
 
+async function completeIngestLogin(agent, profileOverrides = {}, callbackQuery = "") {
+  const login = await agent.get("/auth/twitch/login?purpose=ingest&channel=fenya&reauth=1");
+  const authorizationUrl = new URL(login.headers.location);
+  mockOAuthNetwork(profileOverrides);
+  const callback = await agent.get(`/auth/twitch/callback?code=test-code&state=${authorizationUrl.searchParams.get("state")}${callbackQuery}`);
+  return { login, callback };
+}
+
 beforeEach(() => {
   tempDirectory = mkdtempSync(join(tmpdir(), "fenya-oauth-"));
   process.env.DATABASE_PATH = join(tempDirectory, "test.sqlite");
@@ -78,7 +87,7 @@ afterEach(() => {
   for (const name of [
     "DATABASE_PATH", "TOKEN_ENCRYPTION_KEY", "TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET",
     "TWITCH_REDIRECT_URI", "TWITCH_OAUTH_SCOPES", "AUTH_SUCCESS_REDIRECT_URI", "APP_BASE_URL", "NODE_ENV",
-    "PLATFORM_ADMIN_TWITCH_IDS", "PLATFORM_ADMIN_TWITCH_LOGINS",
+    "PLATFORM_ADMIN_TWITCH_IDS", "PLATFORM_ADMIN_TWITCH_LOGINS", "TWITCH_CHAT_READER_USER_ID", "TWITCH_CHAT_READER_LOGIN",
   ]) delete process.env[name];
   rmSync(tempDirectory, { recursive: true, force: true });
 });
@@ -189,6 +198,77 @@ describe("Twitch Authorization Code login", () => {
     expect(database.prepare("SELECT COUNT(*) AS count FROM users").get().count).toBe(1);
     expect(database.prepare("SELECT display_name FROM users").get().display_name).toBe("Fenya Login");
     expect(database.prepare("SELECT role FROM channel_memberships").get().role).toBe("channel_owner");
+  });
+
+  test("ingest OAuth securely links a reader to the existing ownerless channel without creating the reader channel", async () => {
+    const database = getDatabase();
+    const fenya = findOrCreateChannelFromBroadcaster({ id: "monitored-100", login: "fenya", display_name: "Fenya" });
+    process.env.TWITCH_CHAT_READER_USER_ID = "reader-200";
+
+    const { login, callback } = await completeIngestLogin(request.agent(app), {
+      id: "reader-200", login: "reader_login", display_name: "Reader Login",
+    }, "&purpose=owner&channel=reader_login");
+
+    expect(login.status).toBe(302);
+    expect(new URL(login.headers.location).searchParams.get("force_verify")).toBe("true");
+    expect(callback.status).toBe(302);
+    const linkedChannel = database.prepare("SELECT * FROM channels WHERE id = ?").get(fenya.id);
+    const account = database.prepare("SELECT * FROM twitch_accounts WHERE id = ?").get(linkedChannel.ingest_twitch_account_id);
+    expect(linkedChannel.owner_user_id).toBeNull();
+    expect(account).toMatchObject({ twitch_user_id: "reader-200", twitch_login: "reader_login" });
+    expect(database.prepare("SELECT COUNT(*) AS count FROM channels").get().count).toBe(1);
+    expect(database.prepare("SELECT COUNT(*) AS count FROM channel_memberships").get().count).toBe(0);
+    expect(database.prepare("SELECT COUNT(*) AS count FROM sessions").get().count).toBe(1);
+  });
+
+  test("ingest OAuth accepts the normalized configured reader login", async () => {
+    findOrCreateChannelFromBroadcaster({ id: "monitored-101", login: "fenya", display_name: "Fenya" });
+    process.env.TWITCH_CHAT_READER_LOGIN = "  Reader_Login  ";
+
+    const { callback } = await completeIngestLogin(request.agent(app), {
+      id: "reader-201", login: "reader_login", display_name: "Reader Login",
+    });
+
+    expect(callback.status).toBe(302);
+    expect(getDatabase().prepare("SELECT ingest_twitch_account_id FROM channels WHERE twitch_login = 'fenya'").get().ingest_twitch_account_id).not.toBeNull();
+  });
+
+  test.each([
+    ["TWITCH_CHAT_READER_USER_ID", "expected-reader", { id: "wrong-reader", login: "reader_login" }],
+    ["TWITCH_CHAT_READER_LOGIN", "expected_login", { id: "reader-202", login: "wrong_login" }],
+  ])("ingest OAuth rejects a profile that does not match %s before linking", async (envName, expected, profile) => {
+    findOrCreateChannelFromBroadcaster({ id: `monitored-${envName}`, login: "fenya", display_name: "Fenya" });
+    process.env[envName] = expected;
+
+    const { callback } = await completeIngestLogin(request.agent(app), profile);
+
+    expect(callback.status).toBe(403);
+    expect(callback.text).toContain("\u0410\u0432\u0442\u043e\u0440\u0438\u0437\u043e\u0432\u0430\u043d \u0434\u0440\u0443\u0433\u043e\u0439 Twitch-\u0430\u043a\u043a\u0430\u0443\u043d\u0442");
+    expect(callback.text).toContain("purpose=ingest&amp;channel=fenya&amp;reauth=1");
+    expect(getDatabase().prepare("SELECT ingest_twitch_account_id FROM channels WHERE twitch_login = 'fenya'").get().ingest_twitch_account_id).toBeNull();
+    expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM twitch_accounts").get().count).toBe(0);
+  });
+
+  test("a mismatched OAuth profile cannot replace an existing linked reader account", async () => {
+    const channel = findOrCreateChannelFromBroadcaster({ id: "monitored-existing", login: "fenya", display_name: "Fenya" });
+    const existingProfile = { id: "existing-reader", login: "existing_reader", display_name: "Existing Reader" };
+    const existingUser = findOrCreateUserFromTwitchProfile(existingProfile);
+    const existingAccount = upsertTwitchAccount(existingUser.id, existingProfile, {
+      accessToken: "existing-access",
+      refreshToken: "existing-refresh",
+      scopes: ["user:read:chat"],
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    setChannelIngestTwitchAccount(channel.id, existingAccount.id);
+    process.env.TWITCH_CHAT_READER_USER_ID = "existing-reader";
+
+    const { callback } = await completeIngestLogin(request.agent(app), {
+      id: "unrelated-reader", login: "unrelated_reader", display_name: "Unrelated Reader",
+    });
+
+    expect(callback.status).toBe(403);
+    expect(getDatabase().prepare("SELECT ingest_twitch_account_id FROM channels WHERE id = ?").get(channel.id).ingest_twitch_account_id).toBe(existingAccount.id);
+    expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM twitch_accounts").get().count).toBe(1);
   });
 
   test("callback uses APP_BASE_URL as the production same-origin destination", async () => {

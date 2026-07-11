@@ -32,12 +32,16 @@ async function readJson(response, fallbackMessage) {
   return payload;
 }
 
-export function createTwitchAuthorization({ forceVerify = false, requestedScopes = [] } = {}) {
-  for (const [pendingState, expiresAt] of pendingStates) {
-    if (expiresAt <= Date.now()) pendingStates.delete(pendingState);
+export function createTwitchAuthorization({ forceVerify = false, requestedScopes = [], purpose = null, targetChannelId = null } = {}) {
+  for (const [pendingState, context] of pendingStates) {
+    if (context.expiresAt <= Date.now()) pendingStates.delete(pendingState);
   }
   const state = randomBytes(32).toString("base64url");
-  pendingStates.set(state, Date.now() + STATE_TTL_MS);
+  pendingStates.set(state, {
+    expiresAt: Date.now() + STATE_TTL_MS,
+    purpose,
+    targetChannelId,
+  });
   const configuredScopes = String(process.env.TWITCH_OAUTH_SCOPES || "")
     .split(/[\s,]+/)
     .map((scope) => scope.trim())
@@ -57,7 +61,7 @@ export function createTwitchAuthorization({ forceVerify = false, requestedScopes
 }
 
 export function consumeTwitchAuthorizationState(queryState, cookieState) {
-  if (!queryState || !cookieState) return false;
+  if (!queryState || !cookieState) return null;
   const queryBuffer = Buffer.from(String(queryState));
   const cookieStates = Array.isArray(cookieState) ? cookieState : [cookieState];
   let cookieMatches = false;
@@ -68,10 +72,11 @@ export function consumeTwitchAuthorizationState(queryState, cookieState) {
       break;
     }
   }
-  if (!cookieMatches) return false;
-  const expiresAt = pendingStates.get(String(queryState));
+  if (!cookieMatches) return null;
+  const context = pendingStates.get(String(queryState));
   pendingStates.delete(String(queryState));
-  return Boolean(expiresAt && expiresAt > Date.now());
+  if (!context || context.expiresAt <= Date.now()) return null;
+  return { purpose: context.purpose, targetChannelId: context.targetChannelId };
 }
 
 export async function exchangeAuthorizationCode(code) {

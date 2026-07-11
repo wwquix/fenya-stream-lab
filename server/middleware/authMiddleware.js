@@ -41,6 +41,15 @@ function userOwnsAnyChannel(userId, database = getDatabase()) {
   `).get(userId) !== undefined;
 }
 
+function userIsLinkedIngestAccount(userId, channelId, database = getDatabase()) {
+  return database.prepare(`
+    SELECT 1
+    FROM channels
+    JOIN twitch_accounts ON twitch_accounts.id = channels.ingest_twitch_account_id
+    WHERE channels.id = ? AND twitch_accounts.user_id = ?
+  `).get(channelId, userId) !== undefined;
+}
+
 function validateRoles(roles) {
   if (!Array.isArray(roles) || roles.length === 0 || roles.some((role) => !CHANNEL_ROLES.includes(role))) {
     throw new TypeError("A non-empty list of valid channel roles is required");
@@ -147,8 +156,11 @@ export function requireApiMutationPermission(req, res, next) {
     if (req.path.startsWith("/twitch/fenya/")) {
       const login = process.env.TWITCH_CHANNEL_LOGIN?.trim() || "fenya";
       const channel = getDatabase().prepare("SELECT id FROM channels WHERE twitch_login = ? COLLATE NOCASE").get(login);
-      if (channel && userOwnsChannel(req.user.id, channel.id)) {
-        req.channelRole = "channel_owner";
+      const ownsChannel = channel && userOwnsChannel(req.user.id, channel.id);
+      const isIngestControlRoute = /^\/twitch\/fenya\/ingest\/(?:start|stop)$/.test(req.path);
+      const isLinkedReader = channel && isIngestControlRoute && userIsLinkedIngestAccount(req.user.id, channel.id);
+      if (ownsChannel || isLinkedReader) {
+        req.channelRole = ownsChannel ? "channel_owner" : "ingest_reader";
         next();
         return;
       }

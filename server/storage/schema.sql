@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS channels (
   display_name TEXT NOT NULL,
   profile_image_url TEXT,
   owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  ingest_twitch_account_id INTEGER REFERENCES twitch_accounts(id) ON DELETE SET NULL,
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

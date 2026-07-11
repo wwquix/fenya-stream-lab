@@ -42,6 +42,17 @@ export function getIdentitySummary(user, database = getDatabase()) {
   const identity = findTwitchIdentityByUserId(user.id, database);
   const memberships = getUserMemberships(user.id, database);
   const channels = getUserChannels(user.id, database);
+  const ingestChannels = identity ? database.prepare(`
+    SELECT channels.id, channels.twitch_login, channels.display_name
+    FROM channels
+    JOIN twitch_accounts ON twitch_accounts.id = channels.ingest_twitch_account_id
+    WHERE twitch_accounts.user_id = ? AND channels.is_active = 1
+    ORDER BY channels.display_name COLLATE NOCASE
+  `).all(user.id).map((channel) => ({
+    id: channel.id,
+    twitchLogin: channel.twitch_login,
+    displayName: channel.display_name,
+  })) : [];
   const chatterProfiles = identity ? database.prepare(`
     SELECT streams.channel_id, channels.twitch_login AS channel_login,
       chatters.nickname, SUM(chatters.message_count) AS message_count
@@ -84,6 +95,7 @@ export function getIdentitySummary(user, database = getDatabase()) {
       channelLogin: membership.twitch_login,
       channelDisplayName: membership.display_name,
     })),
+    ingestChannels,
     globalRoles: isPlatformAdmin ? ["platform_admin"] : [],
     role,
     permissions: { canControlIngest, readOnly: !canControlIngest },

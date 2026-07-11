@@ -1,7 +1,7 @@
 import process from "node:process";
 
 import { findChannelByLogin } from "../repositories/channelRepository.js";
-import { findTwitchAccountByUserId } from "../repositories/twitchAccountRepository.js";
+import { findTwitchAccountById } from "../repositories/twitchAccountRepository.js";
 import { startChannelIngest } from "./twitchIngestPoolService.js";
 
 const REQUIRED_CHAT_SCOPE = "user:read:chat";
@@ -16,7 +16,8 @@ function parseScopes(value) {
 }
 
 function assertDatabaseOAuthReady(channel, account) {
-  if (!channel?.owner_user_id) throw new Error("Configured Twitch channel has no owner");
+  if (!channel?.twitch_broadcaster_id) throw new Error("Configured Twitch channel has no broadcaster id");
+  if (!channel?.ingest_twitch_account_id || !account) throw new Error("Configured Twitch channel has no linked reader account");
   if (!account?.access_token_encrypted || !account?.refresh_token_encrypted) {
     throw new Error("Configured Twitch channel has no complete OAuth account");
   }
@@ -28,7 +29,7 @@ function assertDatabaseOAuthReady(channel, account) {
 export async function startConfiguredTwitchIngest({
   env = process.env,
   findChannel = findChannelByLogin,
-  findAccount = findTwitchAccountByUserId,
+  findAccount = findTwitchAccountById,
   startIngest = startChannelIngest,
   logger = console,
 } = {}) {
@@ -42,13 +43,13 @@ export async function startConfiguredTwitchIngest({
   try {
     channel = channelLogin ? findChannel(channelLogin) : null;
     if (!channel) throw new Error("Configured Twitch channel was not found");
-    const account = channel.owner_user_id ? findAccount(channel.owner_user_id) : null;
+    const account = channel.ingest_twitch_account_id ? findAccount(channel.ingest_twitch_account_id) : null;
     assertDatabaseOAuthReady(channel, account);
     const status = await startIngest(channel.id);
     logger.log(`Twitch database OAuth ingest autostarted: channelId=${channel.id}, channel=@${status.channelLogin || channel.twitch_login}`);
     return { enabled: true, started: true, channelId: channel.id, status };
   } catch {
-    logger.error("Twitch ingest autostart failed; connect or reauthorize Twitch for the configured channel");
+    logger.error("Twitch ingest autostart failed; connect or reauthorize the chat reader account for the configured channel");
     return { enabled: true, started: false, channelId: channel?.id ?? null, error: "twitch-connection-required" };
   }
 }

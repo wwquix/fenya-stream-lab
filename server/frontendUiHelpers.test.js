@@ -63,6 +63,11 @@ describe("frontend dashboard UI helpers", () => {
       .toEqual({ role: "chatter", canControlIngest: false, readOnly: true });
     expect(resolveDashboardPermissions({ identity, dashboardMode: "connected-channel", selectedChannel: { id: 9, role: "channel_owner" } }))
       .toEqual({ role: "channel_owner", canControlIngest: true, readOnly: false });
+    expect(resolveDashboardPermissions({
+      identity: { ...identity, ingestChannels: [{ id: 11, twitchLogin: "fenya" }] },
+      dashboardMode: "legacy-fenya",
+      legacyChannelLogin: "FENYA",
+    })).toEqual({ role: "ingest_reader", canControlIngest: true, readOnly: false });
   });
 
   test("distinguishes supported frontend entry paths from unknown routes", () => {

@@ -84,6 +84,9 @@ export function validateEnv(env = process.env) {
     if (!tokenKey) {
       errors.push("TOKEN_ENCRYPTION_KEY is required in production Twitch mode.");
     }
+    if (!read(env, "TWITCH_CHAT_READER_USER_ID") && !read(env, "TWITCH_CHAT_READER_LOGIN")) {
+      errors.push("TWITCH_CHAT_READER_USER_ID or TWITCH_CHAT_READER_LOGIN is required in production Twitch mode.");
+    }
   }
 
   if (isEnabled(env.TWITCH_LEGACY_ENV_TOKEN_MODE)) {

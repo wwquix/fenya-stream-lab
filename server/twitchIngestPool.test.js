@@ -8,7 +8,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createApp } from "./app.js";
-import { findOrCreateChannelFromBroadcaster } from "./repositories/channelRepository.js";
+import { findOrCreateChannelFromBroadcaster, setChannelIngestTwitchAccount } from "./repositories/channelRepository.js";
 import { addOrUpdateChannelMembership } from "./repositories/membershipRepository.js";
 import { upsertTwitchAccount } from "./repositories/twitchAccountRepository.js";
 import { findOrCreateUserFromTwitchProfile } from "./repositories/userRepository.js";
@@ -53,13 +53,14 @@ function createChannel(suffix) {
     display_name: `Channel ${suffix}`,
   };
   const owner = findOrCreateUserFromTwitchProfile(profile);
-  upsertTwitchAccount(owner.id, profile, {
+  const account = upsertTwitchAccount(owner.id, profile, {
     accessToken: `access-${suffix}`,
     refreshToken: `refresh-${suffix}`,
     scopes: ["user:read:chat"],
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   });
   const channel = findOrCreateChannelFromBroadcaster(profile, owner.id);
+  setChannelIngestTwitchAccount(channel.id, account.id);
   addOrUpdateChannelMembership(channel.id, owner.id, "channel_owner");
   return { ...channel, owner };
 }
@@ -143,6 +144,55 @@ afterEach(() => {
 });
 
 describe("multi-channel Twitch ingest pool", () => {
+  test("an ownerless monitored channel uses a different linked reader identity and token for EventSub", async () => {
+    const readerProfile = { id: "broadcaster-reader", login: "reader-login", display_name: "Reader" };
+    const reader = findOrCreateUserFromTwitchProfile(readerProfile);
+    const readerAccount = upsertTwitchAccount(reader.id, readerProfile, {
+      accessToken: "access-reader",
+      refreshToken: "refresh-reader",
+      scopes: ["user:read:chat"],
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    });
+    const monitored = findOrCreateChannelFromBroadcaster({
+      id: "monitored-broadcaster",
+      login: "fenya-ownerless",
+      display_name: "Fenya",
+    });
+    setChannelIngestTwitchAccount(monitored.id, readerAccount.id);
+
+    const status = await startChannelIngest(monitored.id);
+    const subscriptionCall = twitchFetchMock.mock.calls.find(([url]) => String(url).includes("/helix/eventsub/subscriptions"));
+    const subscriptionBody = JSON.parse(subscriptionCall[1].body);
+
+    expect(status).toMatchObject({
+      broadcasterId: "monitored-broadcaster",
+      chatReaderUserId: "broadcaster-reader",
+      running: true,
+    });
+    expect(subscriptionBody.condition).toEqual({
+      broadcaster_user_id: "monitored-broadcaster",
+      user_id: "broadcaster-reader",
+    });
+    expect(subscriptionCall[1].headers.Authorization).toBe("Bearer access-reader");
+    expect(getDatabase().prepare("SELECT owner_user_id FROM channels WHERE id = ?").get(monitored.id).owner_user_id).toBeNull();
+
+    process.env.NODE_ENV = "production";
+    process.env.TWITCH_CHANNEL_LOGIN = monitored.twitch_login;
+    const diagnostics = await request(app).get("/api/twitch/fenya/connection");
+    expect(diagnostics.body).toMatchObject({
+      channelFound: true,
+      channelHasOwner: false,
+      ingestAccountFound: true,
+      oauthAccountFound: true,
+      readerLogin: "reader-login",
+      readerUserId: "broadcaster-reader",
+      needsReauth: false,
+      tokenSource: "database_oauth",
+    });
+    expect(diagnostics.text).not.toContain("access-reader");
+    expect(diagnostics.text).not.toContain("refresh-reader");
+  });
+
   test("starting channel A creates one pool entry", async () => {
     await startChannelIngest(channelA.id);
     expect(getAllIngestStatuses()).toHaveLength(1);
@@ -191,7 +241,10 @@ describe("multi-channel Twitch ingest pool", () => {
     expect(response.body).toMatchObject({
       channelFound: true,
       channelHasOwner: true,
+      ingestAccountFound: true,
       oauthAccountFound: true,
+      readerLogin: "channel-a",
+      readerUserId: "broadcaster-A",
       hasUserAccessToken: true,
       hasRefreshToken: true,
       userTokenValid: true,
@@ -280,6 +333,32 @@ describe("multi-channel Twitch ingest pool", () => {
     const started = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", platformAdminCookie);
     expect(started.status).toBe(202);
     const stopped = await request(app).post(`/api/channels/${channelA.id}/ingest/stop`).set("Cookie", platformAdminCookie);
+    expect(stopped.status).toBe(200);
+    expect(stopped.body.running).toBe(false);
+  });
+
+  test("linked reader can control ownerless Fenya ingest while an unrelated user cannot", async () => {
+    const readerProfile = { id: "broadcaster-reader-control", login: "reader-control", display_name: "Reader" };
+    const reader = findOrCreateUserFromTwitchProfile(readerProfile);
+    const account = upsertTwitchAccount(reader.id, readerProfile, {
+      accessToken: "access-reader-control",
+      refreshToken: "refresh-reader-control",
+      scopes: ["user:read:chat"],
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    });
+    const monitored = findOrCreateChannelFromBroadcaster({ id: "monitored-control", login: "fenya-reader", display_name: "Fenya" });
+    setChannelIngestTwitchAccount(monitored.id, account.id);
+    process.env.NODE_ENV = "production";
+    process.env.TWITCH_CHANNEL_LOGIN = monitored.twitch_login;
+    const readerCookie = `${SESSION_COOKIE_NAME}=${startSession(reader.id).rawToken}`;
+
+    const denied = await request(app).post("/api/twitch/fenya/ingest/start").set("Cookie", outsiderCookie);
+    expect(denied.status).toBe(403);
+    const unrelatedMutation = await request(app).post("/api/twitch/fenya/poll-once").set("Cookie", readerCookie);
+    expect(unrelatedMutation.status).toBe(403);
+    const started = await request(app).post("/api/twitch/fenya/ingest/start").set("Cookie", readerCookie);
+    expect(started.status).toBe(202);
+    const stopped = await request(app).post("/api/twitch/fenya/ingest/stop").set("Cookie", readerCookie);
     expect(stopped.status).toBe(200);
     expect(stopped.body.running).toBe(false);
   });

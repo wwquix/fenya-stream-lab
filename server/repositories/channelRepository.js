@@ -43,3 +43,28 @@ export function findChannelByBroadcasterId(broadcasterId, database = getDatabase
 export function findChannelByLogin(login, database = getDatabase()) {
   return database.prepare("SELECT * FROM channels WHERE twitch_login = ? COLLATE NOCASE").get(login) ?? null;
 }
+
+export function setChannelIngestTwitchAccount(channelId, twitchAccountId, database = getDatabase()) {
+  const result = database.prepare(`
+    UPDATE channels SET ingest_twitch_account_id = ?, updated_at = ?
+    WHERE id = ?
+  `).run(twitchAccountId, new Date().toISOString(), channelId);
+  return result.changes ? findChannelById(channelId, database) : null;
+}
+
+export function findChannelIngestTwitchAccount(channelId, database = getDatabase()) {
+  return database.prepare(`
+    SELECT twitch_accounts.*
+    FROM channels
+    JOIN twitch_accounts ON twitch_accounts.id = channels.ingest_twitch_account_id
+    WHERE channels.id = ? AND channels.is_active = 1
+  `).get(channelId) ?? null;
+}
+
+export function clearChannelIngestTwitchAccount(channelId, database = getDatabase()) {
+  const result = database.prepare(`
+    UPDATE channels SET ingest_twitch_account_id = NULL, updated_at = ?
+    WHERE id = ?
+  `).run(new Date().toISOString(), channelId);
+  return result.changes ? findChannelById(channelId, database) : null;
+}

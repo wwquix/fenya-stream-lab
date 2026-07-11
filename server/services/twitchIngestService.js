@@ -24,7 +24,7 @@ export function resolveConfiguredIngestChannel() {
 }
 
 function shouldUseDatabaseChannel(channel) {
-  return Boolean(channel && (!legacyDevelopmentMode() || channel.owner_user_id));
+  return Boolean(channel && (!legacyDevelopmentMode() || channel.ingest_twitch_account_id));
 }
 
 export function getTwitchIngestStatus() {
@@ -50,7 +50,7 @@ export function startTwitchIngest() {
   const channel = resolveConfiguredIngestChannel();
   if (shouldUseDatabaseChannel(channel)) return startChannelIngest(channel.id);
   if (legacyDevelopmentMode()) return startChannelIngest(LEGACY_FENYA_CHANNEL_ID, { legacy: true });
-  throw new HttpError(409, "Configured Twitch channel is not connected; reconnect Twitch");
+  throw new HttpError(409, "Configured Twitch channel has no linked chat reader account; connect Twitch");
 }
 
 export function stopTwitchIngest() {

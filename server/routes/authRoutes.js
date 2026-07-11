@@ -3,7 +3,12 @@ import process from "node:process";
 import { Buffer } from "node:buffer";
 
 import { HttpError, routeHandler } from "../middleware/errorHandlers.js";
-import { findOrCreateChannelFromBroadcaster } from "../repositories/channelRepository.js";
+import {
+  findChannelById,
+  findChannelByLogin,
+  findOrCreateChannelFromBroadcaster,
+  setChannelIngestTwitchAccount,
+} from "../repositories/channelRepository.js";
 import { addOrUpdateChannelMembership } from "../repositories/membershipRepository.js";
 import { deleteSession } from "../repositories/sessionRepository.js";
 import { upsertTwitchAccount } from "../repositories/twitchAccountRepository.js";
@@ -22,6 +27,8 @@ import { getIdentitySummary } from "../services/identityService.js";
 const router = Router();
 const OAUTH_STATE_COOKIE = "fenya_oauth_attempts";
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+class ReaderAccountMismatchError extends Error {}
 
 function readCookie(req, name) {
   const match = req.headers.cookie?.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
@@ -57,11 +64,30 @@ function writeOAuthAttempts(res, attempts) {
   res.cookie(OAUTH_STATE_COOKIE, encoded, getOAuthStateCookieOptions());
 }
 
-function sendOAuthRetryPage(res, { message, retryScope = null, status = 400 }) {
-  const retryQuery = new URLSearchParams({ reauth: "1" });
+function sendOAuthRetryPage(res, { message, retryScope = null, purpose = null, channelLogin = null, status = 400 }) {
+  const retryQuery = purpose === "ingest"
+    ? new URLSearchParams({ purpose: "ingest", channel: channelLogin || "fenya", reauth: "1" })
+    : new URLSearchParams({ reauth: "1" });
   if (retryScope === "moderation:read") retryQuery.set("scope", retryScope);
   const retryUrl = `/auth/twitch/login?${retryQuery}`;
-  res.status(status).type("html").send(`<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Twitch OAuth · Fenya Stream Lab</title><body style="margin:0;font-family:system-ui;background:#0b0f14;color:#eef2f7;padding:32px"><main style="max-width:620px;margin:10vh auto;padding:28px;border:1px solid #ffffff1f;border-radius:24px;background:#ffffff0a;box-shadow:0 24px 80px #0008"><p style="margin:0 0 8px;color:#9fb0c0;font-size:13px">Fenya Stream Lab · Twitch OAuth</p><h1 style="margin:0 0 12px;font-size:24px">Нужно повторить подключение</h1><p role="alert" style="margin:0 0 22px;color:#cbd5df;line-height:1.55">${message}</p><a href="${retryUrl}" style="display:inline-block;padding:11px 17px;border-radius:999px;background:#d9ff72;color:#10150b;font-weight:750;text-decoration:none">Повторить подключение Twitch</a><a href="/" style="display:inline-block;margin-left:12px;color:#b8c4cf">Вернуться в дашборд</a></main></body></html>`);
+  const retryHref = retryUrl.replaceAll("&", "&amp;");
+  res.status(status).type("html").send(`<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Twitch OAuth · Fenya Stream Lab</title><body style="margin:0;font-family:system-ui;background:#0b0f14;color:#eef2f7;padding:32px"><main style="max-width:620px;margin:10vh auto;padding:28px;border:1px solid #ffffff1f;border-radius:24px;background:#ffffff0a;box-shadow:0 24px 80px #0008"><p style="margin:0 0 8px;color:#9fb0c0;font-size:13px">Fenya Stream Lab · Twitch OAuth</p><h1 style="margin:0 0 12px;font-size:24px">Нужно повторить подключение</h1><p role="alert" style="margin:0 0 22px;color:#cbd5df;line-height:1.55">${message}</p><a href="${retryHref}" style="display:inline-block;padding:11px 17px;border-radius:999px;background:#d9ff72;color:#10150b;font-weight:750;text-decoration:none">Повторить подключение Twitch</a><a href="/" style="display:inline-block;margin-left:12px;color:#b8c4cf">Вернуться в дашборд</a></main></body></html>`);
+}
+
+function assertReaderProfileAllowed(profile) {
+  const expectedUserId = process.env.TWITCH_CHAT_READER_USER_ID?.trim();
+  const expectedLogin = process.env.TWITCH_CHAT_READER_LOGIN?.trim().toLowerCase();
+  if (expectedUserId) {
+    if (String(profile.id) !== expectedUserId) throw new ReaderAccountMismatchError();
+    return;
+  }
+  if (expectedLogin) {
+    if (String(profile.login || "").trim().toLowerCase() !== expectedLogin) throw new ReaderAccountMismatchError();
+    return;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new HttpError(503, "Twitch chat reader account is not configured.");
+  }
 }
 
 function getAuthSuccessRedirectUri() {
@@ -73,13 +99,32 @@ function getAuthSuccessRedirectUri() {
 router.get("/auth/twitch/login", (req, res) => {
   const wantsJson = req.query.format === "json";
   try {
+    const purpose = String(req.query.purpose || "").trim();
+    if (purpose && purpose !== "ingest") throw new HttpError(400, "Unsupported Twitch OAuth purpose");
+    let targetChannel = null;
+    if (purpose === "ingest") {
+      if (process.env.NODE_ENV === "production"
+        && !process.env.TWITCH_CHAT_READER_USER_ID?.trim()
+        && !process.env.TWITCH_CHAT_READER_LOGIN?.trim()) {
+        throw new HttpError(503, "Twitch chat reader account is not configured.");
+      }
+      targetChannel = findChannelByLogin(String(req.query.channel || "").trim());
+      if (!targetChannel) throw new HttpError(404, "Configured Twitch channel was not found.");
+    }
     const requestedScopes = String(req.query.scope || "").split(/[\s,]+/).filter(Boolean);
-    const authorization = createTwitchAuthorization({ forceVerify: req.query.reauth === "1", requestedScopes });
+    const authorization = createTwitchAuthorization({
+      forceVerify: req.query.reauth === "1",
+      requestedScopes,
+      purpose: purpose || null,
+      targetChannelId: targetChannel?.id ?? null,
+    });
     const attempts = readOAuthAttempts(req);
     attempts.push({
       state: authorization.state,
       createdAt: Date.now(),
       retryScope: requestedScopes.includes("moderation:read") ? "moderation:read" : null,
+      purpose: purpose || null,
+      channelLogin: targetChannel?.twitch_login ?? null,
     });
     writeOAuthAttempts(res, attempts);
     if (wantsJson) {
@@ -105,16 +150,23 @@ router.get("/auth/twitch/callback", async (req, res) => {
   const matchingAttempt = attempts.find((attempt) => attempt.state === req.query.state) || null;
   const remainingAttempts = attempts.filter((attempt) => attempt.state !== req.query.state);
   writeOAuthAttempts(res, remainingAttempts);
-  const stateIsValid = consumeTwitchAuthorizationState(req.query.state, attempts.map((attempt) => attempt.state));
-  if (!stateIsValid) {
+  const oauthContext = consumeTwitchAuthorizationState(req.query.state, attempts.map((attempt) => attempt.state));
+  if (!oauthContext) {
     sendOAuthRetryPage(res, {
       message: "Сессия авторизации Twitch истекла. Повторите подключение.",
       retryScope: matchingAttempt?.retryScope,
+      purpose: matchingAttempt?.purpose,
+      channelLogin: matchingAttempt?.channelLogin,
     });
     return;
   }
   if (req.query.error) {
-    sendOAuthRetryPage(res, { message: "Авторизация Twitch была отменена. Повторите вход.", retryScope: matchingAttempt?.retryScope });
+    sendOAuthRetryPage(res, {
+      message: "Авторизация Twitch была отменена. Повторите вход.",
+      retryScope: matchingAttempt?.retryScope,
+      purpose: oauthContext.purpose,
+      channelLogin: matchingAttempt?.channelLogin,
+    });
     return;
   }
 
@@ -122,16 +174,27 @@ router.get("/auth/twitch/callback", async (req, res) => {
     const tokens = await exchangeAuthorizationCode(req.query.code);
     const validation = await validateOAuthAccessToken(tokens.access_token);
     const profile = await fetchAuthenticatedTwitchProfile(tokens.access_token, validation.user_id);
+    const ingestChannel = oauthContext.purpose === "ingest" ? findChannelById(oauthContext.targetChannelId) : null;
+    if (oauthContext.purpose === "ingest") {
+      if (!ingestChannel) throw new HttpError(404, "Configured Twitch channel was not found.");
+      assertReaderProfileAllowed(profile);
+    }
     const user = findOrCreateUserFromTwitchProfile(profile);
     const expiresAt = new Date(Date.now() + Number(tokens.expires_in || validation.expires_in || 0) * 1000).toISOString();
-    upsertTwitchAccount(user.id, profile, {
+    const account = upsertTwitchAccount(user.id, profile, {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       scopes: Array.isArray(validation.scopes) ? validation.scopes : tokens.scope ?? [],
       expiresAt,
     });
-    const channel = findOrCreateChannelFromBroadcaster(profile, user.id);
-    addOrUpdateChannelMembership(channel.id, user.id, "channel_owner");
+    if (oauthContext.purpose === "ingest") {
+      if (!setChannelIngestTwitchAccount(ingestChannel.id, account.id)) {
+        throw new HttpError(404, "Configured Twitch channel was not found.");
+      }
+    } else {
+      const channel = findOrCreateChannelFromBroadcaster(profile, user.id);
+      addOrUpdateChannelMembership(channel.id, user.id, "channel_owner");
+    }
 
     const { rawToken, session } = startSession(user.id, {
       userAgent: req.get("user-agent") || null,
@@ -139,11 +202,15 @@ router.get("/auth/twitch/callback", async (req, res) => {
     });
     setSessionCookie(res, rawToken, session.expires_at);
     res.redirect(getAuthSuccessRedirectUri());
-  } catch {
+  } catch (error) {
     sendOAuthRetryPage(res, {
-      status: 502,
-      message: "Не удалось завершить авторизацию Twitch. Повторите вход.",
+      status: error instanceof ReaderAccountMismatchError ? 403 : 502,
+      message: error instanceof ReaderAccountMismatchError
+        ? "Авторизован другой Twitch-аккаунт. Войдите в настроенный аккаунт чтения чата и повторите подключение."
+        : "Не удалось завершить авторизацию Twitch. Повторите вход.",
       retryScope: matchingAttempt?.retryScope,
+      purpose: oauthContext.purpose,
+      channelLogin: matchingAttempt?.channelLogin,
     });
   }
 });

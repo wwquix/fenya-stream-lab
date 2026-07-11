@@ -56,7 +56,22 @@ describe("environment validation", () => {
       TWITCH_CHANNEL_LOGIN: "fenya",
       DATABASE_PATH: "/srv/fenya.sqlite",
       TOKEN_ENCRYPTION_KEY: validTokenKey,
+      TWITCH_CHAT_READER_LOGIN: "reader_login",
     })).toMatchObject({ isProduction: true, twitchProvider: "twitch" });
+  });
+
+  test("requires an allowlisted chat reader identity in production Twitch mode", () => {
+    expect(() => validateEnv({
+      NODE_ENV: "production",
+      TWITCH_PROVIDER: "twitch",
+      APP_BASE_URL: "https://stats.example.com",
+      TWITCH_REDIRECT_URI: "https://stats.example.com/auth/twitch/callback",
+      TWITCH_CLIENT_ID: "client-id",
+      TWITCH_CLIENT_SECRET: "client-secret",
+      TWITCH_CHANNEL_LOGIN: "fenya",
+      DATABASE_PATH: "/srv/fenya.sqlite",
+      TOKEN_ENCRYPTION_KEY: validTokenKey,
+    })).toThrow(/TWITCH_CHAT_READER_USER_ID or TWITCH_CHAT_READER_LOGIN is required/);
   });
 
   test("production Twitch autostart does not require legacy environment tokens", () => {
@@ -71,6 +86,7 @@ describe("environment validation", () => {
       TWITCH_CHANNEL_LOGIN: "fenya",
       DATABASE_PATH: "/srv/fenya.sqlite",
       TOKEN_ENCRYPTION_KEY: validTokenKey,
+      TWITCH_CHAT_READER_USER_ID: "reader-user-id",
     })).toMatchObject({ isProduction: true, twitchProvider: "twitch" });
   });
 });

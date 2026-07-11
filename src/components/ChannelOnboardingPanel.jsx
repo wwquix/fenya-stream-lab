@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Reveal } from './MotionPrimitives.jsx'
 import { formatDataSourceDescription, getRoleBadgeKeys } from '../utils/dashboardUi.js'
 
-function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedChannel = null, canConnectChannel = false, permissions = null, onIdentityRefresh, onOpenChannel, onOpenLegacy }) {
+function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedChannel = null, legacyChannelLogin = 'fenya', canConnectChannel = false, permissions = null, onIdentityRefresh, onOpenChannel, onOpenLegacy }) {
   const [channels, setChannels] = useState([])
   const [state, setState] = useState('loading')
   const [message, setMessage] = useState(t.channelLoading)
@@ -71,6 +71,10 @@ function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedC
     }
   }
 
+  function connectChatReader() {
+    window.location.assign(`/auth/twitch/login?purpose=ingest&channel=${encodeURIComponent(legacyChannelLogin)}&reauth=1`)
+  }
+
   return (
     <Reveal as="section" className="section-panel channel-onboarding" aria-labelledby="channel-onboarding-title">
       <div className="section-heading">
@@ -108,6 +112,12 @@ function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedC
         {state === 'guest' || (channels.length === 0 && canConnectChannel) ? <button className="liquid-button channel-connect-button" type="button" disabled={state === 'loading' || state === 'connecting'} onClick={handleConnect}>
           {state === 'connecting' ? t.channelConnecting : t.connectMyTwitchChannel}
         </button> : null}
+        {dashboardMode === 'legacy-fenya' ? (
+          <div>
+            <button className="liquid-button channel-connect-button" type="button" onClick={connectChatReader}>{t.connectChatReader}</button>
+            <span className="role-helper">{t.connectChatReaderHint}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="identity-mode-row">

@@ -39,6 +39,10 @@ export function resolveDashboardPermissions({ identity, dashboardMode, selectedC
       ?? identity.memberships?.find((membership) => membership.channelId === selectedChannel?.id)?.role,
     )
   } else if (dashboardMode === 'legacy-fenya') {
+    const isLinkedReader = identity.ingestChannels?.some((channel) => (
+      channel.twitchLogin?.toLowerCase() === String(legacyChannelLogin || 'fenya').toLowerCase()
+    ))
+    if (isLinkedReader) return { role: 'ingest_reader', canControlIngest: true, readOnly: false }
     contextualRole = normalizeRole(identity.memberships?.find((membership) => (
       membership.channelLogin?.toLowerCase() === String(legacyChannelLogin || 'fenya').toLowerCase()
     ))?.role)

@@ -10,10 +10,14 @@ const defaultDatabasePath = fileURLToPath(new URL("../data/fenya-stream-lab.sqli
 
 let database = null;
 
-function applySafeMigrations(targetDatabase) {
+export function applySafeMigrations(targetDatabase) {
   const twitchAccountColumns = targetDatabase.prepare("PRAGMA table_info(twitch_accounts)").all();
   if (!twitchAccountColumns.some((column) => column.name === "needs_reauth")) {
     targetDatabase.exec("ALTER TABLE twitch_accounts ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0 CHECK (needs_reauth IN (0, 1))");
+  }
+  const channelColumns = targetDatabase.prepare("PRAGMA table_info(channels)").all();
+  if (!channelColumns.some((column) => column.name === "ingest_twitch_account_id")) {
+    targetDatabase.exec("ALTER TABLE channels ADD COLUMN ingest_twitch_account_id INTEGER REFERENCES twitch_accounts(id) ON DELETE SET NULL");
   }
   for (const table of ["streams", "viewer_samples", "chat_messages"]) {
     const columns = targetDatabase.prepare(`PRAGMA table_info(${table})`).all();

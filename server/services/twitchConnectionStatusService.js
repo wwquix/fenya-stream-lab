@@ -1,7 +1,7 @@
 import process from "node:process";
 
 import { findChannelByLogin } from "../repositories/channelRepository.js";
-import { findTwitchAccountByUserId, getSafeTwitchAccountStatus } from "../repositories/twitchAccountRepository.js";
+import { findTwitchAccountById, getSafeTwitchAccountStatus } from "../repositories/twitchAccountRepository.js";
 import { getAppAccessToken, getConfiguredUserToken, validateUserToken } from "./twitchAuthService.js";
 import { getTwitchProviderName } from "./twitchMetadataService.js";
 
@@ -30,7 +30,7 @@ export async function getConfiguredChannelConnectionStatus() {
   const provider = getTwitchProviderName();
   const channelLogin = process.env.TWITCH_CHANNEL_LOGIN?.trim() || "fenya";
   const channel = provider === "twitch" ? findChannelByLogin(channelLogin) : null;
-  const storedAccount = channel?.owner_user_id ? findTwitchAccountByUserId(channel.owner_user_id) : null;
+  const storedAccount = channel?.ingest_twitch_account_id ? findTwitchAccountById(channel.ingest_twitch_account_id) : null;
   const account = storedAccount ? getSafeTwitchAccountStatus(storedAccount.id) : null;
   let appTokenAvailable = false;
   if (provider === "twitch") {
@@ -50,7 +50,10 @@ export async function getConfiguredChannelConnectionStatus() {
       broadcasterId: channel.twitch_broadcaster_id,
       channelFound: true,
       channelHasOwner: Boolean(channel.owner_user_id),
+      ingestAccountFound: true,
       oauthAccountFound: true,
+      readerLogin: account.twitch_login,
+      readerUserId: account.twitch_user_id,
       hasClientId: Boolean(process.env.TWITCH_CLIENT_ID?.trim()),
       hasClientSecret: Boolean(process.env.TWITCH_CLIENT_SECRET?.trim()),
       hasUserAccessToken: Boolean(account.has_access_token),
@@ -59,7 +62,7 @@ export async function getConfiguredChannelConnectionStatus() {
       userTokenValid: tokenStatus === "valid" || tokenStatus === "refresh_required",
       userTokenScopes: parseScopes(account.scopes_json),
       expiresAt: account.expires_at ?? null,
-      needsReauth: Boolean(account.needs_reauth),
+      needsReauth: tokenStatus === "reauthorization_required",
       tokenStatus,
       tokenSource: "database_oauth",
       lastError: tokenStatus === "reauthorization_required" ? "Reconnect Twitch for the configured channel" : null,
@@ -81,7 +84,10 @@ export async function getConfiguredChannelConnectionStatus() {
       broadcasterId: process.env.TWITCH_BROADCASTER_ID?.trim() || null,
       channelFound: Boolean(channel),
       channelHasOwner: Boolean(channel?.owner_user_id),
+      ingestAccountFound: false,
       oauthAccountFound: false,
+      readerLogin: tokenInfo?.login ?? null,
+      readerUserId: tokenInfo?.user_id ?? null,
       hasClientId: Boolean(process.env.TWITCH_CLIENT_ID?.trim()),
       hasClientSecret: Boolean(process.env.TWITCH_CLIENT_SECRET?.trim()),
       hasUserAccessToken: Boolean(getConfiguredUserToken()),
@@ -103,7 +109,10 @@ export async function getConfiguredChannelConnectionStatus() {
     broadcasterId: channel?.twitch_broadcaster_id ?? null,
     channelFound: Boolean(channel),
     channelHasOwner: Boolean(channel?.owner_user_id),
+    ingestAccountFound: false,
     oauthAccountFound: false,
+    readerLogin: null,
+    readerUserId: null,
     hasClientId: Boolean(process.env.TWITCH_CLIENT_ID?.trim()),
     hasClientSecret: Boolean(process.env.TWITCH_CLIENT_SECRET?.trim()),
     hasUserAccessToken: false,
@@ -115,6 +124,6 @@ export async function getConfiguredChannelConnectionStatus() {
     needsReauth: true,
     tokenStatus: "reauthorization_required",
     tokenSource: "database_oauth",
-    lastError: "Connect or reauthorize Twitch for the configured channel",
+    lastError: "Connect or reauthorize the chat reader account for the configured channel",
   };
 }
