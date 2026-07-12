@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // The root .env belongs to the Node backend; Vite build mode is already production.
+  envDir: false,
   plugins: [react()],
   server: {
     proxy: {
