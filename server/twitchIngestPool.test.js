@@ -110,6 +110,36 @@ async function flushAsyncWork() {
   for (let index = 0; index < 8; index += 1) await Promise.resolve();
 }
 
+async function startWithWatchdog(channel, timeoutSeconds = 1) {
+  let socket = null;
+  setTwitchIngestPoolWebSocketFactoryForTests((url, channelId) => {
+    socket = new FakeWebSocket(url);
+    socketInstances.push(socket);
+    sockets.set(String(channelId), socket);
+    queueMicrotask(() => emitWelcome(socket, `watchdog-session-${channelId}`, {
+      keepalive_timeout_seconds: timeoutSeconds,
+    }));
+    return socket;
+  });
+  await startChannelIngest(channel.id);
+  await flushAsyncWork();
+  return socket;
+}
+
+function emitValidNotification(socket, channel, messageId = "watchdog-message") {
+  emitEventSub(socket, "notification", {
+    subscription: { type: "channel.chat.message" },
+    event: {
+      broadcaster_user_id: channel.twitch_broadcaster_id,
+      broadcaster_user_login: channel.twitch_login,
+      chatter_user_id: "watchdog-viewer",
+      chatter_user_login: "watchdog-viewer",
+      message_id: messageId,
+      message: { text: "watchdog activity" },
+    },
+  }, { message_timestamp: "2026-07-12T08:00:00Z" });
+}
+
 function createChannel(suffix) {
   const profile = {
     id: `broadcaster-${suffix}`,
@@ -273,6 +303,162 @@ describe("multi-channel Twitch ingest pool", () => {
     await startChannelIngest(channelA.id);
     expect(getAllIngestStatuses()).toHaveLength(1);
     expect(sockets.get(String(channelA.id))).toBe(firstSocket);
+  });
+
+  test("Welcome arms the watchdog using the session keepalive timeout", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA, 1);
+
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.watchdog).toBe(true);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(socket.terminateCalls).toBe(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(socket.terminateCalls).toBe(1);
+  });
+
+  test("session keepalive resets the active socket watchdog", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA);
+
+    await vi.advanceTimersByTimeAsync(750);
+    emitEventSub(socket, "session_keepalive", { session: { id: "watchdog-session" } });
+    await vi.advanceTimersByTimeAsync(750);
+    expect(socket.terminateCalls).toBe(0);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(socket.terminateCalls).toBe(1);
+  });
+
+  test("valid current-channel notification resets the active socket watchdog", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA);
+
+    await vi.advanceTimersByTimeAsync(750);
+    emitValidNotification(socket, channelA);
+    await flushAsyncWork();
+    await vi.advanceTimersByTimeAsync(750);
+    expect(socket.terminateCalls).toBe(0);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(socket.terminateCalls).toBe(1);
+  });
+
+  test.each([
+    ["invalid JSON", (socket) => socket.emit("message", "{not-json")],
+    ["unknown message type", (socket) => emitEventSub(socket, "unknown_message")],
+    ["unrelated notification", (socket) => emitEventSub(socket, "notification", {
+      subscription: { type: "channel.chat.message" },
+      event: { broadcaster_user_id: "another-broadcaster" },
+    })],
+  ])("%s does not reset the watchdog", async (_label, emitMessage) => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA);
+
+    await vi.advanceTimersByTimeAsync(900);
+    emitMessage(socket);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(socket.terminateCalls).toBe(1);
+  });
+
+  test("session reconnect does not reset the old active socket watchdog", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA);
+    let pendingSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      pendingSocket = new FakeWebSocket(url);
+      socketInstances.push(pendingSocket);
+      return pendingSocket;
+    });
+
+    await vi.advanceTimersByTimeAsync(900);
+    emitEventSub(socket, "session_reconnect", {
+      session: { reconnect_url: "wss://eventsub.wss.twitch.tv/ws?reconnect=watchdog" },
+    });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(pendingSocket).not.toBeNull();
+    expect(socket.terminateCalls).toBe(1);
+    expect(pendingSocket.terminateCalls).toBe(0);
+  });
+
+  test("watchdog expiry terminates once and enters one fresh reconnect path", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    setTwitchEventSubTimingForTests({ reconnectBaseMs: 100, reconnectMaxMs: 1_000, reconnectJitterRatio: 0 }, () => 0.5);
+    const socket = await startWithWatchdog(channelA);
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      const replacement = new FakeWebSocket(url);
+      socketInstances.push(replacement);
+      return replacement;
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(socket.terminateCalls).toBe(1);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toMatchObject({
+      reconnectAttempts: 1,
+      timers: { poll: true, reconnect: true, watchdog: false },
+    });
+
+    socket.emit("close", 1006);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(socketInstances).toHaveLength(2);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).hasPendingWebSocket).toBe(true);
+  });
+
+  test("manual stop clears the watchdog and prevents later watchdog work", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA);
+
+    await vi.advanceTimersByTimeAsync(900);
+    stopChannelIngest(channelA.id);
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(socket.terminateCalls).toBe(0);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toMatchObject({
+      desiredRunning: false,
+      timers: { poll: false, reconnect: false, watchdog: false },
+    });
+  });
+
+  test("revocation clears the watchdog and prevents later watchdog work", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const socket = await startWithWatchdog(channelA);
+
+    await vi.advanceTimersByTimeAsync(900);
+    emitRevocation(socket, channelA, "user_removed");
+    await flushAsyncWork();
+    await vi.advanceTimersByTimeAsync(2_000);
+
+    expect(socket.terminateCalls).toBe(0);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toMatchObject({
+      desiredRunning: false,
+      timers: { poll: false, reconnect: false, watchdog: false },
+    });
+  });
+
+  test("successful migration moves watchdog ownership and obsolete messages cannot reset it", async () => {
+    vi.useFakeTimers({ now: Date.now() });
+    const oldSocket = await startWithWatchdog(channelA);
+    let replacementSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      replacementSocket = new FakeWebSocket(url);
+      socketInstances.push(replacementSocket);
+      return replacementSocket;
+    });
+
+    await vi.advanceTimersByTimeAsync(700);
+    emitEventSub(oldSocket, "session_reconnect", {
+      session: { reconnect_url: "wss://eventsub.wss.twitch.tv/ws?reconnect=watchdog-migration" },
+    });
+    emitWelcome(replacementSocket, "replacement-watchdog-session", { keepalive_timeout_seconds: 1 });
+    await flushAsyncWork();
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(oldSocket.terminateCalls).toBe(0);
+    expect(replacementSocket.terminateCalls).toBe(0);
+    emitEventSub(oldSocket, "session_keepalive", { session: { id: "obsolete-session" } });
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(oldSocket.terminateCalls).toBe(0);
+    expect(replacementSocket.terminateCalls).toBe(1);
   });
 
   test("planned session reconnect migrates on the exact URL without creating another subscription", async () => {

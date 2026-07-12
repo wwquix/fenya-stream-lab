@@ -68,6 +68,7 @@ function createState(channelId) {
     legacy: false,
     closingSockets: new Set(),
     generation: 0,
+    watchdogTimeoutSeconds: null,
   };
 }
 
@@ -268,10 +269,14 @@ async function createSubscription(state, sessionId) {
 }
 
 function armWatchdog(state, socket, timeoutSeconds) {
+  if (ingestPoolShuttingDown || !state.desiredRunning || state.websocket !== socket) return;
   clearStateTimer(state, "watchdog");
+  const seconds = Number(timeoutSeconds);
+  state.watchdogTimeoutSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 30;
   state.timers.watchdog = setTimeout(() => {
-    if (state.websocket === socket && state.desiredRunning) socket.terminate();
-  }, (Number(timeoutSeconds) || 30) * 1000 + 5_000);
+    state.timers.watchdog = null;
+    if (!ingestPoolShuttingDown && state.desiredRunning && state.websocket === socket) socket.terminate();
+  }, state.watchdogTimeoutSeconds * 1_000);
   state.timers.watchdog.unref?.();
 }
 
@@ -358,6 +363,7 @@ function stopIngestForRevocation(state, subscription) {
   state.revocationStatus = revocationStatus;
   state.socketOpenPromise = null;
   for (const name of Object.keys(state.timers)) clearStateTimer(state, name);
+  state.watchdogTimeoutSeconds = null;
 
   if (revocationStatus === "authorization_revoked") {
     state.status = "reauthorization_required";
@@ -452,7 +458,6 @@ function openSocket(state, url, { subscribe, kind }) {
       try { message = JSON.parse(raw.toString()); } catch { state.lastError = "Received invalid Twitch EventSub JSON"; return; }
       const messageType = message.metadata?.message_type;
       const session = message.payload?.session;
-      armWatchdog(state, socket, session?.keepalive_timeout_seconds);
       try {
         if (messageType === "session_welcome") {
           if (settled || state.pendingWebsocket !== socket || !session?.id) return;
@@ -475,6 +480,7 @@ function openSocket(state, url, { subscribe, kind }) {
           state.reconnectAttempts = 0;
           state.lastError = null;
           schedulePolling(state);
+          armWatchdog(state, socket, session.keepalive_timeout_seconds);
           if (kind === "migration" && previousSocket && previousSocket !== socket) {
             state.closingSockets.add(previousSocket);
             void closeWebSocketGracefully(previousSocket, WEBSOCKET_CLOSE_TIMEOUT_MS)
@@ -483,8 +489,11 @@ function openSocket(state, url, { subscribe, kind }) {
           settled = true;
           clearTimeout(startTimeout);
           resolve(publicStatus(state));
+        } else if (state.websocket === socket && messageType === "session_keepalive") {
+          armWatchdog(state, socket, state.watchdogTimeoutSeconds);
         } else if (state.websocket === socket && messageType === "notification") {
-          processChannelEventSubNotification(state.channelId, message);
+          const result = processChannelEventSubNotification(state.channelId, message);
+          if (result) armWatchdog(state, socket, state.watchdogTimeoutSeconds);
         } else if (state.websocket === socket && messageType === "session_reconnect") {
           beginSessionMigration(state, socket, session?.reconnect_url);
         } else if (state.websocket === socket && messageType === "revocation") {
@@ -526,6 +535,7 @@ function openSocket(state, url, { subscribe, kind }) {
       }
       if (state.websocket !== socket || !state.desiredRunning || ingestPoolShuttingDown) return;
       clearStateTimer(state, "watchdog");
+      state.watchdogTimeoutSeconds = null;
       state.websocket = null;
       state.sessionId = null;
       state.running = false;
@@ -586,6 +596,7 @@ function prepareStateForStop(state) {
   state.status = "stopped";
   state.socketOpenPromise = null;
   for (const name of Object.keys(state.timers)) clearStateTimer(state, name);
+  state.watchdogTimeoutSeconds = null;
   const sockets = [...new Set([state.websocket, state.pendingWebsocket].filter(Boolean))];
   for (const socket of sockets) state.closingSockets.add(socket);
   return sockets;
