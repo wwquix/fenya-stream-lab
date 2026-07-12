@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import Hero from './components/Hero.jsx'
 import SectionRail from './components/SectionRail.jsx'
 import BackToTop from './components/BackToTop.jsx'
 import StreamControlBar from './components/StreamControlBar.jsx'
-import StreamPulse from './components/StreamPulse.jsx'
 import TopChatters from './components/TopChatters.jsx'
 import WordMutationCloud from './components/WordMutationCloud.jsx'
 import ModeratorUnit from './components/ModeratorUnit.jsx'
@@ -34,6 +33,15 @@ import AppErrorState from './components/AppErrorState.jsx'
 import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
 
 const allSectionIds = ['top', 'pulse', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
+const StreamPulse = lazy(() => import('./components/StreamPulse.jsx'))
+
+function StreamPulseFallback({ t }) {
+  return (
+    <section className="real-data-empty glass-panel" id="pulse" role="status">
+      <p>{t.loadingMetadata}</p>
+    </section>
+  )
+}
 
 function App() {
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
@@ -283,7 +291,9 @@ function App() {
               <RealModeNotice title={t.offlineConnectedTitle} note={t.offlineConnectedNote} />
             ) : null}
             {hasRealStream ? (
-              <StreamPulse stream={streamPulseStream} compareStream={null} events={backendPulseData?.events ?? []} t={t} />
+              <Suspense fallback={<StreamPulseFallback t={t} />}>
+                <StreamPulse stream={streamPulseStream} compareStream={null} events={backendPulseData?.events ?? []} t={t} />
+              </Suspense>
             ) : (
               <RealDataEmptySection
                 id="pulse"
@@ -340,7 +350,9 @@ function App() {
           </>
         ) : (
           <>
-            <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
+            <Suspense fallback={<StreamPulseFallback t={t} />}>
+              <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
+            </Suspense>
             {/* Data map is reserved for a future real data pipeline view. */}
             <TopChatters
               chatters={chatters}
