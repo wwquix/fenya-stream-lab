@@ -18,6 +18,7 @@ import {
   getChannelIngestStatus,
   getTwitchIngestPoolDebugStateForTests,
   resetTwitchIngestPoolForTests,
+  setTwitchEventSubTimingForTests,
   setTwitchIngestPoolWebSocketFactoryForTests,
   shutdownAllIngest,
   startChannelIngest,
@@ -27,8 +28,10 @@ import { SESSION_COOKIE_NAME, startSession } from "./services/sessionService.js"
 import { closeDatabase, getDatabase } from "./storage/db.js";
 
 class FakeWebSocket extends EventEmitter {
-  constructor() {
+  constructor(url = null) {
     super();
+    this.url = url;
+    this.readyState = 1;
     this.closeCalls = 0;
     this.terminateCalls = 0;
     this.deferClose = false;
@@ -37,11 +40,15 @@ class FakeWebSocket extends EventEmitter {
   close() {
     this.closeCalls += 1;
     this.onClose?.();
-    if (!this.deferClose) this.emit("close");
+    if (!this.deferClose) {
+      this.readyState = 3;
+      this.emit("close", 1000);
+    }
   }
   terminate() {
     this.terminateCalls += 1;
-    this.emit("close");
+    this.readyState = 3;
+    this.emit("close", 1006);
   }
 }
 
@@ -60,6 +67,32 @@ let twitchFetchMock;
 
 function jsonResponse(payload, status = 200) {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
+}
+
+function emitEventSub(socket, messageType, payload = {}, metadata = {}) {
+  socket.emit("message", JSON.stringify({
+    metadata: { message_type: messageType, ...metadata },
+    payload,
+  }));
+}
+
+function emitWelcome(socket, sessionId, overrides = {}) {
+  emitEventSub(socket, "session_welcome", {
+    session: {
+      id: sessionId,
+      connected_at: "2026-07-04T18:05:00Z",
+      keepalive_timeout_seconds: 30,
+      ...overrides,
+    },
+  });
+}
+
+function eventSubSubscriptionCalls() {
+  return twitchFetchMock.mock.calls.filter(([url]) => String(url).includes("/helix/eventsub/subscriptions"));
+}
+
+async function flushAsyncWork() {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
 }
 
 function createChannel(suffix) {
@@ -135,7 +168,7 @@ beforeEach(() => {
   sockets = new Map();
   socketInstances = [];
   setTwitchIngestPoolWebSocketFactoryForTests((_url, channelId) => {
-    const socket = new FakeWebSocket();
+    const socket = new FakeWebSocket(_url);
     socketInstances.push(socket);
     sockets.set(String(channelId), socket);
     queueMicrotask(() => socket.emit("message", JSON.stringify({
@@ -150,6 +183,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetTwitchIngestPoolForTests();
+  vi.useRealTimers();
   resetTwitchAuthCache();
   vi.unstubAllGlobals();
   closeDatabase();
@@ -224,6 +258,151 @@ describe("multi-channel Twitch ingest pool", () => {
     await startChannelIngest(channelA.id);
     expect(getAllIngestStatuses()).toHaveLength(1);
     expect(sockets.get(String(channelA.id))).toBe(firstSocket);
+  });
+
+  test("planned session reconnect migrates on the exact URL without creating another subscription", async () => {
+    const initial = await startChannelIngest(channelA.id);
+    await flushAsyncWork();
+    const oldSocket = sockets.get(String(channelA.id));
+    const reconnectUrl = "wss://eventsub.wss.twitch.tv/ws?reconnect=exact-token&keep=this";
+    let replacementSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      replacementSocket = new FakeWebSocket(url);
+      socketInstances.push(replacementSocket);
+      return replacementSocket;
+    });
+
+    emitEventSub(oldSocket, "session_reconnect", { session: { reconnect_url: reconnectUrl } });
+    emitEventSub(oldSocket, "session_reconnect", { session: { reconnect_url: "wss://ignored.example/ws" } });
+    await flushAsyncWork();
+
+    expect(replacementSocket.url).toBe(reconnectUrl);
+    expect(socketInstances).toHaveLength(2);
+    expect(oldSocket.closeCalls).toBe(0);
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({
+      sessionId: initial.sessionId,
+      subscriptionId: initial.subscriptionId,
+      status: "reconnecting",
+    });
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toMatchObject({
+      hasWebSocket: true,
+      hasPendingWebSocket: true,
+      pendingKind: "migration",
+    });
+    expect(eventSubSubscriptionCalls()).toHaveLength(1);
+
+    emitWelcome(replacementSocket, "migrated-session");
+    await flushAsyncWork();
+
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({
+      sessionId: "migrated-session",
+      subscriptionId: initial.subscriptionId,
+      status: "running",
+      running: true,
+    });
+    expect(eventSubSubscriptionCalls()).toHaveLength(1);
+    expect(oldSocket.closeCalls).toBe(1);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.reconnect).toBe(false);
+    expect(socketInstances).toHaveLength(2);
+  });
+
+  test("unexpected close reconnects on the base URL and creates a fresh reader-backed subscription", async () => {
+    await startChannelIngest(channelA.id);
+    await flushAsyncWork();
+    vi.useFakeTimers({ now: Date.now() });
+    setTwitchEventSubTimingForTests({ reconnectBaseMs: 100, reconnectMaxMs: 1_000, reconnectJitterRatio: 0 }, () => 0.5);
+    const oldSocket = sockets.get(String(channelA.id));
+    let replacementSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url, channelId) => {
+      replacementSocket = new FakeWebSocket(url);
+      socketInstances.push(replacementSocket);
+      sockets.set(String(channelId), replacementSocket);
+      queueMicrotask(() => emitWelcome(replacementSocket, "fresh-session"));
+      return replacementSocket;
+    });
+
+    oldSocket.readyState = 3;
+    oldSocket.emit("close", 1006);
+    oldSocket.emit("close", 1006);
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({
+      status: "reconnecting",
+      running: false,
+      sessionId: null,
+      subscriptionId: null,
+      reconnectAttempts: 1,
+    });
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.reconnect).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(100);
+    await flushAsyncWork();
+
+    const status = getChannelIngestStatus(channelA.id);
+    expect(replacementSocket.url).toBe("wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=30");
+    expect(status).toMatchObject({ status: "running", running: true, sessionId: "fresh-session", reconnectAttempts: 0 });
+    expect(eventSubSubscriptionCalls()).toHaveLength(2);
+    const request = eventSubSubscriptionCalls()[1][1];
+    expect(request.headers.Authorization).toBe("Bearer access-A");
+    expect(JSON.parse(request.body).condition).toEqual({
+      broadcaster_user_id: channelA.twitch_broadcaster_id,
+      user_id: "broadcaster-A",
+    });
+  });
+
+  test("reconnect backoff increases, is capped, and keeps one timer per channel", async () => {
+    await startChannelIngest(channelA.id);
+    await flushAsyncWork();
+    vi.useFakeTimers({ now: new Date("2026-07-12T12:00:00Z") });
+    setTwitchEventSubTimingForTests({ reconnectBaseMs: 100, reconnectMaxMs: 250, reconnectJitterRatio: 0 }, () => 0.5);
+    const reconnectTimes = [];
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      reconnectTimes.push(Date.now());
+      const socket = new FakeWebSocket(url);
+      queueMicrotask(() => {
+        socket.readyState = 3;
+        socket.emit("close", 1006);
+      });
+      return socket;
+    });
+    const oldSocket = sockets.get(String(channelA.id));
+    oldSocket.readyState = 3;
+    oldSocket.emit("close", 1006);
+    oldSocket.emit("close", 1006);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toMatchObject({ reconnectAttempts: 1 });
+
+    await vi.advanceTimersByTimeAsync(800);
+    await flushAsyncWork();
+
+    expect(reconnectTimes.slice(0, 4).map((time) => time - Date.parse("2026-07-12T12:00:00Z"))).toEqual([100, 300, 550, 800]);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.reconnect).toBe(true);
+  });
+
+  test("manual stop during reconnect prevents a late Welcome from becoming active", async () => {
+    await startChannelIngest(channelA.id);
+    await flushAsyncWork();
+    vi.useFakeTimers();
+    setTwitchEventSubTimingForTests({ reconnectBaseMs: 100, reconnectMaxMs: 1_000, reconnectJitterRatio: 0 }, () => 0.5);
+    let pendingSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      pendingSocket = new FakeWebSocket(url);
+      return pendingSocket;
+    });
+    const oldSocket = sockets.get(String(channelA.id));
+    oldSocket.readyState = 3;
+    oldSocket.emit("close", 1006);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(pendingSocket).not.toBeNull();
+
+    stopChannelIngest(channelA.id);
+    emitWelcome(pendingSocket, "obsolete-session");
+    await flushAsyncWork();
+
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({ status: "stopped", running: false, sessionId: null });
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toMatchObject({
+      desiredRunning: false,
+      hasWebSocket: false,
+      hasPendingWebSocket: false,
+    });
+    expect(eventSubSubscriptionCalls()).toHaveLength(1);
   });
 
   test("shutdown waits for graceful WebSocket close without terminating it", async () => {

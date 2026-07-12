@@ -17,9 +17,16 @@ const EVENTSUB_URL = "wss://eventsub.wss.twitch.tv/ws?keepalive_timeout_seconds=
 const REQUIRED_CHAT_SCOPE = "user:read:chat";
 const START_TIMEOUT_MS = 15_000;
 const WEBSOCKET_CLOSE_TIMEOUT_MS = 1_500;
+const defaultEventSubTiming = Object.freeze({
+  reconnectBaseMs: 1_000,
+  reconnectMaxMs: 30_000,
+  reconnectJitterRatio: 0.2,
+});
 const ingestPool = new Map();
 let createWebSocket = (url) => new WebSocket(url);
 let ingestPoolShuttingDown = false;
+let eventSubTiming = { ...defaultEventSubTiming };
+let reconnectRandom = Math.random;
 
 function interval(name, fallback) {
   const value = Number(process.env[name] || fallback);
@@ -51,6 +58,7 @@ function createState(channelId) {
     lastError: null,
     websocket: null,
     pendingWebsocket: null,
+    pendingKind: null,
     timers: { poll: null, reconnect: null, watchdog: null },
     startPromise: null,
     socketOpenPromise: null,
@@ -58,6 +66,7 @@ function createState(channelId) {
     twitchAccountId: null,
     legacy: false,
     closingSockets: new Set(),
+    generation: 0,
   };
 }
 
@@ -105,7 +114,7 @@ function publicStatus(state) {
     reconnectAttempts: state.reconnectAttempts,
     lastError: state.lastError,
     pollIntervalMs: interval("TWITCH_POLL_INTERVAL_MS", 30_000),
-    reconnectIntervalMs: interval("TWITCH_EVENTSUB_RECONNECT_MS", 5_000),
+    reconnectIntervalMs: interval("TWITCH_RECONNECT_INTERVAL_MS", 5_000),
   };
 }
 
@@ -251,8 +260,9 @@ async function createSubscription(state, sessionId) {
         : "Twitch EventSub subscription failed", { cause: error });
     }
   }
-  state.subscriptionId = payload.data?.[0]?.id ?? null;
-  if (!state.subscriptionId) throw new HttpError(502, "Twitch EventSub subscription failed");
+  const subscriptionId = payload.data?.[0]?.id ?? null;
+  if (!subscriptionId) throw new HttpError(502, "Twitch EventSub subscription failed");
+  return subscriptionId;
 }
 
 function armWatchdog(state, socket, timeoutSeconds) {
@@ -280,99 +290,168 @@ export function processChannelEventSubNotification(channelId, message) {
   return result;
 }
 
+function parseReconnectUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "wss:" ? String(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function reconnectDelay(attempt) {
+  const exponential = Math.min(
+    eventSubTiming.reconnectMaxMs,
+    eventSubTiming.reconnectBaseMs * (2 ** Math.max(0, attempt - 1)),
+  );
+  const jitter = exponential * eventSubTiming.reconnectJitterRatio * ((reconnectRandom() * 2) - 1);
+  return Math.max(0, Math.min(eventSubTiming.reconnectMaxMs, Math.round(exponential + jitter)));
+}
+
+function handleReconnectFailure(state, error) {
+  if (ingestPoolShuttingDown || !state.desiredRunning) return;
+  state.lastError = safeError(error, "Twitch EventSub reconnect failed");
+  scheduleReconnect(state);
+}
+
 function scheduleReconnect(state) {
-  if (ingestPoolShuttingDown || !state.desiredRunning || state.timers.reconnect) return;
+  if (ingestPoolShuttingDown || !state.desiredRunning || state.timers.reconnect || state.pendingWebsocket || state.socketOpenPromise) return;
   state.status = "reconnecting";
   state.running = false;
-  state.reconnectAttempts += 1;
+  const attempt = state.reconnectAttempts + 1;
+  const delay = reconnectDelay(attempt);
+  state.reconnectAttempts = attempt;
   state.timers.reconnect = setTimeout(() => {
     state.timers.reconnect = null;
-    openSocket(state, EVENTSUB_URL, true).catch((error) => {
-      state.lastError = safeError(error, "Twitch EventSub reconnect failed");
-      scheduleReconnect(state);
-    });
-  }, interval("TWITCH_EVENTSUB_RECONNECT_MS", 5_000));
+    if (ingestPoolShuttingDown || !state.desiredRunning) return;
+    const generation = state.generation;
+    openSocket(state, EVENTSUB_URL, { subscribe: true, kind: "fresh" })
+      .catch((error) => {
+        if (state.generation === generation) handleReconnectFailure(state, error);
+      });
+  }, delay);
   state.timers.reconnect.unref?.();
 }
 
-function openSocket(state, url, shouldSubscribe) {
+function socketCanRemainActive(socket) {
+  return Boolean(socket && socket.readyState !== WebSocket.CLOSING && socket.readyState !== WebSocket.CLOSED);
+}
+
+function beginSessionMigration(state, socket, reconnectUrl) {
+  if (state.websocket !== socket || state.pendingWebsocket || state.socketOpenPromise) return;
+  const validatedUrl = parseReconnectUrl(reconnectUrl);
+  if (!validatedUrl) {
+    state.lastError = "Twitch EventSub supplied an invalid reconnect URL.";
+    return;
+  }
+  state.status = "reconnecting";
+  const oldSocket = socket;
+  const generation = state.generation;
+  openSocket(state, validatedUrl, { subscribe: false, kind: "migration" }).catch((error) => {
+    if (ingestPoolShuttingDown || !state.desiredRunning || state.generation !== generation) return;
+    state.lastError = safeError(error, "Twitch EventSub migration failed");
+    if (state.websocket === oldSocket && socketCanRemainActive(oldSocket)) {
+      state.status = "running";
+      state.running = true;
+      return;
+    }
+    state.subscriptionId = null;
+    scheduleReconnect(state);
+  });
+}
+
+function openSocket(state, url, { subscribe, kind }) {
   if (ingestPoolShuttingDown || !state.desiredRunning) {
     return Promise.reject(new HttpError(503, "Twitch ingest is shutting down"));
   }
   if (state.socketOpenPromise) return state.socketOpenPromise;
+  const generation = state.generation;
   const operation = new Promise((resolve, reject) => {
-    const previousSocket = state.websocket;
     const socket = createWebSocket(url, state.channelId);
     state.pendingWebsocket = socket;
+    state.pendingKind = kind;
     let settled = false;
-    const startTimeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        socket.terminate();
-        reject(new HttpError(504, "Timed out waiting for Twitch EventSub welcome"));
+    const fail = (error, { terminate = false } = {}) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(startTimeout);
+      if (state.pendingWebsocket === socket) {
+        state.pendingWebsocket = null;
+        state.pendingKind = null;
       }
+      try {
+        if (terminate) socket.terminate();
+        else if (socket.readyState !== WebSocket.CLOSING && socket.readyState !== WebSocket.CLOSED) socket.close(1000, "EventSub connection failed");
+      } catch { /* The failed socket is already unavailable. */ }
+      reject(error);
+    };
+    const startTimeout = setTimeout(() => {
+      fail(new HttpError(504, "Timed out waiting for Twitch EventSub welcome"), { terminate: true });
     }, START_TIMEOUT_MS);
     startTimeout.unref?.();
 
     socket.on("message", async (raw) => {
-      if (ingestPoolShuttingDown || !state.desiredRunning) return;
+      if (ingestPoolShuttingDown || !state.desiredRunning || state.generation !== generation) return;
       let message;
       try { message = JSON.parse(raw.toString()); } catch { state.lastError = "Received invalid Twitch EventSub JSON"; return; }
+      const messageType = message.metadata?.message_type;
       const session = message.payload?.session;
       armWatchdog(state, socket, session?.keepalive_timeout_seconds);
       try {
-        if (message.metadata?.message_type === "session_welcome") {
-          if (ingestPoolShuttingDown || !state.desiredRunning) {
-            socket.close(1000, "Twitch ingest stopping");
+        if (messageType === "session_welcome") {
+          if (settled || state.pendingWebsocket !== socket || !session?.id) return;
+          state.status = subscribe ? "subscribing" : "reconnecting";
+          const subscriptionId = subscribe ? await createSubscription(state, session.id) : state.subscriptionId;
+          if (ingestPoolShuttingDown || !state.desiredRunning || state.generation !== generation || state.pendingWebsocket !== socket) {
+            fail(new HttpError(503, "Twitch ingest stopped during EventSub setup"));
             return;
           }
+          const previousSocket = state.websocket;
           state.websocket = socket;
           state.pendingWebsocket = null;
+          state.pendingKind = null;
           state.sessionId = session.id;
+          state.subscriptionId = subscriptionId;
           state.connectedAt = session.connected_at || new Date().toISOString();
-          state.status = shouldSubscribe ? "subscribing" : "running";
-          if (shouldSubscribe) await createSubscription(state, session.id);
           state.status = "running";
           state.running = true;
+          state.reconnectAttempts = 0;
           state.lastError = null;
           schedulePolling(state);
-          if (previousSocket && previousSocket !== socket) previousSocket.close(1000, "EventSub reconnect complete");
-          if (!settled) { settled = true; clearTimeout(startTimeout); resolve(publicStatus(state)); }
-        } else if (message.metadata?.message_type === "notification") {
+          if (kind === "migration" && previousSocket && previousSocket !== socket) {
+            state.closingSockets.add(previousSocket);
+            void closeWebSocketGracefully(previousSocket, WEBSOCKET_CLOSE_TIMEOUT_MS)
+              .finally(() => state.closingSockets.delete(previousSocket));
+          }
+          settled = true;
+          clearTimeout(startTimeout);
+          resolve(publicStatus(state));
+        } else if (state.websocket === socket && messageType === "notification") {
           processChannelEventSubNotification(state.channelId, message);
-        } else if (message.metadata?.message_type === "session_reconnect") {
-          state.status = "reconnecting";
-          openSocket(state, session.reconnect_url, false).catch((error) => {
-            state.lastError = safeError(error, "Twitch EventSub migration failed");
-            scheduleReconnect(state);
-          });
-        } else if (message.metadata?.message_type === "revocation") {
+        } else if (state.websocket === socket && messageType === "session_reconnect") {
+          beginSessionMigration(state, socket, session?.reconnect_url);
+        } else if (state.websocket === socket && messageType === "revocation") {
           state.lastError = `Twitch revoked ${message.payload?.subscription?.type || "EventSub subscription"}`;
           state.status = "error";
           state.running = false;
         }
       } catch (error) {
-        state.lastError = safeError(error, "Twitch EventSub message handling failed");
-        state.status = "error";
-        state.running = false;
-        if (!settled) {
-          settled = true;
-          state.desiredRunning = false;
-          clearTimeout(startTimeout);
-          socket.close(1000, "Twitch EventSub setup failed");
-          reject(error);
-        }
+        if (!settled) fail(error);
+        else state.lastError = safeError(error, "Twitch EventSub message handling failed");
       }
     });
     socket.on("error", (error) => {
       state.lastError = safeError(error, "Twitch EventSub WebSocket error");
-      if (!settled) { settled = true; clearTimeout(startTimeout); reject(new HttpError(502, state.lastError)); }
+      if (!settled) fail(new HttpError(502, state.lastError));
     });
     socket.on("close", () => {
       if (state.closingSockets.has(socket)) {
         state.closingSockets.delete(socket);
         if (state.websocket === socket) state.websocket = null;
-        if (state.pendingWebsocket === socket) state.pendingWebsocket = null;
+        if (state.pendingWebsocket === socket) {
+          state.pendingWebsocket = null;
+          state.pendingKind = null;
+        }
         if (!settled) {
           settled = true;
           clearTimeout(startTimeout);
@@ -380,19 +459,24 @@ function openSocket(state, url, shouldSubscribe) {
         }
         return;
       }
-      if (!settled) {
+      if (state.generation !== generation) return;
+      if (!settled && state.pendingWebsocket === socket) {
+        state.pendingWebsocket = null;
+        state.pendingKind = null;
         settled = true;
         clearTimeout(startTimeout);
-        state.pendingWebsocket = null;
         if (state.desiredRunning) reject(new HttpError(502, "Twitch EventSub WebSocket closed before welcome"));
         else resolve(publicStatus(state));
         return;
       }
-      if (state.websocket !== socket || !state.desiredRunning) return;
+      if (state.websocket !== socket || !state.desiredRunning || ingestPoolShuttingDown) return;
       clearStateTimer(state, "watchdog");
       state.websocket = null;
       state.sessionId = null;
       state.running = false;
+      state.status = "reconnecting";
+      if (state.pendingKind === "migration" && state.pendingWebsocket) return;
+      state.subscriptionId = null;
       scheduleReconnect(state);
     });
   });
@@ -409,6 +493,8 @@ export async function startChannelIngest(channelId, options = {}) {
   if (getTwitchProviderName() !== "twitch") throw new HttpError(409, "Twitch ingest requires TWITCH_PROVIDER=twitch");
   const state = stateFor(channelId);
   if (state.desiredRunning) return state.startPromise || publicStatus(state);
+  state.generation += 1;
+  const generation = state.generation;
   state.desiredRunning = true;
   state.status = "connecting";
   state.lastError = null;
@@ -422,24 +508,28 @@ export async function startChannelIngest(channelId, options = {}) {
       if (!state.broadcasterId) throw new HttpError(404, "Twitch broadcaster id is missing");
       if (!state.chatReaderUserId) throw new HttpError(401, "Twitch chat reader user id is missing");
       console.log(`Twitch ingest listening: channel=@${state.channelLogin}, streamStartedAt=${state.streamStartedAt ?? "offline"}, collectedFrom=${state.collectedFrom}`);
-      return await openSocket(state, EVENTSUB_URL, true);
+      return await openSocket(state, EVENTSUB_URL, { subscribe: true, kind: "initial" });
     } catch (error) {
-      state.desiredRunning = false;
-      state.running = false;
-      state.status = "error";
-      state.lastError = safeError(error, "Twitch ingest failed to start");
+      if (state.generation === generation) {
+        state.desiredRunning = false;
+        state.running = false;
+        state.status = "error";
+        state.lastError = safeError(error, "Twitch ingest failed to start");
+      }
       throw error;
     } finally {
-      state.startPromise = null;
+      if (state.generation === generation) state.startPromise = null;
     }
   })();
   return state.startPromise;
 }
 
 function prepareStateForStop(state) {
+  state.generation += 1;
   state.desiredRunning = false;
   state.running = false;
   state.status = "stopped";
+  state.socketOpenPromise = null;
   for (const name of Object.keys(state.timers)) clearStateTimer(state, name);
   const sockets = [...new Set([state.websocket, state.pendingWebsocket].filter(Boolean))];
   for (const socket of sockets) state.closingSockets.add(socket);
@@ -450,9 +540,12 @@ function finishStateStop(state, sockets) {
   for (const socket of sockets) state.closingSockets.delete(socket);
   if (sockets.includes(state.websocket)) state.websocket = null;
   if (sockets.includes(state.pendingWebsocket)) state.pendingWebsocket = null;
-  state.sessionId = null;
-  state.subscriptionId = null;
-  state.status = "stopped";
+  if (!state.pendingWebsocket) state.pendingKind = null;
+  if (!state.desiredRunning) {
+    state.sessionId = null;
+    state.subscriptionId = null;
+    state.status = "stopped";
+  }
 }
 
 function closeWebSocketGracefully(socket, timeoutMs) {
@@ -524,6 +617,11 @@ export function setTwitchIngestPoolWebSocketFactoryForTests(factory) {
   createWebSocket = factory || ((url) => new WebSocket(url));
 }
 
+export function setTwitchEventSubTimingForTests(overrides = {}, random = Math.random) {
+  eventSubTiming = { ...defaultEventSubTiming, ...overrides };
+  reconnectRandom = random;
+}
+
 export function getTwitchIngestPoolDebugStateForTests(channelId) {
   const state = ingestPool.get(String(channelId));
   if (!state) return null;
@@ -531,6 +629,8 @@ export function getTwitchIngestPoolDebugStateForTests(channelId) {
     desiredRunning: state.desiredRunning,
     hasWebSocket: Boolean(state.websocket),
     hasPendingWebSocket: Boolean(state.pendingWebsocket),
+    pendingKind: state.pendingKind,
+    reconnectAttempts: state.reconnectAttempts,
     timers: Object.fromEntries(Object.entries(state.timers).map(([name, timer]) => [name, Boolean(timer)])),
   };
 }
@@ -539,5 +639,7 @@ export function resetTwitchIngestPoolForTests() {
   stopAllIngest();
   ingestPool.clear();
   ingestPoolShuttingDown = false;
+  eventSubTiming = { ...defaultEventSubTiming };
+  reconnectRandom = Math.random;
   createWebSocket = (url) => new WebSocket(url);
 }
