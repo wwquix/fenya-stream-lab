@@ -87,6 +87,21 @@ function emitWelcome(socket, sessionId, overrides = {}) {
   });
 }
 
+function emitRevocation(socket, channel, status, overrides = {}) {
+  emitEventSub(socket, "revocation", {
+    subscription: {
+      id: `subscription-${channel.twitch_broadcaster_id}`,
+      type: "channel.chat.message",
+      status,
+      condition: {
+        broadcaster_user_id: channel.twitch_broadcaster_id,
+        user_id: channel.twitch_broadcaster_id,
+      },
+      ...overrides,
+    },
+  });
+}
+
 function eventSubSubscriptionCalls() {
   return twitchFetchMock.mock.calls.filter(([url]) => String(url).includes("/helix/eventsub/subscriptions"));
 }
@@ -403,6 +418,126 @@ describe("multi-channel Twitch ingest pool", () => {
       hasPendingWebSocket: false,
     });
     expect(eventSubSubscriptionCalls()).toHaveLength(1);
+  });
+
+  test("unrelated revocations do not change the active ingest", async () => {
+    const initial = await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+    const unrelated = [
+      { type: "stream.online" },
+      { id: "another-subscription" },
+      { condition: { broadcaster_user_id: "another-broadcaster", user_id: "broadcaster-A" } },
+      { condition: { broadcaster_user_id: "broadcaster-A", user_id: "another-reader" } },
+    ];
+
+    for (const overrides of unrelated) emitRevocation(socket, channelA, "authorization_revoked", overrides);
+    await flushAsyncWork();
+
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({
+      status: "running",
+      running: true,
+      subscriptionId: initial.subscriptionId,
+      revocationStatus: null,
+      lastError: null,
+    });
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).desiredRunning).toBe(true);
+    expect(socket.closeCalls).toBe(0);
+    const account = getDatabase().prepare(`
+      SELECT twitch_accounts.needs_reauth
+      FROM channels JOIN twitch_accounts ON twitch_accounts.id = channels.ingest_twitch_account_id
+      WHERE channels.id = ?
+    `).get(channelA.id);
+    expect(account.needs_reauth).toBe(0);
+  });
+
+  test("authorization revocation stops active and pending sockets and marks only the linked account", async () => {
+    const readerProfile = { id: "broadcaster-revocation-reader", login: "revocation-reader", display_name: "Revocation Reader" };
+    const reader = findOrCreateUserFromTwitchProfile(readerProfile);
+    const readerAccount = upsertTwitchAccount(reader.id, readerProfile, {
+      accessToken: "access-revocation-reader",
+      refreshToken: "refresh-revocation-reader",
+      scopes: ["user:read:chat"],
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    });
+    setChannelIngestTwitchAccount(channelA.id, readerAccount.id);
+    await startChannelIngest(channelA.id);
+    const activeSocket = sockets.get(String(channelA.id));
+    let pendingSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      pendingSocket = new FakeWebSocket(url);
+      socketInstances.push(pendingSocket);
+      return pendingSocket;
+    });
+    emitEventSub(activeSocket, "session_reconnect", {
+      session: { reconnect_url: "wss://eventsub.wss.twitch.tv/ws?reconnect=revocation-test" },
+    });
+    expect(pendingSocket).not.toBeNull();
+
+    emitRevocation(activeSocket, channelA, "authorization_revoked", {
+      condition: {
+        broadcaster_user_id: channelA.twitch_broadcaster_id,
+        user_id: "broadcaster-revocation-reader",
+      },
+    });
+    await flushAsyncWork();
+
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({
+      status: "reauthorization_required",
+      running: false,
+      sessionId: null,
+      subscriptionId: null,
+      revocationStatus: "authorization_revoked",
+      lastError: "Twitch authorization for the linked reader account was revoked. Reconnect the account to resume ingest.",
+    });
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toEqual(expect.objectContaining({
+      desiredRunning: false,
+      hasWebSocket: false,
+      hasPendingWebSocket: false,
+      timers: { poll: false, reconnect: false, watchdog: false },
+    }));
+    expect(activeSocket.closeCalls).toBe(1);
+    expect(pendingSocket.closeCalls).toBe(1);
+    expect(getDatabase().prepare("SELECT needs_reauth FROM twitch_accounts WHERE twitch_user_id = ?").get("broadcaster-revocation-reader").needs_reauth).toBe(1);
+    expect(getDatabase().prepare("SELECT needs_reauth FROM twitch_accounts WHERE twitch_user_id = ?").get("broadcaster-A").needs_reauth).toBe(0);
+    expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM twitch_accounts WHERE needs_reauth = 1").get().count).toBe(1);
+
+    activeSocket.emit("close", 1006);
+    await flushAsyncWork();
+    expect(socketInstances).toHaveLength(2);
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id).timers.reconnect).toBe(false);
+  });
+
+  test.each([
+    ["user_removed", "The linked reader Twitch account no longer exists."],
+    ["version_removed", "Twitch no longer supports this EventSub channel.chat.message subscription version."],
+    ["future_status", "Twitch revoked the EventSub subscription for an unknown reason."],
+  ])("%s revocation fails closed without marking or reconnecting", async (revocationStatus, lastError) => {
+    await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+    const ownerBefore = getDatabase().prepare("SELECT owner_user_id FROM channels WHERE id = ?").get(channelA.id);
+
+    emitRevocation(socket, channelA, revocationStatus);
+    await flushAsyncWork();
+
+    expect(getChannelIngestStatus(channelA.id)).toMatchObject({
+      status: "error",
+      running: false,
+      revocationStatus,
+      lastError,
+    });
+    expect(getTwitchIngestPoolDebugStateForTests(channelA.id)).toEqual(expect.objectContaining({
+      desiredRunning: false,
+      hasWebSocket: false,
+      hasPendingWebSocket: false,
+      timers: { poll: false, reconnect: false, watchdog: false },
+    }));
+    expect(socket.closeCalls).toBe(1);
+    expect(getDatabase().prepare("SELECT needs_reauth FROM twitch_accounts WHERE twitch_user_id = ?").get("broadcaster-A").needs_reauth).toBe(0);
+    expect(getDatabase().prepare("SELECT owner_user_id FROM channels WHERE id = ?").get(channelA.id)).toEqual(ownerBefore);
+
+    socket.emit("close", 1006);
+    await flushAsyncWork();
+    expect(socketInstances).toHaveLength(1);
   });
 
   test("shutdown waits for graceful WebSocket close without terminating it", async () => {

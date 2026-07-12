@@ -5,7 +5,7 @@ import WebSocket from "ws";
 import { HttpError } from "../middleware/errorHandlers.js";
 import { findChannelById } from "../repositories/channelRepository.js";
 import { saveTwitchChatMessage, saveTwitchStreamSnapshot } from "../repositories/twitchIngestRepository.js";
-import { findTwitchAccountById } from "../repositories/twitchAccountRepository.js";
+import { findTwitchAccountById, markTwitchAccountNeedsReauth } from "../repositories/twitchAccountRepository.js";
 import { getConfiguredUserToken, refreshUserAccessToken, validateUserToken } from "./twitchAuthService.js";
 import { twitchHelixRequest } from "./twitchHelixClient.js";
 import { getTwitchProviderName, loadTwitchChannelMetadata } from "./twitchMetadataService.js";
@@ -47,6 +47,7 @@ function createState(channelId) {
     desiredRunning: false,
     sessionId: null,
     subscriptionId: null,
+    revocationStatus: null,
     currentStreamId: null,
     streamStartedAt: null,
     collectedFrom: null,
@@ -102,6 +103,7 @@ function publicStatus(state) {
     running: state.running,
     sessionId: state.sessionId,
     subscriptionId: state.subscriptionId,
+    revocationStatus: state.revocationStatus,
     currentStreamId: state.currentStreamId,
     streamStartedAt: state.streamStartedAt,
     collectedFrom: state.collectedFrom,
@@ -337,6 +339,60 @@ function socketCanRemainActive(socket) {
   return Boolean(socket && socket.readyState !== WebSocket.CLOSING && socket.readyState !== WebSocket.CLOSED);
 }
 
+function isCurrentChatRevocation(state, subscription) {
+  if (subscription?.type !== "channel.chat.message") return false;
+  if (subscription.id && state.subscriptionId && subscription.id !== state.subscriptionId) return false;
+  const condition = subscription.condition || {};
+  if (condition.broadcaster_user_id != null
+    && String(condition.broadcaster_user_id) !== String(state.broadcasterId)) return false;
+  if (condition.user_id != null
+    && String(condition.user_id) !== String(state.chatReaderUserId)) return false;
+  return true;
+}
+
+function stopIngestForRevocation(state, subscription) {
+  if (!isCurrentChatRevocation(state, subscription)) return;
+  const revocationStatus = String(subscription.status || "unknown");
+  state.desiredRunning = false;
+  state.running = false;
+  state.revocationStatus = revocationStatus;
+  state.socketOpenPromise = null;
+  for (const name of Object.keys(state.timers)) clearStateTimer(state, name);
+
+  if (revocationStatus === "authorization_revoked") {
+    state.status = "reauthorization_required";
+    state.lastError = "Twitch authorization for the linked reader account was revoked. Reconnect the account to resume ingest.";
+    if (state.twitchAccountId) {
+      try {
+        markTwitchAccountNeedsReauth(state.twitchAccountId);
+      } catch {
+        state.lastError = "Twitch authorization was revoked. Reconnect the linked reader account before restarting ingest.";
+      }
+    }
+  } else if (revocationStatus === "user_removed") {
+    state.status = "error";
+    state.lastError = "The linked reader Twitch account no longer exists.";
+  } else if (revocationStatus === "version_removed") {
+    state.status = "error";
+    state.lastError = "Twitch no longer supports this EventSub channel.chat.message subscription version.";
+  } else {
+    state.status = "error";
+    state.lastError = "Twitch revoked the EventSub subscription for an unknown reason.";
+  }
+
+  const sockets = [...new Set([state.websocket, state.pendingWebsocket].filter(Boolean))];
+  state.websocket = null;
+  state.pendingWebsocket = null;
+  state.pendingKind = null;
+  state.sessionId = null;
+  state.subscriptionId = null;
+  for (const socket of sockets) state.closingSockets.add(socket);
+  void Promise.all(sockets.map((socket) => closeWebSocketGracefully(socket, WEBSOCKET_CLOSE_TIMEOUT_MS)))
+    .finally(() => {
+      for (const socket of sockets) state.closingSockets.delete(socket);
+    });
+}
+
 function beginSessionMigration(state, socket, reconnectUrl) {
   if (state.websocket !== socket || state.pendingWebsocket || state.socketOpenPromise) return;
   const validatedUrl = parseReconnectUrl(reconnectUrl);
@@ -412,6 +468,7 @@ function openSocket(state, url, { subscribe, kind }) {
           state.pendingKind = null;
           state.sessionId = session.id;
           state.subscriptionId = subscriptionId;
+          state.revocationStatus = null;
           state.connectedAt = session.connected_at || new Date().toISOString();
           state.status = "running";
           state.running = true;
@@ -431,9 +488,7 @@ function openSocket(state, url, { subscribe, kind }) {
         } else if (state.websocket === socket && messageType === "session_reconnect") {
           beginSessionMigration(state, socket, session?.reconnect_url);
         } else if (state.websocket === socket && messageType === "revocation") {
-          state.lastError = `Twitch revoked ${message.payload?.subscription?.type || "EventSub subscription"}`;
-          state.status = "error";
-          state.running = false;
+          stopIngestForRevocation(state, message.payload?.subscription);
         }
       } catch (error) {
         if (!settled) fail(error);
