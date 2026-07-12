@@ -126,7 +126,13 @@ async function startWithWatchdog(channel, timeoutSeconds = 1) {
   return socket;
 }
 
-function emitValidNotification(socket, channel, messageId = "watchdog-message") {
+function emitValidNotification(
+  socket,
+  channel,
+  messageId = "watchdog-message",
+  metadataMessageId = `eventsub-${messageId}`,
+  text = "watchdog activity",
+) {
   emitEventSub(socket, "notification", {
     subscription: { type: "channel.chat.message" },
     event: {
@@ -135,9 +141,12 @@ function emitValidNotification(socket, channel, messageId = "watchdog-message") 
       chatter_user_id: "watchdog-viewer",
       chatter_user_login: "watchdog-viewer",
       message_id: messageId,
-      message: { text: "watchdog activity" },
+      message: { text },
     },
-  }, { message_timestamp: "2026-07-12T08:00:00Z" });
+  }, {
+    message_id: metadataMessageId,
+    message_timestamp: "2026-07-12T08:00:00Z",
+  });
 }
 
 function createChannel(suffix) {
@@ -923,6 +932,86 @@ describe("multi-channel Twitch ingest pool", () => {
       { channel_id: channelA.id, stream_session_id: "stream-A" },
       { channel_id: channelB.id, stream_session_id: "stream-B" },
     ]);
+  });
+
+  test("duplicate chat delivery updates database aggregates and runtime count only once", async () => {
+    await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+
+    emitValidNotification(socket, channelA, "duplicate-chat-event", "eventsub-delivery-one", "duplicateword");
+    emitValidNotification(socket, channelA, "duplicate-chat-event", "eventsub-delivery-two", "duplicateword");
+    await flushAsyncWork();
+
+    const database = getDatabase();
+    expect(database.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE event_id = ?").get("duplicate-chat-event").count).toBe(1);
+    expect(getChannelIngestStatus(channelA.id).messagesStoredRuntime).toBe(1);
+    expect(database.prepare("SELECT total_messages FROM streams WHERE stream_id = ?").get("stream-A").total_messages).toBe(1);
+    expect(database.prepare("SELECT message_count FROM chatters WHERE stream_id = ? AND nickname = ?").get("stream-A", "watchdog-viewer").message_count).toBe(1);
+    expect(database.prepare("SELECT count FROM word_stats WHERE stream_id = ? AND word_text = ?").get("stream-A", "duplicateword").count).toBe(1);
+    expect(database.prepare("SELECT COUNT(*) AS count FROM streams WHERE channel_id = ? AND source = 'twitch'").get(channelA.id).count).toBe(1);
+  });
+
+  test("the same Twitch chat event remains deduplicated after socket migration", async () => {
+    await startChannelIngest(channelA.id);
+    const oldSocket = sockets.get(String(channelA.id));
+    emitValidNotification(oldSocket, channelA, "reconnect-duplicate-event", "eventsub-before-reconnect", "reconnectword");
+
+    let replacementSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url) => {
+      replacementSocket = new FakeWebSocket(url);
+      socketInstances.push(replacementSocket);
+      return replacementSocket;
+    });
+    emitEventSub(oldSocket, "session_reconnect", {
+      session: { reconnect_url: "wss://eventsub.wss.twitch.tv/ws?reconnect=dedup-test" },
+    });
+    emitWelcome(replacementSocket, "dedup-replacement-session");
+    await flushAsyncWork();
+
+    emitValidNotification(replacementSocket, channelA, "reconnect-duplicate-event", "eventsub-after-reconnect", "reconnectword");
+    await flushAsyncWork();
+
+    const database = getDatabase();
+    expect(database.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE event_id = ?").get("reconnect-duplicate-event").count).toBe(1);
+    expect(getChannelIngestStatus(channelA.id).messagesStoredRuntime).toBe(1);
+    expect(database.prepare("SELECT total_messages FROM streams WHERE stream_id = ?").get("stream-A").total_messages).toBe(1);
+    expect(database.prepare("SELECT message_count FROM chatters WHERE stream_id = ? AND nickname = ?").get("stream-A", "watchdog-viewer").message_count).toBe(1);
+    expect(database.prepare("SELECT count FROM word_stats WHERE stream_id = ? AND word_text = ?").get("stream-A", "reconnectword").count).toBe(1);
+    expect(database.prepare("SELECT COUNT(*) AS count FROM streams WHERE channel_id = ? AND source = 'twitch'").get(channelA.id).count).toBe(1);
+  });
+
+  test("database deduplication survives an ingest and SQLite restart", async () => {
+    await startChannelIngest(channelA.id);
+    emitValidNotification(
+      sockets.get(String(channelA.id)),
+      channelA,
+      "restart-duplicate-event",
+      "eventsub-before-restart",
+      "restartword",
+    );
+    await flushAsyncWork();
+
+    resetTwitchIngestPoolForTests();
+    closeDatabase();
+    let restartedSocket = null;
+    setTwitchIngestPoolWebSocketFactoryForTests((url, channelId) => {
+      restartedSocket = new FakeWebSocket(url);
+      socketInstances.push(restartedSocket);
+      sockets.set(String(channelId), restartedSocket);
+      queueMicrotask(() => emitWelcome(restartedSocket, `restart-session-${channelId}`));
+      return restartedSocket;
+    });
+    await startChannelIngest(channelA.id);
+    emitValidNotification(restartedSocket, channelA, "restart-duplicate-event", "eventsub-after-restart", "restartword");
+    await flushAsyncWork();
+
+    const database = getDatabase();
+    expect(database.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE event_id = ?").get("restart-duplicate-event").count).toBe(1);
+    expect(getChannelIngestStatus(channelA.id).messagesStoredRuntime).toBe(0);
+    expect(database.prepare("SELECT total_messages FROM streams WHERE stream_id = ?").get("stream-A").total_messages).toBe(1);
+    expect(database.prepare("SELECT message_count FROM chatters WHERE stream_id = ? AND nickname = ?").get("stream-A", "watchdog-viewer").message_count).toBe(1);
+    expect(database.prepare("SELECT count FROM word_stats WHERE stream_id = ? AND word_text = ?").get("stream-A", "restartword").count).toBe(1);
+    expect(database.prepare("SELECT COUNT(*) AS count FROM streams WHERE channel_id = ? AND source = 'twitch'").get(channelA.id).count).toBe(1);
   });
 
   test("unauthorized user cannot start channel ingest", async () => {
