@@ -8782,6 +8782,157 @@ dt,
   border-radius: 18px;
 }
 
+/* Restored real-session controls and three-column chat dashboard. */
+.stream-control-bar.twitch-control-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(520px, 2fr);
+  gap: 14px 18px;
+  align-items: end;
+}
+
+.twitch-control-bar .twitch-status-panel {
+  grid-row: span 2;
+}
+
+.session-control-grid {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.35fr) minmax(160px, 1.15fr) minmax(110px, .7fr) minmax(230px, 1.3fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.session-control-grid .custom-select,
+.session-control-grid .replay-action-stack {
+  min-width: 0;
+}
+
+.session-export-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.custom-select.is-disabled {
+  opacity: .55;
+}
+
+.custom-select.is-disabled .custom-select-trigger {
+  cursor: not-allowed;
+}
+
+.chat-dashboard.is-three-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.session-insights {
+  min-width: 0;
+  padding: 18px;
+}
+
+.session-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 14px 0 0;
+}
+
+.session-insights-title {
+  margin: 8px 0 0;
+  color: var(--text-primary);
+  font-weight: 750;
+}
+
+.session-insights-grid div {
+  padding: 10px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-bg) 82%, transparent);
+}
+
+.session-insights-grid dt,
+.session-insights-grid dd {
+  margin: 0;
+}
+
+.session-insights-grid dt,
+.leaderboard-calculated-note,
+.leaderboard-empty,
+.session-insights-warning,
+.session-insights-empty {
+  color: var(--text-muted);
+  font-size: .78rem;
+}
+
+.session-insights-grid dd {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.session-status {
+  color: var(--text-muted);
+  font-size: .72rem;
+}
+
+.session-status.is-live,
+.replay-state.is-active {
+  color: var(--accent-lime);
+}
+
+.leaderboard-empty {
+  padding: 22px 4px;
+}
+
+.leaderboard-calculated-note {
+  margin: 8px 0 0;
+}
+
+.section-inline-error,
+.session-insights-warning {
+  color: var(--danger-text, #ff9d9d);
+}
+
+@media (max-width: 1180px) {
+  .stream-control-bar.twitch-control-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .twitch-control-bar .twitch-status-panel {
+    grid-row: auto;
+  }
+
+  .session-control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .chat-dashboard.is-three-column {
+    grid-template-columns: 1fr;
+  }
+
+  .session-insights {
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .session-control-grid,
+  .session-insights-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .session-export-actions,
+  .session-export-actions button,
+  .session-control-grid .replay-actions,
+  .session-control-grid .replay-actions button {
+    width: 100%;
+  }
+}
+
 /* Final MVP error surfaces and non-interactive identity badges. */
 .app-error-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .app-error-state { grid-column: 1 / -1; width: min(760px, 100%); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 22px; border-radius: 24px; }

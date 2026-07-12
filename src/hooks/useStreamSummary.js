@@ -67,13 +67,14 @@ function normalizeStreamSummary(payload) {
   }
 }
 
-export function useStreamSummary(streamId) {
+export function useStreamSummary(streamId, { enabled = true } = {}) {
   const [summary, setSummary] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
   const [isGenerating, setIsGenerating] = useState(false)
 
   useEffect(() => {
+    if (!enabled) return undefined
     const controller = new AbortController()
     let isActive = true
 
@@ -122,7 +123,7 @@ export function useStreamSummary(streamId) {
       isActive = false
       controller.abort()
     }
-  }, [streamId])
+  }, [enabled, streamId])
 
   async function generate() {
     setIsGenerating(true)

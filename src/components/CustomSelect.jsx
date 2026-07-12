@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from "motion/react"
 
-function CustomSelect({ id, label, value, options, onChange }) {
+function CustomSelect({ id, label, value, options, onChange, disabled = false }) {
   const [isOpen, setIsOpen] = useState(false)
   const rootRef = useRef(null)
   const prefersReducedMotion = useReducedMotion()
@@ -35,7 +35,7 @@ function CustomSelect({ id, label, value, options, onChange }) {
   }
 
   return (
-    <div className={`custom-select ${isOpen ? 'is-open' : ''}`} ref={rootRef}>
+    <div className={`custom-select ${isOpen ? 'is-open' : ''} ${disabled ? 'is-disabled' : ''}`} ref={rootRef}>
       <span className="custom-select-label" id={`${id}-label`}>
         {label}
       </span>
@@ -47,6 +47,7 @@ function CustomSelect({ id, label, value, options, onChange }) {
           aria-expanded={isOpen}
           aria-controls={`${id}-menu`}
           aria-labelledby={`${id}-label ${id}-value`}
+          disabled={disabled}
           onClick={() => setIsOpen((open) => !open)}
         >
           <span id={`${id}-value`}>{selectedOption?.label}</span>
@@ -69,6 +70,7 @@ function CustomSelect({ id, label, value, options, onChange }) {
                 role="option"
                 aria-selected={option.value === value}
                 tabIndex={isOpen ? 0 : -1}
+                disabled={disabled}
                 onClick={() => selectOption(option.value)}
                 key={option.value}
               >

@@ -2,6 +2,7 @@ import CustomSelect from './CustomSelect.jsx'
 import { ProgressActionButton, Reveal } from './MotionPrimitives.jsx'
 import { formatCategory, formatStreamTitle } from '../i18n/translations.js'
 import { hasCollectionGap } from '../utils/dashboardUi.js'
+import { createSessionCsv, createSessionReportHtml, sessionExportFilename } from '../utils/sessionDashboard.js'
 
 function createCsv(stream) {
   const rows = [
@@ -18,6 +19,16 @@ function downloadCsv(stream) {
   const link = document.createElement('a')
   link.href = url
   link.download = `${stream.id}-pulse.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadText(content, type, filename) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -44,7 +55,7 @@ function formatCollectionTime(value, isRussian) {
   }).format(date)
 }
 
-function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, theme, onToggleTheme, replay, streamSummary, t }) {
+function StreamControlBar({ streams, internalSessions = [], selectedSession = null, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, sessionDataLoading = false, theme, onToggleTheme, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -97,6 +108,33 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
       if (!canManageChannel) return Promise.resolve(null)
       return action()
     }
+    const realStreamOptions = internalSessions.map((stream) => ({ value: stream.id, label: `${stream.title} · ${stream.date ?? t.notAvailable}` }))
+    const realCompareOptions = [
+      { value: '', label: t.compareOff },
+      ...internalSessions.filter((stream) => stream.id !== selectedStreamId).map((stream) => ({ value: stream.id, label: `${stream.title} · ${stream.date ?? t.notAvailable}` })),
+    ]
+    const canReplay = Boolean(selectedSession?.samples?.length >= 2 && replay?.canReplay)
+    const replayStatusLabel = replay?.status?.isActive
+      ? `${t.replayRunning} · ${replay.status.progress}% · ${replay.status.currentTime ?? t.notAvailable}`
+      : canReplay ? t.replayIdle : t.replayInsufficientSamples
+    const exportDisabled = !selectedSession?.samples?.length || sessionDataLoading
+    const exportSelectedCsv = () => downloadText(createSessionCsv(selectedSession), 'text/csv;charset=utf-8', sessionExportFilename(selectedSession, 'csv'))
+    const exportSelectedReport = () => downloadText(createSessionReportHtml(selectedSession, {
+      notAvailable: t.notAvailable,
+      metrics: t.reportMetrics,
+      duration: t.duration,
+      averageViewers: t.averageViewers,
+      peakViewers: t.peakViewers,
+      totalMessages: t.streamMessages,
+      uniqueChatters: t.sessionActiveChatters,
+      activityPeak: t.activityPeak,
+      topChatters: t.topChatters,
+      topWords: t.reportTopWords,
+      samples: t.reportSamples,
+      time: t.time,
+      viewers: t.viewers,
+      messagesPerMinute: t.chatPerMin,
+    }), 'text/html;charset=utf-8', sessionExportFilename(selectedSession, 'html'))
 
     return (
       <Reveal as="section" className="stream-control-bar twitch-control-bar glass-panel soft-glow" aria-label={t.streamControls}>
@@ -125,7 +163,20 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
           {readOnlyAccess ? <span className="twitch-read-only-badge">{t.readOnlyAccess}</span> : null}
         </div>
 
-        <div className="twitch-ingest-actions">
+        <div className="session-control-grid">
+          <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={realStreamOptions.length ? realStreamOptions : [{ value: '', label: t.noInternalSessions }]} onChange={onStreamChange} disabled={!realStreamOptions.length} />
+          <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={realCompareOptions} onChange={onCompareChange} disabled={realCompareOptions.length < 2} />
+          <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay?.speed ?? 1} options={[1, 2, 5, 10].map((value) => ({ value, label: `${value}x` }))} onChange={replay?.setSpeed} disabled={!canReplay} />
+          <div className="replay-action-stack">
+            <span className="replay-actions-label">{t.replayMode}<span className={`replay-state ${replay?.status?.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatusLabel}</span></span>
+            <div className="replay-actions">
+              <button className="liquid-button" type="button" disabled={!canReplay || replay.status.isActive} onClick={replay.start}>{t.startReplay}</button>
+              <button className="liquid-button" type="button" disabled={!replay?.status?.isActive} onClick={replay.stop}>{t.stopReplay}</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="twitch-ingest-actions session-export-actions">
           {canManageChannel ? <button
             className="liquid-button"
             type="button"
@@ -146,6 +197,8 @@ function StreamControlBar({ streams, selectedStreamId, compareStreamId, onStream
             <span aria-hidden="true" />
             {themeLabel}
           </button>
+          <button className="liquid-button" type="button" disabled={exportDisabled} onClick={exportSelectedCsv}>{t.exportCsv}</button>
+          <button className="liquid-button" type="button" disabled={!selectedSession || sessionDataLoading} onClick={exportSelectedReport}>{t.generateReport}</button>
         </div>
       </Reveal>
     )

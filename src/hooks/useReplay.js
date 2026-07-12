@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 const initialStatus = { status: 'idle', isActive: false, speed: null, progress: 0 }
 
-export function useReplay(streamId) {
+export function useReplay(streamId, { enabled = true } = {}) {
   const [status, setStatus] = useState(initialStatus)
   const [speed, setSpeed] = useState(5)
   const [events, setEvents] = useState([])
@@ -10,6 +10,7 @@ export function useReplay(streamId) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    if (!enabled) return undefined
     const source = new EventSource(`/api/replay/${encodeURIComponent(streamId)}/events`)
     const eventTypes = ['replay_started', 'chat_message', 'viewer_sample', 'moderation_action', 'stream_marker', 'replay_finished', 'replay_error']
 
@@ -41,7 +42,7 @@ export function useReplay(streamId) {
       .catch(setError)
 
     return () => source.close()
-  }, [streamId])
+  }, [enabled, streamId])
 
   async function request(path, options) {
     setIsPending(true)

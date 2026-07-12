@@ -25,12 +25,15 @@ import { useModerationAnalytics } from './hooks/useModerationAnalytics.js'
 import { useStreamArchive } from './hooks/useStreamArchive.js'
 import { useStreamSummary } from './hooks/useStreamSummary.js'
 import { useReplay } from './hooks/useReplay.js'
+import { useClientReplay } from './hooks/useClientReplay.js'
+import { useSessionReport } from './hooks/useSessionReport.js'
 import { useIdentity } from './hooks/useIdentity.js'
 import { useTwitchVods } from './hooks/useTwitchVods.js'
 import { useTwitchModerators } from './hooks/useTwitchModerators.js'
 import { translations } from './i18n/translations.js'
 import AppErrorState from './components/AppErrorState.jsx'
 import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
+import { buildInternalSessions, chooseDefaultSessionId, mergeSessionData } from './utils/sessionDashboard.js'
 
 const allSectionIds = ['top', 'pulse', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
 const StreamPulse = lazy(() => import('./components/StreamPulse.jsx'))
@@ -41,6 +44,24 @@ function StreamPulseFallback({ t }) {
       <p>{t.loadingMetadata}</p>
     </section>
   )
+}
+
+function adaptSessionToPulse(session, fallbackStream) {
+  if (!session?.samples?.length) return null
+  return {
+    ...fallbackStream,
+    id: session.streamId,
+    title: session.title,
+    category: session.category,
+    categorySegments: [],
+    chartData: session.samples.map((sample) => ({
+      time: sample.time,
+      viewers: sample.viewers,
+      chatMessagesPerMinute: sample.messagesPerMinute,
+      category: session.category,
+      previewLabel: session.title,
+    })),
+  }
 }
 
 function App() {
@@ -70,10 +91,39 @@ function App() {
   const wordAnalytics = useWordAnalytics({ channelId })
   const moderationAnalytics = useModerationAnalytics({ channelId })
   const streamArchive = useStreamArchive({ channelId })
-  const streamSummary = useStreamSummary(selectedStream.id)
-  const replay = useReplay(selectedStream.id)
   const dashboardMode = channelId ? 'connected-channel' : twitchIngest.connection?.provider === 'twitch' ? 'legacy-fenya' : 'mock'
   const isTwitchMode = dashboardMode !== 'mock'
+  const streamSummary = useStreamSummary(selectedStream.id, { enabled: !isTwitchMode })
+  const replay = useReplay(selectedStream.id, { enabled: !isTwitchMode })
+  const internalSessions = useMemo(() => buildInternalSessions(
+    streamArchive.archive,
+    streamAnalytics.analytics,
+    twitchMetadata.metadata?.isLive === true,
+  ), [streamArchive.archive, streamAnalytics.analytics, twitchMetadata.metadata?.isLive])
+  const defaultInternalSessionId = chooseDefaultSessionId(internalSessions, streamAnalytics.analytics?.streamId, twitchMetadata.metadata?.isLive === true)
+  const activeSelectedStreamId = isTwitchMode && !internalSessions.some((session) => session.id === selectedStreamId)
+    ? defaultInternalSessionId
+    : selectedStreamId
+  const activeCompareStreamId = compareStreamId !== activeSelectedStreamId && internalSessions.some((session) => session.id === compareStreamId)
+    ? compareStreamId
+    : ''
+  const selectedInternalBase = internalSessions.find((session) => session.id === activeSelectedStreamId) ?? null
+  const compareInternalBase = internalSessions.find((session) => session.id === activeCompareStreamId) ?? null
+  const selectedSessionReport = useSessionReport(selectedInternalBase?.id, isTwitchMode)
+  const compareSessionReport = useSessionReport(compareInternalBase?.id, isTwitchMode && Boolean(compareStreamId))
+  const currentStreamId = streamAnalytics.analytics?.streamId
+  const selectedIsCurrent = Boolean(selectedInternalBase?.id && selectedInternalBase.id === currentStreamId)
+  const selectedSession = useMemo(() => mergeSessionData(selectedInternalBase, selectedSessionReport.report, selectedIsCurrent ? {
+    samples: streamAnalytics.analytics?.points,
+    events: streamAnalytics.analytics?.events,
+    totalMessages: chatAnalytics.analytics?.totalMessages,
+    uniqueChatters: chatAnalytics.analytics?.activeNow,
+    activityPeak: chatAnalytics.analytics?.activityPeak,
+    topChatters: chatAnalytics.analytics?.leaderboards?.messages,
+    topWords: wordAnalytics.analytics?.words,
+  } : {}), [selectedInternalBase, selectedSessionReport.report, selectedIsCurrent, streamAnalytics.analytics, chatAnalytics.analytics, wordAnalytics.analytics])
+  const compareSession = useMemo(() => mergeSessionData(compareInternalBase, compareSessionReport.report), [compareInternalBase, compareSessionReport.report])
+  const clientReplay = useClientReplay(selectedSession?.samples ?? [], selectedInternalBase?.id)
   const isDataModeLoading = twitchIngest.isLoading && (channelId ? !twitchIngest.status : !twitchIngest.connection)
   const permissions = resolveDashboardPermissions({
     identity: identity.identity,
@@ -122,7 +172,10 @@ function App() {
     isLive: twitchMetadata.metadata?.isLive ?? null,
   }
   const streamPulseEvents = backendPulseData?.events ?? streamEvents
-  const hasRealStream = Boolean(streamAnalytics.analytics?.points?.length)
+  const replayedSelectedSession = selectedSession ? { ...selectedSession, samples: clientReplay.visibleSamples } : null
+  const realPulseStream = adaptSessionToPulse(replayedSelectedSession, selectedStream)
+  const realCompareStream = adaptSessionToPulse(compareSession, selectedStream)
+  const hasRealStream = Boolean(realPulseStream?.chartData?.length)
   const hasRealChat = Boolean(chatAnalytics.analytics?.leaderboards?.messages?.length)
   const hasRealWords = Boolean(wordAnalytics.analytics?.words?.length)
   const twitchConnected = Boolean(
@@ -133,10 +186,8 @@ function App() {
   const renderedSectionIds = useMemo(() => (
     backendUnavailable || isDataModeLoading
       ? ['top']
-      : isTwitchMode
-        ? allSectionIds.filter((id) => id !== 'import')
-        : allSectionIds
-  ), [backendUnavailable, isDataModeLoading, isTwitchMode])
+      : allSectionIds
+  ), [backendUnavailable, isDataModeLoading])
   const replayChatAnalytics = useMemo(() => {
     if (!replay.data.chatMessages.length) return null
     const counts = new Map()
@@ -240,8 +291,10 @@ function App() {
       <div className="content-grid" id="dashboard">
         <StreamControlBar
           streams={streams}
-          selectedStreamId={selectedStreamId}
-          compareStreamId={compareStreamId}
+          internalSessions={internalSessions}
+          selectedSession={selectedSession}
+          selectedStreamId={isTwitchMode ? activeSelectedStreamId : selectedStreamId}
+          compareStreamId={isTwitchMode ? activeCompareStreamId : compareStreamId}
           onStreamChange={handleStreamChange}
           onCompareChange={setCompareStreamId}
           twitchMetadata={twitchMetadata}
@@ -252,9 +305,10 @@ function App() {
           canManageChannel={canManageChannel}
           readOnlyAccess={hasReadOnlyAccess}
           isDataModeLoading={isDataModeLoading}
+          sessionDataLoading={selectedSessionReport.isLoading}
           theme={theme}
           onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
-          replay={replay}
+          replay={isTwitchMode ? clientReplay : replay}
           streamSummary={streamSummary}
           t={t}
         />
@@ -292,7 +346,7 @@ function App() {
             ) : null}
             {hasRealStream ? (
               <Suspense fallback={<StreamPulseFallback t={t} />}>
-                <StreamPulse stream={streamPulseStream} compareStream={null} events={backendPulseData?.events ?? []} t={t} />
+                <StreamPulse stream={realPulseStream} compareStream={realCompareStream} events={selectedSession?.events ?? []} t={t} />
               </Suspense>
             ) : (
               <RealDataEmptySection
@@ -302,18 +356,21 @@ function App() {
                 minHeight="chart"
               />
             )}
-            {hasRealChat ? (
-              <TopChatters
-                chatters={[]}
-                chatAnalytics={chatAnalytics.analytics}
-                language={language}
-                realDataMode
-                hasRealStream={hasRealStream}
-                t={t}
-              />
-            ) : (
-              <RealDataEmptySection id="chatters" title={t.viewersAndChat} note={dashboardMode === 'connected-channel' ? t.channelChatEmpty : t.noChatMessages} minHeight="large" />
-            )}
+            <TopChatters
+              chatters={[]}
+              chatAnalytics={selectedIsCurrent ? chatAnalytics.analytics : selectedSession?.topChatters?.length ? {
+                totalMessages: selectedSession.totalMessages ?? 0,
+                activeNow: selectedSession.uniqueChatters ?? 0,
+                activityPeak: selectedSession.activityPeak ?? 1,
+                leaderboards: { messages: selectedSession.topChatters.map((item) => ({ nickname: item.nickname, value: item.messages ?? item.value ?? 0 })) },
+                recentMessages: [],
+              } : null}
+              realDataMode
+              session={selectedSession}
+              ingestStatus={twitchIngest.status}
+              error={chatAnalytics.error || selectedSessionReport.error}
+              t={t}
+            />
             {hasRealWords ? (
               <WordMutationCloud
                 words={[]}
@@ -335,7 +392,7 @@ function App() {
               canManageChannel={canManageChannel}
               t={t}
             />
-            <StreamArchive streams={[]} archive={streamArchive.archive} selectedStreamId="" realDataMode vodArchive={twitchVods} canSyncVods={canManageChannel} dashboardMode={dashboardMode} t={t} />
+            <StreamArchive streams={[]} archive={streamArchive.archive} selectedStreamId={activeSelectedStreamId.startsWith('stream-') ? activeSelectedStreamId : `stream-${activeSelectedStreamId}`} realDataMode vodArchive={twitchVods} canSyncVods={canManageChannel} dashboardMode={dashboardMode} t={t} />
             <RealDataSummary
               connection={twitchIngest.connection}
               ingestStatus={twitchIngest.status}
@@ -347,6 +404,7 @@ function App() {
               channelLogin={selectedChannel?.twitchLogin}
               t={t}
             />
+            <ImportDataPanel t={t} />
           </>
         ) : (
           <>
@@ -357,7 +415,18 @@ function App() {
             <TopChatters
               chatters={chatters}
               chatAnalytics={replayChatAnalytics ?? (selectedStream.id === currentStream.id ? chatAnalytics.analytics : null)}
-              language={language}
+              session={{
+                ...selectedStream,
+                streamId: selectedStream.id,
+                durationMinutes: selectedStream.summary?.durationMinutes,
+                averageViewers: selectedStream.summary?.averageViewers,
+                peakViewers: selectedStream.summary?.peakViewers,
+                totalMessages: selectedStream.metrics?.chatMessages,
+                uniqueChatters: selectedStream.metrics?.activeChatters,
+                activityPeak: null,
+                samples: selectedStream.chartData?.map((point) => ({ time: point.time, viewers: point.viewers, messagesPerMinute: point.chatMessagesPerMinute })) ?? [],
+                events: streamEvents,
+              }}
               t={t}
             />
             <WordMutationCloud
