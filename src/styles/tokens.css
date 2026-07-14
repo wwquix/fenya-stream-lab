@@ -1,31 +1,131 @@
-:root {
-  --bg-main: #f5f5f7;
-  --bg-panel: rgba(255, 255, 255, 0.78);
-  --bg-panel-strong: rgba(255, 255, 255, 0.94);
-  --text-main: #1d1d1f;
-  --text-muted: #6e6e73;
-  --text-dim: #86868b;
-  --toxic-green: #607d98;
-  --toxic-green-soft: rgba(96, 125, 152, 0.11);
-  --danger-red: #b95861;
-  --cyan: #5f8eae;
-  --violet: #66778d;
-  --amber: #9b7b48;
-  --glass-border: rgba(15, 23, 42, 0.08);
-  --glass-border-strong: rgba(69, 87, 108, 0.18);
-  --radius-lg: 18px;
-  --radius-xl: 28px;
-  --radius-control: 18px;
-  --radius-inner: 16px;
-  --shadow-glow: 0 16px 42px rgba(59, 72, 89, 0.1);
-  --shadow-panel: 0 18px 50px rgba(34, 42, 53, 0.08);
-  --transition-fast: 140ms ease;
-  --transition-soft: 260ms ease;
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Geometry and rhythm */
+  --radius-section: 30px;
+  --radius-card: 22px;
+  --radius-control: 14px;
+  --radius-compact: 12px;
+  --radius-pill: 999px;
+  --radius-xl: var(--radius-section);
+  --radius-lg: var(--radius-card);
+  --radius-inner: var(--radius-control);
+  --space-section: clamp(24px, 3.5vw, 44px);
+  --space-card: clamp(16px, 2vw, 22px);
+  --control-height: 42px;
+
+  /* Typography */
   --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif;
   --font-heading: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif;
   --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
-  --letter-spacing-label: 0.06em;
+  --heading-weight: 600;
+  --label-weight: 600;
+  --letter-spacing-label: 0.035em;
   --line-height-body: 1.55;
-  --line-height-heading: 0.96;
-  color-scheme: light;
+  --line-height-heading: 1.04;
+
+  /* Light theme */
+  --theme-page: #f5f5f7;
+  --theme-card: rgba(255, 255, 255, 0.86);
+  --theme-card-elevated: #ffffff;
+  --theme-text-primary: #1d1d1f;
+  --theme-text-secondary: #6e6e73;
+  --theme-text-muted: #85858a;
+  --theme-border: rgba(15, 23, 42, 0.08);
+  --theme-border-soft: rgba(15, 23, 42, 0.055);
+  --theme-shadow: 0 16px 44px rgba(38, 48, 61, 0.075);
+  --theme-shadow-hover: 0 20px 50px rgba(38, 48, 61, 0.1);
+  --theme-card-shadow: 0 8px 24px rgba(38, 48, 61, 0.055);
+  --theme-accent: #52697d;
+  --theme-accent-soft: rgba(82, 105, 125, 0.1);
+  --theme-hover: #eef1f3;
+  --theme-chart-viewers: #52697d;
+  --theme-chart-messages: #8a9aa8;
+  --theme-chart-compare: rgba(82, 105, 125, 0.42);
+  --theme-chart-grid: rgba(29, 29, 31, 0.085);
+  --theme-chart-cursor: rgba(29, 29, 31, 0.18);
+  --theme-chart-selection: rgba(82, 105, 125, 0.1);
+  --theme-marker: #667c8f;
+  --theme-marker-stroke: #ffffff;
+  --theme-status: #66806f;
+  --theme-hero:
+    radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.98), transparent 22rem),
+    radial-gradient(circle at 76% 30%, rgba(197, 211, 221, 0.48), transparent 28rem),
+    linear-gradient(135deg, #fbfbfc, #e8edf0);
+
+  /* Compatibility aliases used by existing components */
+  --bg-main: var(--theme-page);
+  --bg-page: var(--theme-page);
+  --bg-panel: var(--theme-card);
+  --bg-panel-strong: var(--theme-card-elevated);
+  --bg-card: var(--theme-card-elevated);
+  --bg-card-soft: var(--theme-hover);
+  --bg-elevated: var(--theme-card-elevated);
+  --text-main: var(--theme-text-primary);
+  --text-muted: var(--theme-text-secondary);
+  --text-secondary: var(--theme-text-secondary);
+  --text-dim: var(--theme-text-muted);
+  --text-primary: var(--theme-text-primary);
+  --panel-bg: var(--theme-card);
+  --border-soft: var(--theme-border-soft);
+  --toxic-green: var(--theme-accent);
+  --toxic-green-soft: var(--theme-accent-soft);
+  --accent-lime: var(--theme-status);
+  --danger-red: #b95861;
+  --danger-text: #a94750;
+  --cyan: var(--theme-chart-messages);
+  --violet: var(--theme-chart-viewers);
+  --amber: #9b7b48;
+  --glass-border: var(--theme-border);
+  --glass-border-strong: rgba(82, 105, 125, 0.2);
+  --shadow-panel: var(--theme-shadow);
+  --shadow-glow: var(--theme-shadow-hover);
+  --shadow-soft: var(--theme-card-shadow);
+  --accent: var(--theme-accent);
+  --accent-soft: var(--theme-accent-soft);
+  --hover-soft: var(--theme-hover);
+  --chart-viewers-line: var(--theme-chart-viewers);
+  --chart-messages-line: var(--theme-chart-messages);
+  --chart-compare-line: var(--theme-chart-compare);
+  --chart-grid: var(--theme-chart-grid);
+  --chart-cursor: var(--theme-chart-cursor);
+  --chart-selection: var(--theme-chart-selection);
+  --chart-marker: var(--theme-marker);
+  --chart-marker-stroke: var(--theme-marker-stroke);
+  --transition-fast: 140ms ease;
+  --transition-soft: 260ms ease;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --theme-page: #111214;
+  --theme-card: rgba(29, 30, 33, 0.9);
+  --theme-card-elevated: #242529;
+  --theme-text-primary: rgba(255, 255, 255, 0.92);
+  --theme-text-secondary: rgba(255, 255, 255, 0.68);
+  --theme-text-muted: rgba(255, 255, 255, 0.52);
+  --theme-border: rgba(255, 255, 255, 0.085);
+  --theme-border-soft: rgba(255, 255, 255, 0.055);
+  --theme-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+  --theme-shadow-hover: 0 22px 54px rgba(0, 0, 0, 0.3);
+  --theme-card-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+  --theme-accent: #93a4b4;
+  --theme-accent-soft: rgba(147, 164, 180, 0.1);
+  --theme-hover: #2b2d31;
+  --theme-chart-viewers: #a6b4c1;
+  --theme-chart-messages: #71899c;
+  --theme-chart-compare: rgba(220, 224, 229, 0.38);
+  --theme-chart-grid: rgba(255, 255, 255, 0.075);
+  --theme-chart-cursor: rgba(255, 255, 255, 0.18);
+  --theme-chart-selection: rgba(147, 164, 180, 0.12);
+  --theme-marker: #9aabb9;
+  --theme-marker-stroke: #1c1d20;
+  --theme-status: #789383;
+  --theme-hero:
+    radial-gradient(circle at 22% 10%, rgba(76, 80, 88, 0.42), transparent 24rem),
+    radial-gradient(circle at 78% 28%, rgba(67, 82, 96, 0.28), transparent 30rem),
+    linear-gradient(135deg, #25262a, #17181b);
+  --glass-border-strong: rgba(147, 164, 180, 0.2);
+  --danger-text: #ff9d9d;
 }

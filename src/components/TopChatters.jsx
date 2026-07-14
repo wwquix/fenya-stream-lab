@@ -63,7 +63,7 @@ function TopChatters({ chatters, chatAnalytics = null, realDataMode = false, ses
   const activityPeak = session?.activityPeak ?? chatAnalytics?.activityPeak ?? null
   return (
     <Reveal as="section" className="section-panel top-chatters" id="chatters" aria-labelledby="top-chatters-title">
-      <div className="section-heading"><div className="liquid-card hover-lift"><h2 id="top-chatters-title">{t.viewersAndChat}</h2></div></div>
+      <div className="section-heading"><div><h2 id="top-chatters-title">{t.viewersAndChat}</h2></div></div>
       {error ? <p className="section-inline-error" role="alert">{t.chatSectionPartialError}</p> : null}
       <div className="chat-summary-metrics" aria-label={t.viewersAndChat}>
         <div className="liquid-card hover-lift"><span>{t.sessionActiveChatters}</span><strong><AnimatedNumber value={activeChatters} format={formatPlainInteger} /></strong></div>
