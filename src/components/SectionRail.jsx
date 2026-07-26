@@ -1,6 +1,7 @@
 const railItems = [
   { id: 'top', labelKey: 'navTop' },
   { id: 'pulse', labelKey: 'navPulse' },
+  { id: 'insights', labelKey: 'navInsights' },
   { id: 'chatters', labelKey: 'navChatters' },
   { id: 'words', labelKey: 'navSpeech' },
   { id: 'moderators', labelKey: 'navMods' },
