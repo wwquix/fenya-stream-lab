@@ -213,6 +213,11 @@
   outline: none;
 }
 
+.advanced-insights-panel:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 4px;
+}
+
 .advanced-tab-content {
   display: grid;
   min-width: 0;

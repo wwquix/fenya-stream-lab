@@ -189,7 +189,7 @@ Clip confidence is `clamp(0.35 + 0.07 × reason count + min(sample count, 20) / 
 
 ### Chat loyalty
 
-Loyalty is derived only from saved `chat_messages` and aggregate `chatters` participation rows, grouped by normalized login and stream within the same channel. It does not infer silent viewers or watch time. The deterministic mock seed includes aggregate message-count participation for archived demo streams; real Twitch results continue to use only rows collected for that source.
+Loyalty is derived from saved `chat_messages` and, for non-Twitch legacy/mock history, aggregate `chatters` participation rows, grouped by normalized login and stream within the same channel. Zero-message aggregates are ignored. Because the legacy `chatters` table has no source column, real Twitch loyalty fails closed to source-tagged `chat_messages` only. It does not infer silent viewers or watch time. The deterministic mock seed includes aggregate message-count participation for archived demo streams.
 
 Categories are mutually exclusive. The service applies this priority:
 

@@ -125,7 +125,7 @@ The local summary uses the same advanced clip-ranking function as the advanced e
 ## Advanced analytics flow
 
 1. The legacy stream route resolves only an unowned compatibility stream for the configured login; the connected-channel route first applies centralized membership authorization.
-2. The repository loads the selected stream plus ordered samples, markers, segments, and channel/source-scoped history. Chat messages are aggregated in SQL by stream and normalized login, including timestamp-coverage metadata, instead of loading every raw message into application memory.
+2. The repository loads the selected stream plus ordered samples, markers, segments, and channel/source-scoped history. Chat messages are aggregated in SQL by stream and normalized login, including timestamp-coverage metadata, instead of loading every raw message into application memory. The legacy `chatters` aggregate has no source column, so it is used only for non-Twitch compatibility history; Twitch loyalty fails closed to source-tagged messages.
 3. A data-quality summary records the exact row counts, historical depth, timestamp coverage, collection boundary, and warnings.
 4. Pure calculations produce four independent sections:
    - chat loyalty from saved message rows and aggregate chatter participation only;

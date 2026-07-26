@@ -181,6 +181,10 @@ function seedAdvancedAnalyticsRows() {
     minute: 7,
     source: "mock",
   });
+  getDatabase().prepare(`
+    INSERT INTO chatters (stream_id, nickname, message_count, updated_at)
+    VALUES ('a-5', 'unsourced_aggregate_user', 999, ?)
+  `).run(timestamp(9));
   insertMessage({ streamId: "b-1", channel: channelB, login: "other_channel_user", minute: 8 });
   for (const [index, login] of ["legacy_regular", "legacy_returning", "legacy_new"].entries()) {
     insertMessage({
@@ -436,6 +440,8 @@ describe("advanced analytics API", () => {
       .not.toContain("mock_only_user");
     expect(response.body.loyalty.participants.map((participant) => participant.login))
       .not.toContain("same_stream_mock_user");
+    expect(response.body.loyalty.participants.map((participant) => participant.login))
+      .not.toContain("unsourced_aggregate_user");
     expect(response.body.loyalty.participants.map((participant) => participant.login))
       .not.toContain("other_channel_user");
     expect(response.body.clipSuggestions.every((candidate) => candidate.peakViewers < 99_999)).toBe(true);

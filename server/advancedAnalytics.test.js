@@ -324,6 +324,23 @@ describe("advanced analytics pure calculations", () => {
       });
       expect(Number.isFinite(result.newShare)).toBe(true);
     });
+
+    test("does not treat zero-message aggregate rows as chat participation", () => {
+      const result = calculateLoyalty(dataset({
+        chatters: [{
+          streamId: "stream-5",
+          nickname: "silent_aggregate",
+          messageCount: 0,
+          updatedAt: timestamp(5),
+        }],
+      }));
+
+      expect(result).toMatchObject({
+        activeParticipants: 0,
+        participants: [],
+        topParticipants: [],
+      });
+    });
   });
 
   describe("clip suggestions", () => {

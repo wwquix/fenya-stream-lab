@@ -73,15 +73,20 @@ export function loadAdvancedAnalyticsDataset(streamId, {
     WHERE stream_id = ? AND source = ?
   `).get(normalizedStreamId, stream.source).count;
 
-  const chatters = database.prepare(`
-    SELECT chatters.stream_id AS streamId, chatters.nickname AS login,
-      chatters.message_count AS messageCount, chatters.updated_at AS updatedAt
-    FROM chatters
-    JOIN streams ON streams.stream_id = chatters.stream_id
-    WHERE ${historyScope.sql} AND streams.source = ?
-    ORDER BY chatters.stream_id, chatters.nickname COLLATE NOCASE
-  `).all(historyScope.parameter, stream.source)
-    .filter((chatter) => historyStreamIds.has(chatter.streamId));
+  // `chatters` predates source-aware storage. Real Twitch loyalty therefore
+  // fails closed to source-tagged messages instead of trusting an aggregate
+  // row that could have been updated by an import or demo write.
+  const chatters = stream.source === "twitch"
+    ? []
+    : database.prepare(`
+      SELECT chatters.stream_id AS streamId, chatters.nickname AS login,
+        chatters.message_count AS messageCount, chatters.updated_at AS updatedAt
+      FROM chatters
+      JOIN streams ON streams.stream_id = chatters.stream_id
+      WHERE ${historyScope.sql} AND streams.source = ?
+      ORDER BY chatters.stream_id, chatters.nickname COLLATE NOCASE
+    `).all(historyScope.parameter, stream.source)
+      .filter((chatter) => historyStreamIds.has(chatter.streamId));
 
   const viewerSamples = database.prepare(`
     SELECT event_id AS eventId, time_label AS time, sampled_at AS timestamp,

@@ -190,6 +190,12 @@ export function calculateLoyalty(dataset) {
 
   const byLogin = new Map();
   for (const row of counts.values()) {
+    const messageCount = Math.max(
+      row.rawCount,
+      row.messageAggregateCount,
+      row.chatterAggregateCount,
+    );
+    if (messageCount <= 0) continue;
     const participant = byLogin.get(row.login) ?? {
       login: row.login,
       streams: new Map(),
@@ -198,7 +204,7 @@ export function calculateLoyalty(dataset) {
       ? row.messageTimestamps
       : row.chatterTimestamps;
     participant.streams.set(row.streamId, {
-      count: Math.max(row.rawCount, row.messageAggregateCount, row.chatterAggregateCount),
+      count: messageCount,
       timestamps,
     });
     byLogin.set(row.login, participant);
