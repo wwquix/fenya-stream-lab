@@ -31,6 +31,7 @@ import { useIdentity } from './hooks/useIdentity.js'
 import { useTwitchVods } from './hooks/useTwitchVods.js'
 import { useTwitchModerators } from './hooks/useTwitchModerators.js'
 import { useAdvancedAnalytics } from './hooks/useAdvancedAnalytics.js'
+import { useLiquidPointer } from './hooks/useLiquidPointer.js'
 import { translations } from './i18n/translations.js'
 import AppErrorState from './components/AppErrorState.jsx'
 import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
@@ -42,7 +43,7 @@ const AdvancedInsights = lazy(() => import('./components/AdvancedInsights.jsx'))
 
 function StreamPulseFallback({ t }) {
   return (
-    <section className="real-data-empty glass-panel" id="pulse" role="status">
+    <section className="real-data-empty liquid-glass liquid-surface" id="pulse" role="status">
       <p>{t.loadingMetadata}</p>
     </section>
   )
@@ -50,7 +51,7 @@ function StreamPulseFallback({ t }) {
 
 function AdvancedInsightsFallback({ t }) {
   return (
-    <section className="real-data-empty glass-panel" id="insights" role="status">
+    <section className="real-data-empty liquid-glass liquid-surface" id="insights" role="status">
       <p>{t.advancedLoading}</p>
     </section>
   )
@@ -75,6 +76,7 @@ function adaptSessionToPulse(session, fallbackStream) {
 }
 
 function App() {
+  useLiquidPointer()
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
   const [theme, setTheme] = useState(() => {
     try {
@@ -351,7 +353,7 @@ function App() {
           <AppErrorState compact title={t.apiRequestFailedTitle} message={t.apiRequestFailedMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
         ) : null}
         {isDataModeLoading ? (
-          <section className="real-data-empty glass-panel" role="status">
+          <section className="real-data-empty liquid-glass liquid-surface" role="status">
             <p>{t.loadingRealMode}</p>
           </section>
         ) : isTwitchMode ? (

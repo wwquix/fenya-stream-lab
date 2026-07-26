@@ -1,0 +1,328 @@
+.app-shell {
+  background:
+    radial-gradient(circle at 12% 28%, var(--liquid-ambient-a), transparent 32rem),
+    radial-gradient(circle at 88% 62%, var(--liquid-ambient-b), transparent 36rem);
+}
+
+.liquid-glass {
+  --liquid-active-surface: var(--liquid-surface);
+  --liquid-active-blur: var(--liquid-blur);
+  --liquid-active-shadow: var(--liquid-shadow);
+  --liquid-pointer-x: 50%;
+  --liquid-pointer-y: 0%;
+  --liquid-pointer-opacity: 0;
+
+  position: relative;
+  isolation: isolate;
+  border: 1px solid var(--liquid-border);
+  background:
+    linear-gradient(145deg, var(--liquid-highlight) 0%, transparent 34%),
+    var(--liquid-active-surface);
+  box-shadow:
+    var(--liquid-active-shadow),
+    inset 0 1px 0 var(--liquid-edge-light),
+    inset 0 -1px 0 var(--liquid-edge-dark);
+}
+
+.liquid-glass.liquid-surface-elevated {
+  --liquid-active-surface: var(--liquid-surface-elevated);
+  --liquid-active-blur: var(--liquid-blur-elevated);
+  --liquid-active-shadow: var(--liquid-shadow-elevated);
+}
+
+:root[data-theme] .liquid-glass.liquid-surface,
+:root[data-theme] .liquid-glass.liquid-surface-elevated {
+  border-color: var(--liquid-border);
+  background:
+    linear-gradient(145deg, var(--liquid-highlight) 0%, transparent 34%),
+    var(--liquid-active-surface);
+  box-shadow:
+    var(--liquid-active-shadow),
+    inset 0 1px 0 var(--liquid-edge-light),
+    inset 0 -1px 0 var(--liquid-edge-dark);
+}
+
+.section-panel.liquid-glass {
+  overflow: hidden;
+}
+
+.section-rail.liquid-glass,
+.back-to-top.liquid-glass {
+  position: fixed;
+}
+
+.liquid-glass::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(
+      var(--liquid-pointer-size) circle at var(--liquid-pointer-x) var(--liquid-pointer-y),
+      var(--liquid-highlight-strong),
+      transparent 42%
+    ),
+    linear-gradient(
+      115deg,
+      var(--liquid-highlight),
+      transparent 28% 72%,
+      color-mix(in srgb, var(--liquid-highlight) 36%, transparent)
+    );
+  opacity: var(--liquid-pointer-opacity);
+  transition: opacity 180ms ease;
+}
+
+.liquid-glass::after {
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  border: 1px solid var(--liquid-border-soft);
+  border-radius: inherit;
+  box-shadow:
+    inset 1px 1px 0 var(--liquid-edge-light),
+    inset -1px -1px 0 var(--liquid-edge-dark);
+  pointer-events: none;
+  content: "";
+}
+
+.liquid-glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+@supports (
+  (backdrop-filter: blur(1px)) or
+  (-webkit-backdrop-filter: blur(1px))
+) {
+  .liquid-glass {
+    -webkit-backdrop-filter:
+      blur(var(--liquid-active-blur))
+      saturate(var(--liquid-saturation))
+      brightness(var(--liquid-brightness));
+    backdrop-filter:
+      blur(var(--liquid-active-blur))
+      saturate(var(--liquid-saturation))
+      brightness(var(--liquid-brightness));
+  }
+}
+
+@supports not (
+  (backdrop-filter: blur(1px)) or
+  (-webkit-backdrop-filter: blur(1px))
+) {
+  .liquid-glass,
+  :root[data-theme] .liquid-glass.liquid-surface,
+  :root[data-theme] .liquid-glass.liquid-surface-elevated {
+    background:
+      linear-gradient(145deg, var(--liquid-highlight) 0%, transparent 34%),
+      var(--theme-card-elevated);
+    box-shadow:
+      var(--theme-shadow),
+      inset 0 1px 0 var(--liquid-edge-light),
+      inset 0 -1px 0 var(--liquid-edge-dark);
+  }
+
+  .liquid-glass::before {
+    opacity: var(--liquid-static-highlight-opacity);
+  }
+}
+
+.liquid-inner-surface {
+  border: 1px solid var(--liquid-border-soft);
+  background: var(--liquid-inner-surface);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--liquid-edge-light) 60%, transparent),
+    0 8px 22px color-mix(in srgb, var(--liquid-edge-dark) 22%, transparent);
+}
+
+.liquid-glass .glass-panel,
+.liquid-glass .liquid-card,
+.liquid-inner-surface {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.stream-tooltip,
+.replay-preview-card.stream-tooltip {
+  background: var(--theme-card-elevated);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.liquid-control,
+.liquid-button {
+  position: relative;
+  border: 1px solid var(--liquid-border-soft);
+  background: var(--liquid-control-surface);
+  box-shadow: var(--liquid-control-shadow);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition:
+    transform 140ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.liquid-control:hover,
+.liquid-button:hover {
+  transform: none;
+}
+
+.liquid-control:active,
+.liquid-button:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.liquid-control.is-active,
+.liquid-control[aria-selected="true"],
+.liquid-control[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--theme-accent) 28%, var(--liquid-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 58%, var(--liquid-control-hover));
+}
+
+:where(.liquid-control, .liquid-button):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--theme-accent) 82%, transparent);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--theme-accent) 14%, transparent),
+    var(--liquid-control-shadow);
+}
+
+:where(.liquid-control, .liquid-button):disabled,
+:where(.liquid-control, .liquid-button)[aria-disabled="true"] {
+  transform: none;
+}
+
+.section-rail .liquid-control {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.custom-select-shell.liquid-control {
+  transform: none;
+}
+
+:root[data-theme] .liquid-glass .liquid-control,
+:root[data-theme] .liquid-glass .liquid-button,
+:root[data-theme] .liquid-glass .custom-select-shell.liquid-control {
+  border-color: var(--liquid-border-soft);
+  background: var(--liquid-control-surface);
+  box-shadow: var(--liquid-control-shadow);
+}
+
+:root[data-theme] .liquid-glass .liquid-control.is-active,
+:root[data-theme] .liquid-glass .liquid-control[aria-selected="true"],
+:root[data-theme] .liquid-glass .liquid-control[aria-pressed="true"],
+:root[data-theme] .liquid-glass .liquid-button.is-active,
+:root[data-theme] .liquid-glass .liquid-button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--theme-accent) 28%, var(--liquid-border));
+  background: color-mix(in srgb, var(--theme-accent-soft) 58%, var(--liquid-control-hover));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .liquid-control:hover,
+  .liquid-button:hover {
+    border-color: var(--liquid-border);
+    background: var(--liquid-control-hover);
+    box-shadow:
+      inset 0 1px 0 var(--liquid-edge-light),
+      0 8px 22px color-mix(in srgb, var(--liquid-edge-dark) 34%, transparent);
+    transform: translateY(-1px);
+  }
+
+  .section-rail .liquid-control:hover,
+  .custom-select-shell.liquid-control:hover {
+    transform: none;
+  }
+
+  :root[data-theme] .liquid-glass .liquid-control:hover,
+  :root[data-theme] .liquid-glass .liquid-button:hover,
+  :root[data-theme] .liquid-glass .custom-select-shell.liquid-control:hover {
+    border-color: var(--liquid-border);
+    background: var(--liquid-control-hover);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .liquid-glass[data-liquid-interactive] {
+    --liquid-pointer-x: 50% !important;
+    --liquid-pointer-y: 0% !important;
+    --liquid-pointer-opacity: var(--liquid-static-highlight-opacity) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass[data-liquid-interactive] {
+    --liquid-pointer-x: 50% !important;
+    --liquid-pointer-y: 0% !important;
+    --liquid-pointer-opacity: var(--liquid-static-highlight-opacity) !important;
+  }
+
+  .liquid-glass::before,
+  .liquid-control,
+  .liquid-button {
+    transition: none !important;
+  }
+
+  .liquid-control:hover,
+  .liquid-control:active,
+  .liquid-button:hover,
+  .liquid-button:active {
+    transform: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .liquid-glass {
+    --liquid-active-surface: var(--liquid-surface-strong);
+
+    border-color: var(--theme-text-secondary);
+  }
+
+  .liquid-inner-surface,
+  .liquid-control,
+  .liquid-button {
+    border-color: var(--theme-text-secondary);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass,
+  :root[data-theme] .liquid-glass.liquid-surface,
+  :root[data-theme] .liquid-glass.liquid-surface-elevated {
+    --liquid-pointer-opacity: 0 !important;
+
+    background: var(--theme-card-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .liquid-glass,
+  .liquid-inner-surface,
+  .liquid-control,
+  .liquid-button {
+    border: 1px solid CanvasText !important;
+    color: CanvasText !important;
+    background: Canvas !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    forced-color-adjust: auto;
+  }
+
+  .liquid-glass::before,
+  .liquid-glass::after {
+    display: none;
+  }
+
+  :where(.liquid-control, .liquid-button):focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
