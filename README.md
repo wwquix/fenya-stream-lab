@@ -56,6 +56,16 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 
 The project intentionally does not use TypeScript, Tailwind, a real Twitch SDK, or an OpenAI dependency.
 
+## Liquid Glass material
+
+The interface uses a restrained web adaptation of Liquid Glass rather than a copy of a system UI. Shared CSS tokens define the light and dark material variants, edge lighting, shadows, transparency, and backdrop enhancement.
+
+- Backdrop blur is limited to opt-in top-level and elevated surfaces.
+- Nested cards use a denser translucent background without a second blur.
+- A delegated, `requestAnimationFrame`-batched pointer highlight updates CSS variables without React state.
+- Touch/coarse pointers and reduced motion use a static highlight instead of pointer tracking.
+- Progressive fallbacks keep panels readable when `backdrop-filter` is unavailable or reduced transparency/forced colors are requested.
+
 ## Demo/mock mode
 
 Mock mode is the default portfolio experience. It requires no secrets, no Twitch account, and no backend credentials. It shows a complete deterministic dashboard with viewer timelines, saved chat-participation history for loyalty examples, chat leaderboards, word analytics, moderator workload, archive data, imports, replay, summaries, and local reports.
