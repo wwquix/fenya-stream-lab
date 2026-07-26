@@ -59,7 +59,7 @@ function ModeratorUnit({ moderators, events, moderationAnalytics, moderatorDirec
     const syncedModerators = Array.isArray(directory?.moderators) ? directory.moderators : []
     const isRussian = t.navTop === 'Топ'
     return (
-      <Reveal as="section" className="section-panel moderator-unit moderator-directory" id="moderators" aria-labelledby="moderator-unit-title">
+      <Reveal as="section" className="section-panel moderator-unit moderator-directory liquid-glass liquid-surface" id="moderators" aria-labelledby="moderator-unit-title" data-liquid-interactive>
         <div className="section-heading">
           <div>
             <p className="eyebrow">{t.moderatorKicker}</p>
@@ -111,7 +111,7 @@ function ModeratorUnit({ moderators, events, moderationAnalytics, moderatorDirec
   }
 
   return (
-    <Reveal as="section" className="section-panel moderator-unit" id="moderators" aria-labelledby="moderator-unit-title">
+    <Reveal as="section" className="section-panel moderator-unit liquid-glass liquid-surface" id="moderators" aria-labelledby="moderator-unit-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
           {t.moderatorKicker ? <p className="eyebrow">{t.moderatorKicker}</p> : null}

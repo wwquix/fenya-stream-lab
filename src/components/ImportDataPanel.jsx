@@ -112,7 +112,7 @@ function ImportDataPanel({ t }) {
   }
 
   return (
-    <Reveal as="section" className="section-panel import-data-panel" id="import" aria-labelledby="import-data-title">
+    <Reveal as="section" className="section-panel import-data-panel liquid-glass liquid-surface" id="import" aria-labelledby="import-data-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{t.importKicker}</p>

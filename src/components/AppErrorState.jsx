@@ -2,7 +2,7 @@ export default function AppErrorState({ title, message, actionLabel = null, onAc
   const Heading = compact ? 'h2' : 'h1'
 
   return (
-    <section className={`app-error-state glass-panel ${compact ? 'is-compact' : ''}`} role="alert">
+    <section className={`app-error-state liquid-glass liquid-surface ${compact ? 'is-compact' : ''}`} role="alert">
       <span className="app-error-code" aria-hidden="true">FSL</span>
       <div>
         <Heading>{title}</Heading>

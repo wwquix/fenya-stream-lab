@@ -130,7 +130,7 @@ function segmentLabel(segment, language, t) {
 
 function StatePanel({ message, role = 'status', actionLabel = null, onAction = null }) {
   return (
-    <div className="advanced-insights-state glass-panel" role={role} aria-live={role === 'status' ? 'polite' : undefined}>
+    <div className="advanced-insights-state liquid-inner-surface" role={role} aria-live={role === 'status' ? 'polite' : undefined}>
       <p>{message}</p>
       {actionLabel && onAction ? (
         <button className="liquid-button" type="button" onClick={onAction}>
@@ -143,7 +143,7 @@ function StatePanel({ message, role = 'status', actionLabel = null, onAction = n
 
 function MetricCard({ label, value, detail = null }) {
   return (
-    <article className="advanced-metric-card glass-panel">
+    <article className="advanced-metric-card liquid-inner-surface">
       <span>{label}</span>
       <strong>{value}</strong>
       {detail ? <small>{detail}</small> : null}
@@ -166,7 +166,7 @@ function DataQualityBlock({ data, language, t, headingId }) {
   ))
 
   return (
-    <section className={`advanced-quality glass-panel is-${quality.status}`} aria-labelledby={headingId}>
+    <section className={`advanced-quality liquid-inner-surface is-${quality.status}`} aria-labelledby={headingId}>
       <div className="advanced-card-heading">
         <div>
           <p className="eyebrow">{t.advancedDataBasis}</p>
@@ -237,7 +237,7 @@ function LoyaltyPanel({ loyalty, language, t }) {
       </div>
 
       <div className="advanced-two-column">
-        <section className="advanced-subcard glass-panel" aria-labelledby="advanced-loyalty-distribution">
+        <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-loyalty-distribution">
           <div className="advanced-card-heading">
             <h3 id="advanced-loyalty-distribution">{t.advancedLoyaltyDistribution}</h3>
             <span className={`advanced-status-pill ${loyalty.isSufficient ? 'is-complete' : 'is-insufficient'}`}>
@@ -274,7 +274,7 @@ function LoyaltyPanel({ loyalty, language, t }) {
           </ul>
         </section>
 
-        <section className="advanced-subcard glass-panel" aria-labelledby="advanced-loyalty-criteria">
+        <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-loyalty-criteria">
           <h3 id="advanced-loyalty-criteria">{t.advancedLoyaltyCriteria}</h3>
           <p>{t.advancedLoyaltyCriteriaNote}</p>
           <dl className="advanced-compact-metrics">
@@ -286,7 +286,7 @@ function LoyaltyPanel({ loyalty, language, t }) {
         </section>
       </div>
 
-      <section className="advanced-subcard glass-panel" aria-labelledby="advanced-loyal-participants">
+      <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-loyal-participants">
         <div className="advanced-card-heading">
           <div>
             <h3 id="advanced-loyal-participants">{t.advancedTopLoyalParticipants}</h3>
@@ -333,7 +333,7 @@ function ClipSuggestionsPanel({ clips, language, t }) {
       <p className="advanced-context-note">{t.advancedClipWindowDisclaimer}</p>
       <ol className="advanced-clip-list">
         {clips.slice(0, 5).map((clip, index) => (
-          <li className="advanced-clip-card glass-panel" key={`${clip.startTime}-${clip.peakTime}-${index}`}>
+          <li className="advanced-clip-card liquid-inner-surface" key={`${clip.startTime}-${clip.peakTime}-${index}`}>
             <div className="advanced-card-heading">
               <div>
                 <span className="advanced-rank">{index + 1}</span>
@@ -400,7 +400,7 @@ function EventImpactPanel({ events, language, t }) {
             const isActive = index === activeIndex
             return (
               <button
-                className={isActive ? 'is-active' : ''}
+                className={`liquid-control ${isActive ? 'is-active' : ''}`}
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => setSelectedEventKey(key)}
@@ -414,7 +414,7 @@ function EventImpactPanel({ events, language, t }) {
           })}
         </div>
 
-        <article className="advanced-event-detail glass-panel" aria-live="polite">
+        <article className="advanced-event-detail liquid-inner-surface" aria-live="polite">
           <div className="advanced-card-heading">
             <div>
               <p className="eyebrow">{selectedEvent.time ?? t.notAvailable}</p>
@@ -532,7 +532,7 @@ function RetentionPanel({ retention, dataQuality, language, t }) {
         <MetricCard label={t.advancedRecoveredDrops} value={`${formatMetric(retention.recoveredDropCount, language, t)} / ${formatMetric(retention.dropCount, language, t)}`} />
       </div>
 
-      <section className="advanced-retention-chart glass-panel" aria-labelledby="advanced-retention-chart-title">
+      <section className="advanced-retention-chart liquid-inner-surface" aria-labelledby="advanced-retention-chart-title">
         <div className="advanced-card-heading">
           <div>
             <h3 id="advanced-retention-chart-title">{t.advancedViewerCurve}</h3>
@@ -608,17 +608,17 @@ function RetentionPanel({ retention, dataQuality, language, t }) {
       </section>
 
       <div className="advanced-two-column">
-        <section className="advanced-subcard glass-panel" aria-labelledby="advanced-stable-segment">
+        <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-stable-segment">
           <h3 id="advanced-stable-segment">{t.advancedStableSegment}</h3>
           <p>{segmentLabel(retention.stableSegment, language, t)}</p>
         </section>
-        <section className="advanced-subcard glass-panel" aria-labelledby="advanced-problem-segment">
+        <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-problem-segment">
           <h3 id="advanced-problem-segment">{t.advancedProblemSegment}</h3>
           <p>{segmentLabel(retention.problemSegment, language, t)}</p>
         </section>
       </div>
 
-      <section className="advanced-subcard glass-panel" aria-labelledby="advanced-drop-list">
+      <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-drop-list">
         <h3 id="advanced-drop-list">{t.advancedLargestDrops}</h3>
         {retention.drops.length ? (
           <ol className="advanced-drop-list">
@@ -738,7 +738,7 @@ function AdvancedInsights({
                 <button
                   ref={(element) => { tabRefs.current[index] = element }}
                   id={tabId}
-                  className={selected ? 'is-active' : ''}
+                  className={`liquid-control ${selected ? 'is-active' : ''}`}
                   type="button"
                   role="tab"
                   aria-selected={selected}
@@ -777,11 +777,12 @@ function AdvancedInsights({
   return (
     <Reveal
       as="section"
-      className="section-panel advanced-insights"
+      className="section-panel advanced-insights liquid-glass liquid-surface"
       id="insights"
       aria-labelledby={`${idPrefix}-title`}
       data-entity-type="stream"
       data-entity-id={streamId ?? undefined}
+      data-liquid-interactive
     >
       <div className="section-heading">
         <div>

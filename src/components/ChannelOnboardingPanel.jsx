@@ -76,7 +76,7 @@ function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedC
   }
 
   return (
-    <Reveal as="section" className="section-panel channel-onboarding" aria-labelledby="channel-onboarding-title">
+    <Reveal as="section" className="section-panel channel-onboarding liquid-glass liquid-surface" aria-labelledby="channel-onboarding-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{t.channelOnboardingKicker}</p>

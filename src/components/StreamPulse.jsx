@@ -243,7 +243,7 @@ function StreamPulse({ stream, compareStream, events, t }) {
   }
 
   return (
-    <Reveal as="section" className="section-panel stream-pulse" id="pulse" aria-labelledby="stream-pulse-title">
+    <Reveal as="section" className="section-panel stream-pulse liquid-glass liquid-surface" id="pulse" aria-labelledby="stream-pulse-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{t.streamControls}</p>

@@ -68,7 +68,7 @@ function StreamArchive({ streams, archive, selectedStreamId, realDataMode = fals
   const activeStreams = adaptBackendStreams(archive) ?? (realDataMode ? [] : streams)
 
   return (
-    <Reveal as="section" className="section-panel stream-archive" id="archive" aria-labelledby="stream-archive-title">
+    <Reveal as="section" className="section-panel stream-archive liquid-glass liquid-surface" id="archive" aria-labelledby="stream-archive-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{t.archiveKicker}</p>

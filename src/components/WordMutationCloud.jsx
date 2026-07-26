@@ -103,7 +103,7 @@ function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', re
   const isMinimalCloud = realDataMode && visibleWords.length <= 3
 
   return (
-    <Reveal as="section" className="section-panel word-mutations" id="words" aria-labelledby="word-mutations-title" data-entity-type="stream" data-entity-id={streamId}>
+    <Reveal as="section" className="section-panel word-mutations liquid-glass liquid-surface" id="words" aria-labelledby="word-mutations-title" data-entity-type="stream" data-entity-id={streamId} data-liquid-interactive>
       <div className="section-heading">
         <div>
           {t.speechKicker ? <p className="eyebrow">{t.speechKicker}</p> : null}
