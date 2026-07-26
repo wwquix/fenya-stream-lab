@@ -18,6 +18,40 @@ const MOCK_MESSAGES = [
   "спокойно, камбэк близко",
 ];
 
+const MOCK_CHAT_PARTICIPATION_HISTORY = [
+  {
+    streamId: "2026-06-03",
+    participants: [
+      { nickname: "agapuku106", messageCount: 740 },
+      { nickname: "fen_signal_042", messageCount: 612 },
+      { nickname: "acid_masha", messageCount: 318 },
+    ],
+  },
+  {
+    streamId: "2026-06-07",
+    participants: [
+      { nickname: "agapuku106", messageCount: 805 },
+      { nickname: "BogdanVoid", messageCount: 420 },
+    ],
+  },
+  {
+    streamId: "2026-06-14",
+    participants: [
+      { nickname: "agapuku106", messageCount: 910 },
+      { nickname: "fen_signal_042", messageCount: 772 },
+      { nickname: "BogdanVoid", messageCount: 508 },
+    ],
+  },
+  {
+    streamId: "2026-06-19",
+    participants: [
+      { nickname: "agapuku106", messageCount: 1_020 },
+      { nickname: "fen_signal_042", messageCount: 844 },
+      { nickname: "MirePilot", messageCount: 604 },
+    ],
+  },
+];
+
 const INITIAL_CHAT_ANALYTICS = {
   streamId: "2026-06-23",
   title: "Вечерний рейтинговый стрим",
@@ -66,6 +100,7 @@ const INITIAL_CHAT_ANALYTICS = {
     { time: "21:08", nickname: "BogdanVoid", text: "спокойно, камбэк близко", type: "normal" },
     { time: "21:09", nickname: "SlimeOracle", text: "ждём ещё один матч", type: "normal" },
   ],
+  participationHistory: MOCK_CHAT_PARTICIPATION_HISTORY,
 };
 
 function getLocalTime() {
@@ -102,4 +137,3 @@ export async function getCurrentChatAnalytics(channelLogin) {
     updatedAt: new Date().toISOString(),
   };
 }
-

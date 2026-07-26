@@ -26,13 +26,17 @@ export function loadStreamDataset(streamId) {
     viewerSamples: database.prepare(`
       SELECT time_label AS time, viewers, messages_per_minute AS messagesPerMinute,
         sampled_at AS timestamp, source
-      FROM viewer_samples WHERE stream_id = ? ORDER BY COALESCE(sampled_at, created_at), id
-    `).all(normalizedId),
+      FROM viewer_samples
+      WHERE stream_id = ? AND source = ?
+      ORDER BY COALESCE(sampled_at, created_at), id
+    `).all(normalizedId, stream.source),
     chatMessages: database.prepare(`
       SELECT time_label AS time, chatter_login AS nickname, message_text AS message,
         message_type AS messageType, sent_at AS timestamp, source
-      FROM chat_messages WHERE stream_id = ? ORDER BY COALESCE(sent_at, created_at), id
-    `).all(normalizedId),
+      FROM chat_messages
+      WHERE stream_id = ? AND source = ?
+      ORDER BY COALESCE(sent_at, created_at), id
+    `).all(normalizedId, stream.source),
     chatters: database.prepare(`
       SELECT nickname, message_count AS messages, messages_note AS note
       FROM chatters WHERE stream_id = ? ORDER BY message_count DESC, nickname LIMIT 25
@@ -45,17 +49,23 @@ export function loadStreamDataset(streamId) {
       SELECT time_label AS time, action_type AS actionType, moderator_login AS moderator,
         target_login AS target, reason, label, note, actions, timeouts, bans,
         deleted_messages AS deletedMessages, occurred_at AS timestamp, source
-      FROM moderation_actions WHERE stream_id = ? ORDER BY COALESCE(occurred_at, created_at), id
-    `).all(normalizedId),
+      FROM moderation_actions
+      WHERE stream_id = ? AND source = ?
+      ORDER BY COALESCE(occurred_at, created_at), id
+    `).all(normalizedId, stream.source),
     segments: database.prepare(`
       SELECT start_time AS start, end_time AS end, label, category_name AS category
-      FROM stream_segments WHERE stream_id = ? ORDER BY start_time, id
-    `).all(normalizedId),
+      FROM stream_segments
+      WHERE stream_id = ? AND source = ?
+      ORDER BY start_time, id
+    `).all(normalizedId, stream.source),
     markers: database.prepare(`
       SELECT time_label AS time, label, marker_type AS markerType, category_name AS category,
         viewers, messages_per_minute AS messagesPerMinute, occurred_at AS timestamp, source
-      FROM stream_markers WHERE stream_id = ? ORDER BY COALESCE(occurred_at, created_at), id
-    `).all(normalizedId),
+      FROM stream_markers
+      WHERE stream_id = ? AND source = ?
+      ORDER BY COALESCE(occurred_at, created_at), id
+    `).all(normalizedId, stream.source),
   };
 }
 
@@ -76,4 +86,3 @@ export function saveStoredStreamSummary(summary) {
   `).run(summary.streamId, JSON.stringify(summary), summary.updatedAt);
   return summary;
 }
-
