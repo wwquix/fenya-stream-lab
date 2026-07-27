@@ -4,14 +4,23 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialTheme } from "../src/utils/dashboardUi.js";
 import EmptyPanel from "../src/components/EmptyPanel.jsx";
-import TwitchVodArchive from "../src/components/TwitchVodArchive.jsx";
+import TwitchVodArchive, { INITIAL_VOD_LIMIT } from "../src/components/TwitchVodArchive.jsx";
 import StreamPulse from "../src/components/StreamPulse.jsx";
 import StreamControlBar from "../src/components/StreamControlBar.jsx";
+import { getNextCustomSelectIndex } from "../src/utils/customSelectNavigation.js";
 import { translations } from "../src/i18n/translations.js";
 
 const t = { modePrefix: "Режим", myChannelMode: "мой канал" };
 
 describe("frontend dashboard UI helpers", () => {
+  test("wraps custom-select keyboard navigation and supports Home/End", () => {
+    expect(getNextCustomSelectIndex(1, "ArrowDown", 3)).toBe(2);
+    expect(getNextCustomSelectIndex(2, "ArrowDown", 3)).toBe(0);
+    expect(getNextCustomSelectIndex(0, "ArrowUp", 3)).toBe(2);
+    expect(getNextCustomSelectIndex(2, "Home", 3)).toBe(0);
+    expect(getNextCustomSelectIndex(0, "End", 3)).toBe(2);
+  });
+
   test("normalizes shared empty panel height variants", () => {
     expect(normalizeEmptyPanelVariant("chart")).toBe("chart");
     expect(normalizeEmptyPanelVariant("unknown")).toBe("medium");
@@ -138,7 +147,31 @@ describe("frontend dashboard UI helpers", () => {
     const markup = renderToStaticMarkup(createElement(TwitchVodArchive, { archive, canSync: false, t: vodText }));
 
     expect(markup).toContain("Saved stream");
+    expect(markup).toContain("FSL");
     expect(markup).not.toContain("Twitch returned no VODs");
+  });
+
+  test("limits the initial VOD archive and exposes an accessible show-more action", () => {
+    const archive = {
+      hasLoaded: true,
+      vods: Array.from({ length: INITIAL_VOD_LIMIT + 2 }, (_, index) => ({
+        twitchVideoId: `vod-${index + 1}`,
+        title: `Saved stream ${index + 1}`,
+        createdAt: "2026-07-05",
+        duration: "1h2m",
+        viewCount: index + 1,
+        url: `https://twitch.tv/videos/${index + 1}`,
+      })),
+    };
+    const markup = renderToStaticMarkup(createElement(TwitchVodArchive, {
+      archive,
+      canSync: false,
+      t: translations.ru,
+    }));
+
+    expect(markup).toContain(`Saved stream ${INITIAL_VOD_LIMIT}`);
+    expect(markup).not.toContain(`Saved stream ${INITIAL_VOD_LIMIT + 1}`);
+    expect(markup).toContain(translations.ru.showMore);
   });
 
   test("does not render an empty replay rail when Pulse has no category segments", () => {
