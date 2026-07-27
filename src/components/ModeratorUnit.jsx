@@ -3,6 +3,7 @@ import ScannerTooltip from './ScannerTooltip.jsx'
 import { AnimatedNumber, MotionCard, Reveal } from './MotionPrimitives.jsx'
 import { formatStatusLabel } from '../i18n/translations.js'
 import EmptyPanel from './EmptyPanel.jsx'
+import { StatusBanner } from './UiPrimitives.jsx'
 
 function formatPlainInteger(value) {
   return Math.round(value).toString()
@@ -62,17 +63,15 @@ function ModeratorUnit({ moderators, events, moderationAnalytics, moderatorDirec
       <Reveal as="section" className="section-panel moderator-unit moderator-directory liquid-glass liquid-surface" id="moderators" aria-labelledby="moderator-unit-title" data-liquid-interactive>
         <div className="section-heading">
           <div>
-            <p className="eyebrow">{t.moderatorKicker}</p>
             <h2 id="moderator-unit-title">{t.currentModerators}</h2>
-            <p className="section-note">{t.moderatorDirectoryNote}</p>
           </div>
           {directory?.available && canManageChannel ? (
-            <button className="moderator-toggle liquid-button" type="button" disabled={moderatorDirectory.isSyncing} onClick={() => moderatorDirectory.sync().catch(() => undefined)}>
+            <button className="moderator-toggle button button-primary" type="button" disabled={moderatorDirectory.isSyncing} onClick={() => moderatorDirectory.sync().catch(() => undefined)}>
               {moderatorDirectory.isSyncing ? t.moderatorSyncing : t.syncModerators}
             </button>
           ) : null}
         </div>
-        {moderatorDirectory?.error ? <p className="twitch-status-error" role="alert">{moderatorDirectory.error.message}</p> : null}
+        {moderatorDirectory?.error ? <StatusBanner variant="error">{moderatorDirectory.error.message}</StatusBanner> : null}
         {moderatorDirectory?.isLoading ? <EmptyPanel message={t.channelLoading} minHeight="medium" compact /> : null}
         {!moderatorDirectory?.isLoading && directory && !directory.available ? (
           <EmptyPanel
@@ -81,7 +80,7 @@ function ModeratorUnit({ moderators, events, moderationAnalytics, moderatorDirec
             detail={t.moderatorFutureShort}
             minHeight="small"
             compact
-            action={canManageChannel ? <button className="liquid-button" type="button" onClick={requestModeratorScope}>{t.reconnectForModerators}</button> : null}
+            action={canManageChannel ? <button className="button button-primary" type="button" onClick={requestModeratorScope}>{t.reconnectForModerators}</button> : null}
           />
         ) : null}
         {syncedModerators.length ? (
@@ -114,9 +113,7 @@ function ModeratorUnit({ moderators, events, moderationAnalytics, moderatorDirec
     <Reveal as="section" className="section-panel moderator-unit liquid-glass liquid-surface" id="moderators" aria-labelledby="moderator-unit-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
-          {t.moderatorKicker ? <p className="eyebrow">{t.moderatorKicker}</p> : null}
           <h2 id="moderator-unit-title">{t.moderatorPerformance}</h2>
-          <p className="section-note">{t.moderatorNote}</p>
         </div>
         <button className="moderator-toggle liquid-button" type="button" onClick={() => setShowAllModerators((isShown) => !isShown)}>
           {showAllModerators ? t.showLess : `${t.showAll} ${activeModerators.length}`}

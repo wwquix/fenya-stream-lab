@@ -3,6 +3,7 @@ import { ProgressActionButton, Reveal } from './MotionPrimitives.jsx'
 import { formatCategory, formatStreamTitle } from '../i18n/translations.js'
 import { hasCollectionGap } from '../utils/dashboardUi.js'
 import { createSessionCsv, createSessionReportHtml, sessionExportFilename } from '../utils/sessionDashboard.js'
+import { MetricCard, StatusBanner } from './UiPrimitives.jsx'
 
 function createCsv(stream) {
   const rows = [
@@ -55,7 +56,7 @@ function formatCollectionTime(value, isRussian) {
   }).format(date)
 }
 
-function StreamControlBar({ streams, internalSessions = [], selectedSession = null, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, sessionDataLoading = false, theme, onToggleTheme, replay, streamSummary, t }) {
+function StreamControlBar({ streams, internalSessions = [], selectedSession = null, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = null, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, sessionDataLoading = false, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
@@ -70,7 +71,6 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
   const liveLabel = hasLiveState ? (metadata.isLive ? t.liveNow : t.offlineNow) : t.mockFallback
   const metadataStateClass = metadata?.isLive ? 'is-live' : 'is-offline'
   const isRussian = t.navTop === 'Топ'
-  const themeLabel = theme === 'light' ? t.switchToDarkTheme : t.switchToLightTheme
   const replayOptions = [1, 5, 20].map((value) => ({ value, label: `${value}x` }))
   const replayStatus = replay.error
     ? t.replayError
@@ -135,6 +135,27 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
       viewers: t.viewers,
       messagesPerMinute: t.chatPerMin,
     }), 'text/html;charset=utf-8', sessionExportFilename(selectedSession, 'html'))
+    const primaryIngestAction = canManageChannel ? (
+      ingestRunning || ingestBusy ? (
+        <button
+          className="button button-primary control-primary-action"
+          type="button"
+          disabled={isDataModeLoading || twitchIngest?.isPending}
+          onClick={() => runAuthorizedAction(twitchIngest.stop).catch(() => undefined)}
+        >
+          {stopLabel}
+        </button>
+      ) : (
+        <button
+          className="button button-primary control-primary-action"
+          type="button"
+          disabled={isDataModeLoading || twitchIngest?.isPending || !connected}
+          onClick={() => runAuthorizedAction(twitchIngest.start).catch(() => undefined)}
+        >
+          {startLabel}
+        </button>
+      )
+    ) : null
 
     return (
       <Reveal
@@ -152,59 +173,48 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
             <span className={`twitch-state-badge ${metadata?.isLive ? 'is-live' : 'is-offline'}`}>
               {metadata?.isLive ? t.streamLive : t.offlineNow}
             </span>
+            {replay?.status?.isActive ? <span className="twitch-state-badge is-running">{replayStatusLabel}</span> : null}
           </div>
           <div className="stream-live-copy">
             <strong>{metadata?.streamTitle || metadata?.displayName || connection?.channelLogin || 'Twitch'}</strong>
             <span>{metadata?.categoryName || (metadata?.isLive === false ? t.offlineNow : t.loadingMetadata)}</span>
           </div>
-          <dl className="twitch-status-metrics">
-            <div><dt>{t.collectedMessages}</dt><dd>{persistedMessageCount}</dd></div>
-            <div><dt>{t.currentSessionEvents}</dt><dd>{ingestStatus?.messagesStored ?? 0}</dd></div>
-            <div><dt>{t.lastEvent}</dt><dd>{lastEventLabel}</dd></div>
-            <div><dt>{t.lastPoll}</dt><dd>{lastPollLabel}</dd></div>
-          </dl>
-          {statusError ? <p className="twitch-status-error" role="alert">{statusError}</p> : null}
-          {collectionGapNotice ? <p className="twitch-collection-notice" role="status">{collectionGapNotice}</p> : null}
+          <div className="twitch-status-metrics">
+            <MetricCard label={t.collectedMessages} value={persistedMessageCount} emptyLabel={t.notAvailable} />
+            <MetricCard label={t.lastEvent} value={lastEventLabel} emptyLabel={t.notAvailable} />
+            <MetricCard label={t.lastPoll} value={lastPollLabel === '—' ? null : lastPollLabel} emptyLabel={t.notAvailable} />
+          </div>
+          {statusError ? <StatusBanner variant="error">{statusError}</StatusBanner> : null}
+          {collectionGapNotice ? <StatusBanner variant="warning">{collectionGapNotice}</StatusBanner> : null}
           {readOnlyAccess ? <span className="twitch-read-only-badge">{t.readOnlyAccess}</span> : null}
         </div>
 
-        <div className="session-control-grid">
+        <div className="control-primary-row">
           <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={realStreamOptions.length ? realStreamOptions : [{ value: '', label: t.noInternalSessions }]} onChange={onStreamChange} disabled={!realStreamOptions.length} />
-          <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={realCompareOptions} onChange={onCompareChange} disabled={realCompareOptions.length < 2} />
-          <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay?.speed ?? 1} options={[1, 2, 5, 10].map((value) => ({ value, label: `${value}x` }))} onChange={replay?.setSpeed} disabled={!canReplay} />
-          <div className="replay-action-stack">
-            <span className="replay-actions-label">{t.replayMode}<span className={`replay-state ${replay?.status?.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatusLabel}</span></span>
-            <div className="replay-actions">
-              <button className="liquid-button" type="button" disabled={!canReplay || replay.status.isActive} onClick={replay.start}>{t.startReplay}</button>
-              <button className="liquid-button" type="button" disabled={!replay?.status?.isActive} onClick={replay.stop}>{t.stopReplay}</button>
-            </div>
-          </div>
+          {primaryIngestAction}
         </div>
 
-        <div className="twitch-ingest-actions session-export-actions">
-          {canManageChannel ? <button
-            className="liquid-button"
-            type="button"
-            disabled={isDataModeLoading || twitchIngest?.isPending || ingestRunning || ingestBusy || !connected}
-            onClick={() => runAuthorizedAction(twitchIngest.start).catch(() => undefined)}
-          >
-            {startLabel}
-          </button> : null}
-          {canManageChannel ? <button
-            className="liquid-button"
-            type="button"
-            disabled={isDataModeLoading || twitchIngest?.isPending || (!ingestRunning && !ingestBusy)}
-            onClick={() => runAuthorizedAction(twitchIngest.stop).catch(() => undefined)}
-          >
-            {stopLabel}
-          </button> : null}
-          <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
-            <span aria-hidden="true" />
-            {themeLabel}
-          </button>
-          <button className="liquid-button" type="button" disabled={exportDisabled} onClick={exportSelectedCsv}>{t.exportCsv}</button>
-          <button className="liquid-button" type="button" disabled={!selectedSession || sessionDataLoading} onClick={exportSelectedReport}>{t.generateReport}</button>
-        </div>
+        <details className="control-disclosure">
+          <summary>{t.controls}</summary>
+          <div className="session-control-grid">
+            <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={realCompareOptions} onChange={onCompareChange} disabled={realCompareOptions.length < 2} />
+            <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay?.speed ?? 1} options={[1, 2, 5, 10].map((value) => ({ value, label: `${value}x` }))} onChange={replay?.setSpeed} disabled={!canReplay} />
+            <div className="replay-action-stack">
+              <span className="replay-actions-label">{t.replayMode}<span className={`replay-state ${replay?.status?.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatusLabel}</span></span>
+              <div className="replay-actions">
+                <button className="button button-secondary" type="button" disabled={!canReplay || replay.status.isActive} onClick={replay.start}>{t.startReplay}</button>
+                <button className="button button-secondary" type="button" disabled={!replay?.status?.isActive} onClick={replay.stop}>{t.stopReplay}</button>
+              </div>
+            </div>
+          </div>
+          <div className="control-technical-metrics">
+            <MetricCard label={t.currentSessionEvents} value={ingestStatus ? ingestStatus.messagesStored ?? null : null} emptyLabel={t.notAvailable} />
+          </div>
+          <div className="twitch-ingest-actions session-export-actions">
+            <button className="button button-secondary" type="button" disabled={exportDisabled} onClick={exportSelectedCsv}>{t.exportCsv}</button>
+            <button className="button button-secondary" type="button" disabled={!selectedSession || sessionDataLoading} onClick={exportSelectedReport}>{t.generateReport}</button>
+          </div>
+        </details>
       </Reveal>
     )
   }
@@ -230,41 +240,40 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
         <div className="stream-live-copy">
           <strong>{metadataTitle}</strong>
           <span>{metadataCategory}</span>
+          {replay.status.isActive ? <span className="replay-state is-active" aria-live="polite">{replayStatus}</span> : null}
         </div>
       </div>
 
-      <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={streamOptions} onChange={onStreamChange} />
-      <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
+      <div className="control-primary-row">
+        <CustomSelect id="stream-select" label={t.currentStream} value={selectedStreamId} options={streamOptions} onChange={onStreamChange} />
+        <button
+          className="button button-primary control-primary-action"
+          type="button"
+          disabled={replay.isPending}
+          onClick={() => (replay.status.isActive ? replay.stop() : replay.start()).catch(() => undefined)}
+        >
+          {replay.status.isActive ? t.stopReplay : t.startReplay}
+        </button>
+      </div>
 
-      <div className="replay-controls" aria-label={t.replayMode} aria-busy={replay.isPending ? 'true' : 'false'}>
-        <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay.speed} options={replayOptions} onChange={replay.setSpeed} />
-        <div className="replay-action-stack">
-          <span className="replay-actions-label">
-            {t.replayMode}
-            <span className={`replay-state ${replay.status.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatus}</span>
-          </span>
-          <div className="replay-actions">
-            <button className="liquid-button" type="button" disabled={replay.isPending || replay.status.isActive} onClick={() => replay.start().catch(() => undefined)}>{t.startReplay}</button>
-            <button className="liquid-button" type="button" disabled={replay.isPending || !replay.status.isActive} onClick={() => replay.stop().catch(() => undefined)}>{t.stopReplay}</button>
-          </div>
+      <details className="control-disclosure">
+        <summary>{t.controls}</summary>
+        <div className="control-secondary-grid">
+          <CustomSelect id="compare-select" label={t.compare} value={compareStreamId} options={compareOptions} onChange={onCompareChange} />
+          <CustomSelect id="replay-speed" label={t.replaySpeed} value={replay.speed} options={replayOptions} onChange={replay.setSpeed} />
         </div>
-      </div>
-
-      <div className="export-actions">
-        <button className="theme-toggle liquid-button" type="button" onClick={onToggleTheme} aria-label={themeLabel} title={themeLabel}>
-          <span aria-hidden="true" />
-          {themeLabel}
-        </button>
-        <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
-          {t.exportCsv}
-        </ProgressActionButton>
-        <button className="liquid-button" type="button" disabled={streamSummary.isGenerating} onClick={() => streamSummary.generate().catch(() => undefined)}>
-          {streamSummary.isGenerating ? t.generatingReport : t.generateReport}
-        </button>
-        {streamSummary.summary ? <button className="liquid-button" type="button" onClick={downloadMarkdownReport}>{t.downloadReport}</button> : null}
-      </div>
-      {streamSummary.error ? <p className="control-feedback is-error" role="alert">{t.reportError}</p> : null}
-      {!streamSummary.isLoading && !streamSummary.summary && !streamSummary.error ? <p className="control-feedback">{t.reportEmpty}</p> : null}
+        <div className="export-actions">
+          <ProgressActionButton className="button button-secondary" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
+            {t.exportCsv}
+          </ProgressActionButton>
+          <button className="button button-secondary" type="button" disabled={streamSummary.isGenerating} onClick={() => streamSummary.generate().catch(() => undefined)}>
+            {streamSummary.isGenerating ? t.generatingReport : t.generateReport}
+          </button>
+          {streamSummary.summary ? <button className="button button-tertiary" type="button" onClick={downloadMarkdownReport}>{t.downloadReport}</button> : null}
+        </div>
+        {streamSummary.error ? <StatusBanner className="control-feedback" variant="error">{t.reportError}</StatusBanner> : null}
+        {!streamSummary.isLoading && !streamSummary.summary && !streamSummary.error ? <p className="control-feedback">{t.reportEmpty}</p> : null}
+      </details>
     </Reveal>
   )
 }

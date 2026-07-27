@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AnimatedNumber, MotionCard, Reveal } from './MotionPrimitives.jsx'
 import SessionInsights from './SessionInsights.jsx'
 import { buildChatLeaderboards } from '../utils/sessionDashboard.js'
+import { MetricCard, SegmentedControl, StatusBanner } from './UiPrimitives.jsx'
 
 function formatPlainInteger(value) {
   return Math.round(value).toLocaleString()
@@ -23,7 +24,7 @@ function LeaderboardList({ metricLabel, items, renderMetric, emptyMessage, calcu
           <li key={`${chatter.nickname}-${index}`}>
             <span className="leaderboard-rank">{index + 1}</span>
             <span className="leaderboard-avatar" aria-hidden="true">{chatter.nickname.slice(0, 1).toLocaleUpperCase()}</span>
-            <div><strong>{chatter.nickname}</strong><small>{chatter.note ?? metricLabel}</small></div>
+            <div><strong>{chatter.nickname}</strong></div>
             <em aria-label={metricLabel}>{renderMetric(chatter)}</em>
           </li>
         ))}
@@ -39,9 +40,9 @@ function TabbedLeaderboard({ title, tabs, initialTabId, revealDelay = 0 }) {
     <MotionCard as="article" className="chat-leaderboard glass-panel liquid-card subtle-shine" revealDelay={revealDelay}>
       <div className="chat-leaderboard-header">
         <h3>{title}</h3>
-        <div className="leaderboard-tabs" role="tablist" aria-label={title}>
-          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab.id === tab.id} className={`liquid-control ${activeTab.id === tab.id ? 'is-active' : ''}`} onClick={() => setActiveTabId(tab.id)}>{tab.label}</button>)}
-        </div>
+        <SegmentedControl className="leaderboard-tabs" role="tablist" label={title}>
+          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab.id === tab.id} className={`segment-button ${activeTab.id === tab.id ? 'is-active' : ''}`} onClick={() => setActiveTabId(tab.id)}>{tab.label}</button>)}
+        </SegmentedControl>
       </div>
       <LeaderboardList {...activeTab} />
     </MotionCard>
@@ -58,17 +59,21 @@ function mockLeaderboards(chatters) {
 
 function TopChatters({ chatters, chatAnalytics = null, realDataMode = false, session = null, ingestStatus = null, error = null, t }) {
   const leaderboards = realDataMode ? buildChatLeaderboards(chatAnalytics) : mockLeaderboards(chatters)
-  const totalMessages = session?.totalMessages ?? chatAnalytics?.totalMessages ?? (realDataMode ? 0 : chatters.reduce((sum, chatter) => sum + chatter.messages, 0))
-  const activeChatters = session?.uniqueChatters ?? chatAnalytics?.activeNow ?? (realDataMode ? 0 : chatters.length)
+  const totalMessages = session?.totalMessages ?? chatAnalytics?.totalMessages ?? (realDataMode ? null : chatters.reduce((sum, chatter) => sum + chatter.messages, 0))
+  const activeChatters = session?.uniqueChatters ?? chatAnalytics?.activeNow ?? (realDataMode ? null : chatters.length)
   const activityPeak = session?.activityPeak ?? chatAnalytics?.activityPeak ?? null
   return (
     <Reveal as="section" className="section-panel top-chatters liquid-glass liquid-surface" id="chatters" aria-labelledby="top-chatters-title" data-liquid-interactive>
       <div className="section-heading"><div><h2 id="top-chatters-title">{t.viewersAndChat}</h2></div></div>
-      {error ? <p className="section-inline-error" role="alert">{t.chatSectionPartialError}</p> : null}
+      {error ? <StatusBanner className="section-inline-error" variant="warning">{t.chatSectionPartialError}</StatusBanner> : null}
       <div className="chat-summary-metrics" aria-label={t.viewersAndChat}>
-        <div className="liquid-card hover-lift"><span>{t.sessionActiveChatters}</span><strong><AnimatedNumber value={activeChatters} format={formatPlainInteger} /></strong></div>
-        <div className="liquid-card hover-lift"><span>{t.streamMessages}</span><strong><AnimatedNumber value={totalMessages} format={formatPlainInteger} /></strong></div>
-        <div className="liquid-card hover-lift"><span>{t.activityPeak}</span><strong>{activityPeak === null ? t.notAvailable : `x${activityPeak}`}</strong></div>
+        <MetricCard className="liquid-card hover-lift" label={t.sessionActiveChatters} value={activeChatters} emptyLabel={t.notAvailable}>
+          {activeChatters === null ? null : <AnimatedNumber value={activeChatters} format={formatPlainInteger} />}
+        </MetricCard>
+        <MetricCard className="liquid-card hover-lift" label={t.streamMessages} value={totalMessages} emptyLabel={t.notAvailable}>
+          {totalMessages === null ? null : <AnimatedNumber value={totalMessages} format={formatPlainInteger} />}
+        </MetricCard>
+        <MetricCard className="liquid-card hover-lift" label={t.activityPeak} value={activityPeak === null ? null : `x${activityPeak}`} emptyLabel={t.notAvailable} />
       </div>
       <div className="chat-dashboard is-three-column">
         <div className="chat-leaderboards chat-leaderboards-left">

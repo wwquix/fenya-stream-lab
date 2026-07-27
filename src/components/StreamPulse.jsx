@@ -99,16 +99,19 @@ function formatCompactNumber(value) {
   return String(value)
 }
 
-function getYAxisTicks(points, comparePoints = []) {
-  const maxValue = [...points, ...comparePoints].reduce((max, point) => Math.max(max, point.viewers, point.chatMessagesPerMinute), 0)
-  const ceiling = Math.max(2500, Math.ceil(maxValue / 2500) * 2500)
-  const ticks = []
-
-  for (let value = 0; value <= ceiling; value += 2500) {
-    ticks.push(value)
+function getYAxisScale(points, key, minimumCeiling) {
+  const maximum = points.reduce((current, point) => Math.max(current, Number(point[key]) || 0), 0)
+  const target = Math.max(maximum, minimumCeiling)
+  const roughStep = target / 4
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(roughStep, 1)))
+  const normalizedStep = roughStep / magnitude
+  const stepMultiplier = [1, 2, 5, 10].find((candidate) => candidate >= normalizedStep) ?? 10
+  const step = stepMultiplier * magnitude
+  const ceiling = Math.ceil(target / step) * step
+  return {
+    ceiling,
+    ticks: Array.from({ length: Math.round(ceiling / step) + 1 }, (_, index) => index * step),
   }
-
-  return ticks
 }
 
 function formatTimecodeFromOffset(offsetSeconds, chartData) {
@@ -194,7 +197,8 @@ function StreamPulse({ stream, compareStream, events, t }) {
     visibleChartData[visibleChartData.length - 1]?.elapsedMinute ?? streamDuration,
   ]
   const compareChartData = compareStream ? normalizeChartData(compareStream.chartData, streamDuration) : []
-  const yAxisTicks = getYAxisTicks(visibleChartData, compareChartData)
+  const viewerAxis = getYAxisScale([...visibleChartData, ...compareChartData], 'viewers', 100)
+  const messageAxis = getYAxisScale(visibleChartData, 'chatMessagesPerMinute', 10)
   const visibleTimes = new Set(visibleChartData.map((point) => point.time))
   const eventMarkers = streamEvents.map((event) => ({
     ...event,
@@ -246,11 +250,8 @@ function StreamPulse({ stream, compareStream, events, t }) {
     <Reveal as="section" className="section-panel stream-pulse liquid-glass liquid-surface" id="pulse" aria-labelledby="stream-pulse-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.streamControls}</p>
           <h2 id="stream-pulse-title">{t.streamPulse}</h2>
-          <p className="section-note">{t.streamPulseNote}</p>
         </div>
-        <span className="section-kicker">{t.viewers} / {t.chatPerMin}</span>
       </div>
 
       <div className="chart-shell glass-panel liquid-card subtle-shine soft-glow" data-entity-type="stream" data-entity-id={stream.id}>
@@ -282,13 +283,25 @@ function StreamPulse({ stream, compareStream, events, t }) {
                 const nearest = normalizedChartData.reduce((closest, point) => (Math.abs(point.elapsedMinute - value) < Math.abs(closest.elapsedMinute - value) ? point : closest), normalizedChartData[0])
                 return nearest?.time ?? ''
               }}
-              tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+              tick={{ fill: 'var(--chart-viewers-line)', fontSize: 12 }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
-              domain={[0, yAxisTicks[yAxisTicks.length - 1]]}
-              ticks={yAxisTicks}
+              yAxisId="viewers"
+              domain={[0, viewerAxis.ceiling]}
+              ticks={viewerAxis.ticks}
+              tickFormatter={formatCompactNumber}
+              tick={{ fill: 'var(--chart-messages-line)', fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+              width={44}
+            />
+            <YAxis
+              yAxisId="messages"
+              orientation="right"
+              domain={[0, messageAxis.ceiling]}
+              ticks={messageAxis.ticks}
               tickFormatter={formatCompactNumber}
               tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
               axisLine={false}
@@ -300,19 +313,21 @@ function StreamPulse({ stream, compareStream, events, t }) {
               <ReferenceArea
                 x1={visibleSelectedRange.start}
                 x2={visibleSelectedRange.end}
+                yAxisId="viewers"
                 fill="var(--chart-selection)"
                 strokeOpacity={0}
                 ifOverflow="hidden"
               />
             ) : null}
-            <Area type="monotone" dataKey="viewers" fill="url(#viewerGlow)" stroke="var(--chart-viewers-line)" strokeWidth={2.5} />
-            <Line type="monotone" dataKey="chatMessagesPerMinute" stroke="var(--chart-messages-line)" strokeWidth={2.5} dot={false} />
-            {compareStream ? <Line type="monotone" data={compareChartData} dataKey="viewers" stroke="var(--chart-compare-line)" strokeWidth={2} strokeDasharray="5 5" dot={false} /> : null}
+            <Area yAxisId="viewers" type="monotone" dataKey="viewers" fill="url(#viewerGlow)" stroke="var(--chart-viewers-line)" strokeWidth={2.5} />
+            <Line yAxisId="messages" type="monotone" dataKey="chatMessagesPerMinute" stroke="var(--chart-messages-line)" strokeWidth={2.5} dot={false} />
+            {compareStream ? <Line yAxisId="viewers" type="monotone" data={compareChartData} dataKey="viewers" stroke="var(--chart-compare-line)" strokeWidth={2} strokeDasharray="5 5" dot={false} /> : null}
             {eventMarkers.map((event) => (
               <ReferenceDot
                 key={event.id}
                 x={event.point.elapsedMinute}
                 y={event.point.chatMessagesPerMinute}
+                yAxisId="messages"
                 r={5}
                 fill={event.type === 'ban' || event.type === 'timeout' ? 'var(--danger-red)' : 'var(--chart-marker)'}
                 stroke="var(--chart-marker-stroke)"

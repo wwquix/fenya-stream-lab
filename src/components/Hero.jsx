@@ -1,4 +1,3 @@
-import { motion, useReducedMotion } from 'motion/react'
 import { Reveal } from './MotionPrimitives.jsx'
 
 // Future media swap point:
@@ -10,19 +9,23 @@ const defaultHeroAsset = {
 }
 
 const navItems = [
-  { id: 'top', labelKey: 'navTop' },
-  { id: 'pulse', labelKey: 'navPulse' },
-  { id: 'insights', labelKey: 'navInsights' },
-  { id: 'chatters', labelKey: 'navChatters' },
-  { id: 'words', labelKey: 'navSpeech' },
-  { id: 'moderators', labelKey: 'navMods' },
-  { id: 'archive', labelKey: 'navArchive' },
-  { id: 'summary', labelKey: 'navSummary' },
+  { id: 'dashboard', labelKey: 'navDashboard', sections: ['top', 'summary', 'pulse'] },
+  { id: 'insights', labelKey: 'navAnalytics', sections: ['insights', 'chatters', 'moderators', 'words'] },
+  { id: 'archive', labelKey: 'navArchive', sections: ['archive'] },
 ]
 
-function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'top', language, onToggleLanguage, t }) {
+function Hero({
+  stream,
+  heroAsset = defaultHeroAsset,
+  activeSection = 'top',
+  language,
+  onToggleLanguage,
+  onOpenSettings,
+  settingsOpen = false,
+  settingsTriggerRef,
+  t,
+}) {
   const hasHeroAsset = Boolean(heroAsset?.src)
-  const prefersReducedMotion = useReducedMotion()
 
   return (
     <Reveal as="section" className="hero-wrap" id="top" data-entity-type="stream" data-entity-id={stream.id}>
@@ -39,37 +42,31 @@ function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'top', lan
           </a>
           <div className="hero-nav-menu">
             {navItems.map((item) => (
-              <a className={activeSection === item.id ? 'is-active' : ''} href={`#${item.id}`} key={item.id}>
-                {activeSection === item.id ? (
-                  <motion.span
-                    className="hero-nav-active-pill"
-                    layoutId="hero-nav-active-pill"
-                    aria-hidden="true"
-                    transition={prefersReducedMotion
-                      ? { duration: 0 }
-                      : { type: 'spring', stiffness: 420, damping: 36 }}
-                  />
-                ) : null}
+              <a className={item.sections.includes(activeSection) && !settingsOpen ? 'is-active' : ''} href={`#${item.id}`} key={item.id}>
                 <span className="hero-nav-label">{t[item.labelKey]}</span>
               </a>
             ))}
+            <button
+              ref={settingsTriggerRef}
+              className={settingsOpen ? 'is-active' : ''}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={settingsOpen}
+              onClick={onOpenSettings}
+            >
+              <span className="hero-nav-label">{t.navSettings}</span>
+            </button>
           </div>
           <div className="hero-nav-actions">
-            <button className="language-toggle liquid-button" type="button" onClick={onToggleLanguage} aria-label="Switch language">
+            <button className="language-toggle button button-secondary" type="button" onClick={onToggleLanguage} aria-label="Switch language">
               {language === 'ru' ? 'RU' : 'EN'}
             </button>
-            <a className="hero-nav-cta liquid-button" href="#pulse">
-              {t.viewDashboard} <span aria-hidden="true">↗</span>
-            </a>
           </div>
         </nav>
 
         <div className="hero-copy">
-          <p className="hero-badge">
-            <span aria-hidden="true" />
-            {t.heroBadge}
-          </p>
           <h1>Fenya Stream Lab</h1>
+          <a className="button button-tertiary hero-primary-action" href="#dashboard">{t.viewDashboard}</a>
         </div>
       </div>
     </Reveal>

@@ -31,12 +31,14 @@ function SectionRail({ activeSection = 'top', availableSectionIds = [], isVisibl
       aria-hidden={!isVisible}
       data-liquid-interactive
     >
-      {railItems.filter((item) => availableSections.has(item.id)).map((item) => (
-        <a className={`liquid-control ${activeSection === item.id ? 'is-active' : ''}`} href={`#${item.id}`} key={item.id} tabIndex={isVisible ? 0 : -1} onClick={(event) => handleSectionClick(event, item.id)}>
-          <span aria-hidden="true" />
-          <strong>{t[item.labelKey]}</strong>
-        </a>
-      ))}
+      <div className="section-rail-links">
+        {railItems.filter((item) => availableSections.has(item.id)).map((item) => (
+          <a className={`liquid-control ${activeSection === item.id ? 'is-active' : ''}`} href={`#${item.id}`} key={item.id} tabIndex={isVisible ? 0 : -1} onClick={(event) => handleSectionClick(event, item.id)}>
+            <span aria-hidden="true" />
+            <strong>{t[item.labelKey]}</strong>
+          </a>
+        ))}
+      </div>
     </nav>
   )
 }

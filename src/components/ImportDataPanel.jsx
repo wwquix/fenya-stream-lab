@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Reveal } from './MotionPrimitives.jsx'
+import { SegmentedControl } from './UiPrimitives.jsx'
 
 const emptyResult = {
   successCount: 0,
@@ -115,19 +116,16 @@ function ImportDataPanel({ t }) {
     <Reveal as="section" className="section-panel import-data-panel liquid-glass liquid-surface" id="import" aria-labelledby="import-data-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.importKicker}</p>
           <h2 id="import-data-title">{t.importTitle}</h2>
-          <p className="section-note">{t.importNote}</p>
         </div>
-        <span className="section-kicker">SQLite</span>
       </div>
 
       <div className="import-panel-grid">
         <div className="import-input-panel glass-panel">
-          <div className="import-mode-tabs" role="tablist" aria-label={t.importFormatLabel}>
+          <SegmentedControl className="import-mode-tabs" role="tablist" label={t.importFormatLabel}>
             {['json', 'csv'].map((item) => (
               <button
-                className={format === item ? 'is-active' : ''}
+                className={`segment-button ${format === item ? 'is-active' : ''}`}
                 type="button"
                 role="tab"
                 aria-selected={format === item}
@@ -137,7 +135,7 @@ function ImportDataPanel({ t }) {
                 {item.toUpperCase()}
               </button>
             ))}
-          </div>
+          </SegmentedControl>
 
           <div className="import-file-field">
             <span id="import-file-label">{t.importUploadLabel}</span>
@@ -168,7 +166,7 @@ function ImportDataPanel({ t }) {
           </label>
 
           <button
-            className="liquid-button import-submit"
+            className="button button-primary import-submit"
             type="button"
             disabled={!contents.trim() || state === 'importing'}
             onClick={handleImport}

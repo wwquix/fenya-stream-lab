@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import { Reveal } from './MotionPrimitives.jsx'
+import { MetricCard, SegmentedControl, StatusBanner } from './UiPrimitives.jsx'
 import '../styles/advancedInsights.css'
 
 const TAB_DEFINITIONS = [
@@ -130,24 +131,17 @@ function segmentLabel(segment, language, t) {
 
 function StatePanel({ message, role = 'status', actionLabel = null, onAction = null }) {
   return (
-    <div className="advanced-insights-state liquid-inner-surface" role={role} aria-live={role === 'status' ? 'polite' : undefined}>
-      <p>{message}</p>
-      {actionLabel && onAction ? (
-        <button className="liquid-button" type="button" onClick={onAction}>
+    <StatusBanner
+      className="advanced-insights-state"
+      variant={role === 'alert' ? 'error' : 'info'}
+      action={actionLabel && onAction ? (
+        <button className="button button-secondary" type="button" onClick={onAction}>
           {actionLabel}
         </button>
       ) : null}
-    </div>
-  )
-}
-
-function MetricCard({ label, value, detail = null }) {
-  return (
-    <article className="advanced-metric-card liquid-inner-surface">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {detail ? <small>{detail}</small> : null}
-    </article>
+    >
+      {message}
+    </StatusBanner>
   )
 }
 
@@ -166,47 +160,48 @@ function DataQualityBlock({ data, language, t, headingId }) {
   ))
 
   return (
-    <section className={`advanced-quality liquid-inner-surface is-${quality.status}`} aria-labelledby={headingId}>
-      <div className="advanced-card-heading">
-        <div>
-          <p className="eyebrow">{t.advancedDataBasis}</p>
-          <h3 id={headingId}>{t.advancedDataQuality}</h3>
-        </div>
-        <span className={`advanced-status-pill is-${quality.status}`}>{statusLabel}</span>
-      </div>
-      <dl className="advanced-quality-grid">
-        {metrics.map(([label, value]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{formatMetric(value, language, t)}</dd>
+    <section className={`advanced-quality is-${quality.status}`} aria-labelledby={headingId}>
+      <p className="advanced-quality-summary" id={headingId}>
+        <strong>{t.advancedDataQuality}: {statusLabel}</strong>
+        <span>{formatMetric(quality.viewerSamples, language, t)} {t.advancedViewerSamples.toLocaleLowerCase()}</span>
+        <span>{formatMetric(quality.messages, language, t)} {t.advancedMessages.toLocaleLowerCase()}</span>
+        <span>{formatMetric(quality.uniqueChatters, language, t)} {t.advancedUniqueChatters.toLocaleLowerCase()}</span>
+      </p>
+      <details className="methodology-details advanced-quality-details">
+        <summary>{t.advancedDataDetails}</summary>
+        <dl className="advanced-quality-grid">
+          {metrics.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{formatMetric(value, language, t)}</dd>
+            </div>
+          ))}
+          <div>
+            <dt>{t.advancedAbsoluteTimestamps}</dt>
+            <dd>{quality.hasAbsoluteTimestamps === null ? t.notAvailable : quality.hasAbsoluteTimestamps ? t.yes : t.no}</dd>
           </div>
-        ))}
-        <div>
-          <dt>{t.advancedAbsoluteTimestamps}</dt>
-          <dd>{quality.hasAbsoluteTimestamps === null ? t.notAvailable : quality.hasAbsoluteTimestamps ? t.yes : t.no}</dd>
-        </div>
-        <div>
-          <dt>{t.advancedDataSource}</dt>
-          <dd>{mappedLabel(t.advancedSourceLabels, data.source, t.advancedUnknownValue)}</dd>
-        </div>
-        <div>
-          <dt>{t.advancedGeneratedAt}</dt>
-          <dd>{formatDateTime(data.generatedAt, language) ?? t.notAvailable}</dd>
-        </div>
-      </dl>
-      {quality.collectedFrom ? (
-        <p className="advanced-quality-note">
-          <strong>{t.advancedCollectedFrom}</strong>{' '}
-          <span>{formatDateTime(quality.collectedFrom, language)}</span>
-        </p>
-      ) : null}
-      {quality.collectedPeriodOnly ? <p className="advanced-quality-note">{t.advancedCollectedPeriodOnly}</p> : null}
-      {warnings.length ? (
-        <div className="advanced-warning-list" role="status">
-          <strong>{t.advancedWarnings}</strong>
-          <ul>{warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>
-        </div>
-      ) : null}
+          <div>
+            <dt>{t.advancedDataSource}</dt>
+            <dd>{mappedLabel(t.advancedSourceLabels, data.source, t.advancedUnknownValue)}</dd>
+          </div>
+          <div>
+            <dt>{t.advancedGeneratedAt}</dt>
+            <dd>{formatDateTime(data.generatedAt, language) ?? t.notAvailable}</dd>
+          </div>
+        </dl>
+        {quality.collectedFrom ? (
+          <p className="advanced-quality-note">
+            <strong>{t.advancedCollectedFrom}</strong>{' '}
+            <span>{formatDateTime(quality.collectedFrom, language)}</span>
+          </p>
+        ) : null}
+        {quality.collectedPeriodOnly ? <p className="advanced-quality-note">{t.advancedCollectedPeriodOnly}</p> : null}
+        {warnings.length ? (
+          <StatusBanner className="advanced-warning-list" variant="warning" title={t.advancedWarnings}>
+            <ul>{warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul>
+          </StatusBanner>
+        ) : null}
+      </details>
     </section>
   )
 }
@@ -231,9 +226,9 @@ function LoyaltyPanel({ loyalty, language, t }) {
     <div className="advanced-tab-content">
       <div className="advanced-metric-grid">
         <MetricCard label={t.advancedActiveParticipants} value={formatMetric(loyalty.activeParticipants, language, t)} />
-        <MetricCard label={t.advancedKnownParticipantShare} value={formatMetricPercent(loyalty.knownParticipantsShare, language, t, false, true)} />
-        <MetricCard label={t.advancedAverageStreamsAttended} value={formatMetric(loyalty.averageStreamsAttended, language, t, 1)} />
-        <MetricCard label={t.advancedHistoryStreamsUsed} value={formatMetric(loyalty.historyStreamsUsed, language, t)} />
+        <MetricCard label={t.advancedReturningParticipants} value={formatMetric(loyalty.returningParticipants, language, t)} />
+        <MetricCard label={t.advancedNewParticipants} value={formatMetric(loyalty.newParticipants, language, t)} />
+        <MetricCard label={t.advancedRegularParticipants} value={formatMetric(loyalty.regularParticipants, language, t)} />
       </div>
 
       <div className="advanced-two-column">
@@ -274,16 +269,16 @@ function LoyaltyPanel({ loyalty, language, t }) {
           </ul>
         </section>
 
-        <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-loyalty-criteria">
-          <h3 id="advanced-loyalty-criteria">{t.advancedLoyaltyCriteria}</h3>
+        <details className="methodology-details advanced-subcard" id="advanced-loyalty-criteria">
+          <summary>{t.advancedLoyaltyCriteria}</summary>
           <p>{t.advancedLoyaltyCriteriaNote}</p>
           <dl className="advanced-compact-metrics">
-            <div><dt>{t.advancedNewParticipants}</dt><dd>{formatMetric(loyalty.newParticipants, language, t)}</dd></div>
-            <div><dt>{t.advancedReturningParticipants}</dt><dd>{formatMetric(loyalty.returningParticipants, language, t)}</dd></div>
-            <div><dt>{t.advancedRegularParticipants}</dt><dd>{formatMetric(loyalty.regularParticipants, language, t)}</dd></div>
+            <div><dt>{t.advancedKnownParticipantShare}</dt><dd>{formatMetricPercent(loyalty.knownParticipantsShare, language, t, false, true)}</dd></div>
+            <div><dt>{t.advancedAverageStreamsAttended}</dt><dd>{formatMetric(loyalty.averageStreamsAttended, language, t, 1)}</dd></div>
+            <div><dt>{t.advancedHistoryStreamsUsed}</dt><dd>{formatMetric(loyalty.historyStreamsUsed, language, t)}</dd></div>
             <div><dt>{t.advancedReactivatedParticipants}</dt><dd>{formatMetric(loyalty.reactivatedParticipants, language, t)}</dd></div>
           </dl>
-        </section>
+        </details>
       </div>
 
       <section className="advanced-subcard liquid-inner-surface" aria-labelledby="advanced-loyal-participants">
@@ -303,7 +298,7 @@ function LoyaltyPanel({ loyalty, language, t }) {
                   <th scope="col">{t.advancedStreamsAttended}</th>
                   <th scope="col">{t.advancedSelectedStreamMessages}</th>
                   <th scope="col">{t.advancedCurrentStreak}</th>
-                  <th scope="col">{t.advancedFirstKnownAt}</th>
+                  <th className="advanced-optional-column" scope="col">{t.advancedFirstKnownAt}</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,7 +309,7 @@ function LoyaltyPanel({ loyalty, language, t }) {
                     <td>{formatMetric(participant.streamsAttended, language, t)}</td>
                     <td>{formatMetric(participant.messagesInSelectedStream, language, t)}</td>
                     <td>{formatMetric(participant.currentStreak, language, t)}</td>
-                    <td>{formatDateTime(participant.firstKnownAt, language) ?? t.notAvailable}</td>
+                    <td className="advanced-optional-column">{formatDateTime(participant.firstKnownAt, language) ?? t.notAvailable}</td>
                   </tr>
                 ))}
               </tbody>
@@ -330,9 +325,20 @@ function ClipSuggestionsPanel({ clips, language, t }) {
   if (!clips.length) return <StatePanel message={t.advancedClipsEmpty} />
   return (
     <div className="advanced-tab-content">
-      <p className="advanced-context-note">{t.advancedClipWindowDisclaimer}</p>
+      <details className="methodology-details advanced-context-details">
+        <summary>{t.advancedMethodology}</summary>
+        <p>{t.advancedClipWindowDisclaimer}</p>
+      </details>
       <ol className="advanced-clip-list">
-        {clips.slice(0, 5).map((clip, index) => (
+        {clips.slice(0, 5).map((clip, index) => {
+          const evidenceValues = [
+            clip.peakViewers,
+            clip.peakMessagesPerMinute,
+            clip.viewerBaselinePercent,
+            clip.chatBaselinePercent,
+          ]
+          const hasCompleteEvidence = evidenceValues.every((value) => value !== null && value !== undefined && value !== '')
+          return (
           <li className="advanced-clip-card liquid-inner-surface" key={`${clip.startTime}-${clip.peakTime}-${index}`}>
             <div className="advanced-card-heading">
               <div>
@@ -346,15 +352,20 @@ function ClipSuggestionsPanel({ clips, language, t }) {
               </div>
               <div className="advanced-score-group">
                 <span>{t.advancedScore} <strong>{formatScore(clip.score, language, t)}</strong></span>
-                <span>{t.advancedConfidence} <strong>{formatConfidence(clip.confidence, language, t)}</strong></span>
+                {hasCompleteEvidence ? <span>{t.advancedConfidence} <strong>{formatConfidence(clip.confidence, language, t)}</strong></span> : null}
               </div>
             </div>
-            <dl className="advanced-compact-metrics is-four-column">
-              <div><dt>{t.advancedPeakViewers}</dt><dd>{formatMetric(clip.peakViewers, language, t)}</dd></div>
-              <div><dt>{t.advancedPeakChat}</dt><dd>{formatMetric(clip.peakMessagesPerMinute, language, t, 1)}</dd></div>
-              <div><dt>{t.advancedViewerBaselineChange}</dt><dd>{formatMetricPercent(clip.viewerBaselinePercent, language, t, true)}</dd></div>
-              <div><dt>{t.advancedChatBaselineChange}</dt><dd>{formatMetricPercent(clip.chatBaselinePercent, language, t, true)}</dd></div>
+            <dl className="advanced-compact-metrics is-primary-deltas">
+              <div className={clip.viewerBaselinePercent === null || clip.viewerBaselinePercent === undefined ? 'is-missing' : ''}><dt>{t.advancedViewerBaselineChange}</dt><dd>{formatMetricPercent(clip.viewerBaselinePercent, language, t, true)}</dd></div>
+              <div className={clip.chatBaselinePercent === null || clip.chatBaselinePercent === undefined ? 'is-missing' : ''}><dt>{t.advancedChatBaselineChange}</dt><dd>{formatMetricPercent(clip.chatBaselinePercent, language, t, true)}</dd></div>
             </dl>
+            <details className="methodology-details">
+              <summary>{t.advancedMoreMetrics}</summary>
+              <dl className="advanced-compact-metrics">
+                <div className={clip.peakViewers === null || clip.peakViewers === undefined ? 'is-missing' : ''}><dt>{t.advancedPeakViewers}</dt><dd>{formatMetric(clip.peakViewers, language, t)}</dd></div>
+                <div className={clip.peakMessagesPerMinute === null || clip.peakMessagesPerMinute === undefined ? 'is-missing' : ''}><dt>{t.advancedPeakChat}</dt><dd>{formatMetric(clip.peakMessagesPerMinute, language, t, 1)}</dd></div>
+              </dl>
+            </details>
             <div className="advanced-reasons">
               <strong>{t.advancedReasons}</strong>
               {clip.reasons.length ? (
@@ -373,7 +384,8 @@ function ClipSuggestionsPanel({ clips, language, t }) {
               </p>
             ) : null}
           </li>
-        ))}
+          )
+        })}
       </ol>
     </div>
   )
@@ -408,7 +420,7 @@ function EventImpactPanel({ events, language, t }) {
               >
                 <span>{event.time ?? t.notAvailable}</span>
                 <strong>{event.label ?? mappedLabel(t.advancedEventTypeLabels, event.type, t.advancedUnknownEvent)}</strong>
-                <small>{mappedLabel(t.advancedImpactDirectionLabels, event.direction, t.advancedUnknownValue)}</small>
+                <small>{mappedLabel(t.advancedImpactDirectionLabels, event.direction, t.advancedUnknownValue)} · {formatMetricPercent(event.viewerPercent, language, t, true)}</small>
               </button>
             )
           })}
@@ -430,41 +442,34 @@ function EventImpactPanel({ events, language, t }) {
           <div className="advanced-impact-groups">
             <section aria-labelledby="advanced-viewer-impact">
               <h4 id="advanced-viewer-impact">{t.advancedViewerImpact}</h4>
-              <dl className="advanced-compact-metrics">
-                <div><dt>{t.advancedBefore}</dt><dd>{formatMetric(selectedEvent.viewersBefore, language, t, 1)}</dd></div>
-                <div><dt>{t.advancedAfter}</dt><dd>{formatMetric(selectedEvent.viewersAfter, language, t, 1)}</dd></div>
-                <div><dt>{t.advancedAbsoluteChange}</dt><dd>{formatMetric(selectedEvent.viewerDelta, language, t, 1)}</dd></div>
-                <div><dt>{t.advancedPercentChange}</dt><dd>{formatMetricPercent(selectedEvent.viewerPercent, language, t, true)}</dd></div>
-                <div><dt>{t.advancedMaximumAfter}</dt><dd>{formatMetric(selectedEvent.maxViewersAfter, language, t, 1)}</dd></div>
-              </dl>
+              <p className="advanced-impact-primary">{formatMetric(selectedEvent.viewersBefore, language, t, 1)} → {formatMetric(selectedEvent.viewersAfter, language, t, 1)} <strong>{formatMetricPercent(selectedEvent.viewerPercent, language, t, true)}</strong></p>
             </section>
             <section aria-labelledby="advanced-chat-impact">
               <h4 id="advanced-chat-impact">{t.advancedChatImpact}</h4>
-              <dl className="advanced-compact-metrics">
-                <div><dt>{t.advancedBefore}</dt><dd>{formatMetric(selectedEvent.chatBefore, language, t, 1)}</dd></div>
-                <div><dt>{t.advancedAfter}</dt><dd>{formatMetric(selectedEvent.chatAfter, language, t, 1)}</dd></div>
-                <div><dt>{t.advancedAbsoluteChange}</dt><dd>{formatMetric(selectedEvent.chatDelta, language, t, 1)}</dd></div>
-                <div><dt>{t.advancedPercentChange}</dt><dd>{formatMetricPercent(selectedEvent.chatPercent, language, t, true)}</dd></div>
-                <div><dt>{t.advancedMaximumAfter}</dt><dd>{formatMetric(selectedEvent.maxChatAfter, language, t, 1)}</dd></div>
-              </dl>
+              <p className="advanced-impact-primary">{formatMetric(selectedEvent.chatBefore, language, t, 1)} → {formatMetric(selectedEvent.chatAfter, language, t, 1)} <strong>{formatMetricPercent(selectedEvent.chatPercent, language, t, true)}</strong></p>
             </section>
           </div>
-          <dl className="advanced-event-meta">
-            <div><dt>{t.advancedConfidence}</dt><dd>{formatConfidence(selectedEvent.confidence, language, t)}</dd></div>
-            <div><dt>{t.advancedTimeToPeak}</dt><dd>{formatMinutes(selectedEvent.timeToPeakMinutes, language, t)}</dd></div>
-            <div>
-              <dt>{t.advancedEffectDuration}</dt>
-              <dd>
-                {selectedEvent.effectCensored
-                  ? formatMinutes(selectedEvent.effectObservedMinutes, language, t, true)
-                  : formatMinutes(selectedEvent.effectDurationMinutes, language, t)}
-              </dd>
-            </div>
-            <div>
-              <dt>{t.advancedDataPoints}</dt>
-              <dd>{formatMetric(selectedEvent.dataPoints.before, language, t)} / {formatMetric(selectedEvent.dataPoints.after, language, t)}</dd>
-            </div>
-          </dl>
+          <details className="methodology-details">
+            <summary>{t.advancedMoreMetrics}</summary>
+            <dl className="advanced-event-meta">
+              <div><dt>{t.advancedAbsoluteChange}</dt><dd>{formatMetric(selectedEvent.viewerDelta, language, t, 1)} / {formatMetric(selectedEvent.chatDelta, language, t, 1)}</dd></div>
+              <div><dt>{t.advancedMaximumAfter}</dt><dd>{formatMetric(selectedEvent.maxViewersAfter, language, t, 1)} / {formatMetric(selectedEvent.maxChatAfter, language, t, 1)}</dd></div>
+              <div><dt>{t.advancedConfidence}</dt><dd>{formatConfidence(selectedEvent.confidence, language, t)}</dd></div>
+              <div><dt>{t.advancedTimeToPeak}</dt><dd>{formatMinutes(selectedEvent.timeToPeakMinutes, language, t)}</dd></div>
+              <div>
+                <dt>{t.advancedEffectDuration}</dt>
+                <dd>
+                  {selectedEvent.effectCensored
+                    ? formatMinutes(selectedEvent.effectObservedMinutes, language, t, true)
+                    : formatMinutes(selectedEvent.effectDurationMinutes, language, t)}
+                </dd>
+              </div>
+              <div>
+                <dt>{t.advancedDataPoints}</dt>
+                <dd>{formatMetric(selectedEvent.dataPoints.before, language, t)} / {formatMetric(selectedEvent.dataPoints.after, language, t)}</dd>
+              </div>
+            </dl>
+          </details>
         </article>
       </div>
     </div>
@@ -519,18 +524,23 @@ function RetentionPanel({ retention, dataQuality, language, t }) {
   return (
     <div className="advanced-tab-content">
       <p className="advanced-context-note">{t.advancedAggregateRetentionDisclaimer}</p>
-      {dataQuality.collectedPeriodOnly ? <p className="advanced-context-note is-warning">{t.advancedCollectedRetentionDisclaimer}</p> : null}
-      <div className="advanced-metric-grid">
+      {dataQuality.collectedPeriodOnly ? <StatusBanner className="advanced-context-note" variant="warning">{t.advancedCollectedRetentionDisclaimer}</StatusBanner> : null}
+      <div className="advanced-metric-grid retention-primary-metrics">
         <MetricCard label={t.advancedStartViewers} value={formatMetric(retention.startViewers, language, t)} />
         <MetricCard label={t.advancedEndViewers} value={formatMetric(retention.endViewers, language, t)} />
         <MetricCard label={t.averageViewers} value={formatMetric(retention.averageViewers, language, t)} />
         <MetricCard label={t.peakViewers} value={formatMetric(retention.peakViewers, language, t)} />
-        <MetricCard label={t.advancedEndVsStart} value={formatMetricPercent(retention.endVsStartPercent, language, t, true)} />
-        <MetricCard label={t.advancedEarlyBaselineViewers} value={formatMetric(retention.earlyBaselineViewers, language, t)} />
-        <MetricCard label={t.advancedChangeFromEarlyBaseline} value={formatMetricPercent(retention.changeFromEarlyBaselinePercent, language, t, true)} />
         <MetricCard label={t.advancedLargestDrop} value={formatMetricPercent(retention.largestDrop?.dropPercent, language, t)} />
         <MetricCard label={t.advancedRecoveredDrops} value={`${formatMetric(retention.recoveredDropCount, language, t)} / ${formatMetric(retention.dropCount, language, t)}`} />
       </div>
+      <details className="methodology-details">
+        <summary>{t.advancedMoreMetrics}</summary>
+        <dl className="advanced-compact-metrics">
+          <div><dt>{t.advancedEndVsStart}</dt><dd>{formatMetricPercent(retention.endVsStartPercent, language, t, true)}</dd></div>
+          <div><dt>{t.advancedEarlyBaselineViewers}</dt><dd>{formatMetric(retention.earlyBaselineViewers, language, t)}</dd></div>
+          <div><dt>{t.advancedChangeFromEarlyBaseline}</dt><dd>{formatMetricPercent(retention.changeFromEarlyBaselinePercent, language, t, true)}</dd></div>
+        </dl>
+      </details>
 
       <section className="advanced-retention-chart liquid-inner-surface" aria-labelledby="advanced-retention-chart-title">
         <div className="advanced-card-heading">
@@ -674,20 +684,28 @@ function AdvancedInsights({
   onRetry = null,
   streamId = null,
   language = 'ru',
+  scope = 'all',
+  sectionId = 'insights',
+  showDataQuality = true,
   t,
 }) {
-  const [activeTabId, setActiveTabId] = useState(TAB_DEFINITIONS[0].id)
+  const scopedTabs = scope === 'audience'
+    ? TAB_DEFINITIONS.filter((tab) => tab.id === 'loyalty' || tab.id === 'retention')
+    : scope === 'content'
+      ? TAB_DEFINITIONS.filter((tab) => tab.id === 'clips' || tab.id === 'events')
+      : TAB_DEFINITIONS
+  const [activeTabId, setActiveTabId] = useState(scopedTabs[0].id)
   const tabRefs = useRef([])
   const rawId = useId()
   const idPrefix = `advancedInsights${rawId.replaceAll(':', '')}`
-  const activeTabIndex = Math.max(0, TAB_DEFINITIONS.findIndex((tab) => tab.id === activeTabId))
-  const activeTab = TAB_DEFINITIONS[activeTabIndex]
+  const activeTabIndex = Math.max(0, scopedTabs.findIndex((tab) => tab.id === activeTabId))
+  const activeTab = scopedTabs[activeTabIndex]
 
   function handleTabKeyDown(event, index) {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
-    const nextIndex = getNextAdvancedTabIndex(index, event.key, TAB_DEFINITIONS.length)
-    setActiveTabId(TAB_DEFINITIONS[nextIndex].id)
+    const nextIndex = getNextAdvancedTabIndex(index, event.key, scopedTabs.length)
+    setActiveTabId(scopedTabs[nextIndex].id)
     tabRefs.current[nextIndex]?.focus()
   }
 
@@ -702,7 +720,7 @@ function AdvancedInsights({
     body = <StatePanel message={t.advancedEmpty} />
   } else {
     const qualityHeadingId = `${idPrefix}-quality-heading`
-    const quality = <DataQualityBlock data={data} language={language} t={t} headingId={qualityHeadingId} />
+    const quality = showDataQuality ? <DataQualityBlock data={data} language={language} t={t} headingId={qualityHeadingId} /> : null
     if (data.dataQuality.status === 'insufficient') {
       body = (
         <>
@@ -726,11 +744,11 @@ function AdvancedInsights({
       body = (
         <>
           {quality}
-          {data.dataQuality.status === 'partial' ? (
-            <p className="advanced-partial-notice" role="status">{t.advancedPartialData}</p>
+          {showDataQuality && data.dataQuality.status === 'partial' ? (
+            <StatusBanner className="advanced-partial-notice" variant="warning">{t.advancedPartialData}</StatusBanner>
           ) : null}
-          <div className="advanced-insights-tabs" role="tablist" aria-label={t.advancedTabsLabel}>
-            {TAB_DEFINITIONS.map((tab, index) => {
+          <SegmentedControl className="advanced-insights-tabs" role="tablist" label={t.advancedTabsLabel}>
+            {scopedTabs.map((tab, index) => {
               const selected = tab.id === activeTab.id
               const tabId = `${idPrefix}-tab-${tab.id}`
               const panelId = `${idPrefix}-panel-${tab.id}`
@@ -738,7 +756,7 @@ function AdvancedInsights({
                 <button
                   ref={(element) => { tabRefs.current[index] = element }}
                   id={tabId}
-                  className={`liquid-control ${selected ? 'is-active' : ''}`}
+                  className={`segment-button ${selected ? 'is-active' : ''}`}
                   type="button"
                   role="tab"
                   aria-selected={selected}
@@ -752,8 +770,8 @@ function AdvancedInsights({
                 </button>
               )
             })}
-          </div>
-          {TAB_DEFINITIONS.map((tab) => {
+          </SegmentedControl>
+          {scopedTabs.map((tab) => {
             const selected = tab.id === activeTab.id
             return (
               <section
@@ -778,7 +796,7 @@ function AdvancedInsights({
     <Reveal
       as="section"
       className="section-panel advanced-insights liquid-glass liquid-surface"
-      id="insights"
+      id={sectionId}
       aria-labelledby={`${idPrefix}-title`}
       data-entity-type="stream"
       data-entity-id={streamId ?? undefined}
@@ -786,11 +804,8 @@ function AdvancedInsights({
     >
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.advancedInsightsKicker}</p>
           <h2 id={`${idPrefix}-title`}>{t.advancedInsightsTitle}</h2>
-          <p className="section-note">{t.advancedInsightsNote}</p>
         </div>
-        <span className="section-kicker">{t.advancedInsightsBadge}</span>
       </div>
       {body}
     </Reveal>

@@ -1,5 +1,9 @@
+import { useState } from 'react'
 import EmptyPanel from './EmptyPanel.jsx'
+import { MetricCard, StatusBanner } from './UiPrimitives.jsx'
 import { getVodRowPresentation } from '../utils/dashboardUi.js'
+
+export const INITIAL_VOD_LIMIT = 10
 
 function formatVodDate(value, russian) {
   const date = new Date(value)
@@ -11,35 +15,54 @@ function thumbnailUrl(value) {
 }
 
 function formatTotalDuration(seconds, russian) {
-  const totalHours = Math.floor(Number(seconds || 0) / 3600)
-  const minutes = Math.floor((Number(seconds || 0) % 3600) / 60)
+  if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds))) return null
+  const totalHours = Math.floor(Number(seconds) / 3600)
+  const minutes = Math.floor((Number(seconds) % 3600) / 60)
   return russian ? `${totalHours} ч ${minutes} мин` : `${totalHours}h ${minutes}m`
+}
+
+function VodThumbnail({ value }) {
+  const resolvedUrl = thumbnailUrl(value)
+  const [failedUrl, setFailedUrl] = useState(null)
+  const hasFailed = !resolvedUrl || failedUrl === resolvedUrl
+
+  if (hasFailed) {
+    return (
+      <span className="vod-fallback-thumbnail" aria-hidden="true">
+        <strong>FSL</strong>
+        <small>Twitch VOD</small>
+      </span>
+    )
+  }
+
+  return <img src={resolvedUrl} alt="" loading="lazy" onError={() => setFailedUrl(resolvedUrl)} />
 }
 
 export default function TwitchVodArchive({ archive, canSync, dashboardMode = 'legacy-fenya', t }) {
   const russian = t.navTop === 'Топ'
   const comparison = archive?.comparison
+  const [showAllVods, setShowAllVods] = useState(false)
+  const vods = archive?.vods ?? []
+  const visibleVods = showAllVods ? vods : vods.slice(0, INITIAL_VOD_LIMIT)
 
   return (
     <div className="twitch-vod-archive">
       <div className="vod-archive-heading">
         <div>
-          <p className="eyebrow">Twitch VOD</p>
           <h3>{t.vodArchiveTitle}</h3>
-          <p className="section-note">{t.vodArchiveNote}</p>
         </div>
-        {canSync ? <button className="liquid-button vod-sync-button" type="button" disabled={archive?.isSyncing} onClick={() => archive.sync().catch(() => {})}>{archive?.isSyncing ? t.vodSyncing : t.vodSync}</button> : null}
+        {canSync ? <button className="button button-primary vod-sync-button" type="button" disabled={archive?.isSyncing} onClick={() => archive.sync().catch(() => {})}>{archive?.isSyncing ? t.vodSyncing : t.vodSync}</button> : null}
       </div>
       {archive?.syncedCount !== null && archive?.syncedCount !== undefined ? (
-        <p className="section-note vod-sync-result" role="status">{t.vodSyncedCount}: {archive.syncedCount} VOD</p>
+        <StatusBanner className="vod-sync-result" variant="success">{t.vodSyncedCount}: {archive.syncedCount} VOD</StatusBanner>
       ) : null}
-      {archive?.error ? <p className="twitch-status-error" role="alert">{archive.error.message}</p> : null}
+      {archive?.error ? <StatusBanner variant="error">{archive.error.message}</StatusBanner> : null}
       {(comparison?.totalVods || archive?.vods?.length) ? (
-        <dl className="vod-summary glass-panel">
-          <div><dt>{t.vodSyncedTotal}</dt><dd>{comparison?.totalVods ?? archive.vods.length}</dd></div>
-          <div><dt>{t.vodTotalDuration}</dt><dd>{formatTotalDuration(comparison?.totalDurationSeconds, russian)}</dd></div>
-          <div><dt>{t.vodTopViews}</dt><dd>{comparison?.topVod?.viewCount ?? 0}</dd></div>
-        </dl>
+        <div className="vod-summary glass-panel">
+          <MetricCard label={t.vodSyncedTotal} value={comparison?.totalVods ?? archive.vods.length} emptyLabel={t.notAvailable} />
+          <MetricCard label={t.vodTotalDuration} value={formatTotalDuration(comparison?.totalDurationSeconds, russian)} emptyLabel={t.notAvailable} />
+          <MetricCard label={t.vodTopViews} value={comparison?.topVod?.viewCount ?? null} emptyLabel={t.notAvailable} />
+        </div>
       ) : null}
       {archive?.isLoading ? <EmptyPanel message={t.channelLoading} minHeight="medium" compact /> : archive?.vods?.length ? (
         <div className="vod-list" role="list">
@@ -52,35 +75,40 @@ export default function TwitchVodArchive({ archive, canSync, dashboardMode = 'le
             <span>{t.vodColumnStatus}</span>
             <span>{t.vodColumnAction}</span>
           </div>
-          {archive.vods.map((vod) => {
+          {visibleVods.map((vod) => {
             const row = getVodRowPresentation(vod, t)
             return (
             <article className="vod-list-row glass-panel" key={vod.twitchVideoId} role="listitem">
               <div className="vod-list-thumbnail">
-                {vod.thumbnailUrl ? <img src={thumbnailUrl(vod.thumbnailUrl)} alt="" loading="lazy" /> : <span aria-hidden="true">VOD</span>}
+                <VodThumbnail value={vod.thumbnailUrl} />
               </div>
               <h4 className="vod-list-title">{vod.title}</h4>
               <span className="vod-list-value">{formatVodDate(vod.createdAt, russian)}</span>
               <span className="vod-list-value">{vod.duration || '—'}</span>
-              <span className="vod-list-value">{vod.viewCount ?? 0}</span>
+              <span className="vod-list-value">{vod.viewCount ?? '—'}</span>
               <span className={row.statusClassName}>{row.statusLabel}</span>
-              <a className="vod-list-open" href={vod.url} target="_blank" rel="noreferrer">{row.actionLabel}</a>
+              <a className="button button-tertiary vod-list-open" href={vod.url} target="_blank" rel="noreferrer">{row.actionLabel}</a>
             </article>
             )
           })}
+          {vods.length > INITIAL_VOD_LIMIT ? (
+            <button className="button button-secondary vod-list-more" type="button" onClick={() => setShowAllVods((value) => !value)}>
+              {showAllVods ? t.showLess : `${t.showMore} · ${vods.length - INITIAL_VOD_LIMIT}`}
+            </button>
+          ) : null}
         </div>
       ) : archive?.hasLoaded ? (
         <EmptyPanel
           message={t.vodNoResults}
           detail={dashboardMode === 'connected-channel' ? t.vodLegacyHint : null}
           minHeight="medium"
-          action={canSync ? <button className="liquid-button" type="button" disabled={archive?.isSyncing} onClick={() => archive.sync().catch(() => {})}>{archive?.isSyncing ? t.vodSyncing : t.vodSync}</button> : null}
+          action={canSync ? <button className="button button-primary" type="button" disabled={archive?.isSyncing} onClick={() => archive.sync().catch(() => {})}>{archive?.isSyncing ? t.vodSyncing : t.vodSync}</button> : null}
         />
       ) : (
         <EmptyPanel
           message={t.vodNotSynced}
           minHeight="medium"
-          action={canSync ? <button className="liquid-button" type="button" disabled={archive?.isSyncing} onClick={() => archive.sync().catch(() => {})}>{archive?.isSyncing ? t.vodSyncing : t.vodSync}</button> : null}
+          action={canSync ? <button className="button button-primary" type="button" disabled={archive?.isSyncing} onClick={() => archive.sync().catch(() => {})}>{archive?.isSyncing ? t.vodSyncing : t.vodSync}</button> : null}
         />
       )}
     </div>

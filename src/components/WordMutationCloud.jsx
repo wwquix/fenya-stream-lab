@@ -45,39 +45,41 @@ function normalizeWeightsFromCounts(words) {
   return words.map((word) => ({ ...word, weight: weightByCount.get(word.count) }))
 }
 
-function getCountBasedSize(weight, index) {
-  if (index === 0) return 'hero'
-  if (index === 1) return 'xl'
-  if (weight >= 70) return 'lg'
-  if (weight >= 42) return 'md'
-  if (weight >= 25) return 'sm'
-  return 'xs'
+function isNumericToken(value) {
+  return /^\d[\d\s.,]*$/.test(String(value).trim())
 }
 
-function getStableVerticalDrift(word, index) {
-  const seed = `${word.id ?? word.text}-${index}`
-  let hash = 0
+function isObviousSpamToken(value) {
+  const text = String(value).trim()
+  if (!text) return true
+  return /^(?:https?|www|t\.me|discord\.gg|com|ru|by|net|org)$/i.test(text)
+    || /(?:https?:\/\/|www\.|t\.me\/|discord\.gg\/|[a-z0-9_-]+\.(?:com|ru|by|net|org)(?:\/|$))/i.test(text)
+    || (text.length > 48 && !text.includes(' '))
+}
 
-  for (let characterIndex = 0; characterIndex < seed.length; characterIndex += 1) {
-    hash = (hash * 31 + seed.charCodeAt(characterIndex)) >>> 0
-  }
-
-  return (hash % 7) - 3
+function getCountBasedSize(weight, index, text) {
+  if (isNumericToken(text)) return 'sm'
+  if (index < 4) return 'hero'
+  if (weight >= 70) return 'lg'
+  if (weight >= 42) return 'md'
+  return 'sm'
 }
 
 function mergeBackendWords(fallbackWords, wordAnalytics) {
   if (!Array.isArray(wordAnalytics?.words) || wordAnalytics.words.length === 0) {
-    return normalizeWeightsFromCounts([...fallbackWords].sort((first, second) => second.count - first.count))
+    const filteredFallbackWords = fallbackWords.filter((word) => !isObviousSpamToken(getWordText(word, 'ru')))
+    return normalizeWeightsFromCounts([...filteredFallbackWords].sort((first, second) => second.count - first.count))
       .map((word, index) => ({
         ...word,
-        size: getCountBasedSize(word.weight, index),
+        size: getCountBasedSize(word.weight, index, getWordText(word, 'ru')),
         slot: 'auto',
       }))
   }
 
   const mostFrequentWords = [...wordAnalytics.words]
+    .filter((word) => !isObviousSpamToken(word.text))
     .sort((first, second) => second.count - first.count)
-    .slice(0, 50)
+    .slice(0, 28)
 
   return normalizeWeightsFromCounts(mostFrequentWords)
     .map((word, index) => {
@@ -89,7 +91,7 @@ function mergeBackendWords(fallbackWords, wordAnalytics) {
         text: word.text,
         count: word.count,
         weight: word.weight,
-        size: getCountBasedSize(word.weight, index),
+        size: getCountBasedSize(word.weight, index, word.text),
         slot: 'auto',
         tone: backendToneMap[word.tone] ?? fallbackWord.tone ?? 'muted',
         category: word.category,
@@ -106,16 +108,14 @@ function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', re
     <Reveal as="section" className="section-panel word-mutations liquid-glass liquid-surface" id="words" aria-labelledby="word-mutations-title" data-entity-type="stream" data-entity-id={streamId} data-liquid-interactive>
       <div className="section-heading">
         <div>
-          {t.speechKicker ? <p className="eyebrow">{t.speechKicker}</p> : null}
           <h2 id="word-mutations-title">{realDataMode ? t.chatWordsTitle : t.speechPatterns}</h2>
-          <p className="section-note">{realDataMode ? t.chatWordsNote : t.speechNote}</p>
         </div>
       </div>
 
       <div className={`word-cloud word-cloud-dense glass-panel liquid-card soft-glow ${isMinimalCloud ? 'is-minimal' : ''}`}>
         {visibleWords.map((word, index) => {
           const countLabel = `${formatCount(word.count, language)} ${t.mentions}`
-          const verticalDrift = getStableVerticalDrift(word, index)
+          const text = getWordText(word, language)
 
           return (
             <ScannerTooltip
@@ -124,17 +124,16 @@ function WordMutationCloud({ words, wordAnalytics, streamId, language = 'ru', re
               key={word.id}
               type="word"
               id={word.id}
-              className={`word-token stagger-item word-size-${word.size} word-tone-${word.tone ?? 'muted'}`}
-              initial={prefersReducedMotion ? false : { opacity: 0, y: verticalDrift + 10, scale: 0.97 }}
-              animate={prefersReducedMotion ? { opacity: 1 } : { opacity: 1, y: verticalDrift, scale: 1 }}
-              whileHover={prefersReducedMotion ? undefined : { y: verticalDrift - 2, scale: 1.035 }}
+              className={`word-token stagger-item word-size-${word.size} word-tone-${word.tone ?? 'muted'} ${isNumericToken(text) ? 'word-kind-number' : 'word-kind-text'}`}
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={prefersReducedMotion
                 ? { duration: 0 }
                 : { duration: 0.46, delay: Math.min(index, 47) * 0.012, ease: [0.16, 1, 0.3, 1] }}
-              style={{ '--word-drift-y': `${verticalDrift}px` }}
+              title={countLabel}
             >
-              <span>{getWordText(word, language)}</span>
-              <small>{countLabel}</small>
+              <span>{text}</span>
+              <small className="sr-only">{countLabel}</small>
             </ScannerTooltip>
           )
         })}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Hero from './components/Hero.jsx'
 import SectionRail from './components/SectionRail.jsx'
 import BackToTop from './components/BackToTop.jsx'
@@ -36,8 +36,9 @@ import { translations } from './i18n/translations.js'
 import AppErrorState from './components/AppErrorState.jsx'
 import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
 import { buildInternalSessions, chooseDefaultSessionId, mergeSessionData } from './utils/sessionDashboard.js'
+import SettingsPanel from './components/SettingsPanel.jsx'
 
-const allSectionIds = ['top', 'pulse', 'insights', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
+const allSectionIds = ['top', 'summary', 'pulse', 'insights', 'chatters', 'words', 'moderators', 'archive', 'import']
 const StreamPulse = lazy(() => import('./components/StreamPulse.jsx'))
 const AdvancedInsights = lazy(() => import('./components/AdvancedInsights.jsx'))
 
@@ -49,11 +50,19 @@ function StreamPulseFallback({ t }) {
   )
 }
 
-function AdvancedInsightsFallback({ t }) {
+function AdvancedInsightsFallback({ t, id = 'insights' }) {
   return (
-    <section className="real-data-empty liquid-glass liquid-surface" id="insights" role="status">
+    <section className="real-data-empty liquid-glass liquid-surface" id={id} role="status">
       <p>{t.advancedLoading}</p>
     </section>
+  )
+}
+
+function SectionGroupHeader({ title }) {
+  return (
+    <header className="section-group-header">
+      <h2>{title}</h2>
+    </header>
   )
 }
 
@@ -88,9 +97,11 @@ function App() {
   const [activeSection, setActiveSection] = useState('top')
   const [showBackToTop, setShowBackToTop] = useState(false)
   const [showSectionRail, setShowSectionRail] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedStreamId, setSelectedStreamId] = useState(currentStream.id)
   const [compareStreamId, setCompareStreamId] = useState('')
   const [selectedChannel, setSelectedChannel] = useState(null)
+  const settingsTriggerRef = useRef(null)
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? currentStream
   const compareStream = streams.find((stream) => stream.id === compareStreamId) ?? null
   const t = translations[language] ?? translations.ru
@@ -293,6 +304,23 @@ function App() {
     setCompareStreamId((currentCompareId) => (currentCompareId === streamId ? '' : currentCompareId))
   }
 
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false)
+    window.requestAnimationFrame(() => settingsTriggerRef.current?.focus())
+  }, [])
+
+  function openLegacyDashboard() {
+    setSelectedChannel(null)
+    closeSettings()
+    window.requestAnimationFrame(() => document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
+  function openChannelDashboard(channel) {
+    setSelectedChannel(channel)
+    closeSettings()
+    window.requestAnimationFrame(() => document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+
   if (backendUnavailable) {
     return (
       <main className="app-shell app-error-shell">
@@ -303,11 +331,37 @@ function App() {
 
   return (
     <main className="app-shell">
-      <Hero stream={selectedStream} activeSection={activeSection} language={language} onToggleLanguage={() => setLanguage((current) => (current === 'ru' ? 'en' : 'ru'))} t={t} />
+      <Hero
+        stream={selectedStream}
+        activeSection={activeSection}
+        language={language}
+        onToggleLanguage={() => setLanguage((current) => (current === 'ru' ? 'en' : 'ru'))}
+        onOpenSettings={() => setSettingsOpen(true)}
+        settingsOpen={settingsOpen}
+        settingsTriggerRef={settingsTriggerRef}
+        t={t}
+      />
       <SectionRail activeSection={activeSection} availableSectionIds={renderedSectionIds} isVisible={showSectionRail} t={t} />
       <BackToTop isVisible={showBackToTop} />
+      {settingsOpen ? (
+        <SettingsPanel theme={theme} onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))} onClose={closeSettings} t={t}>
+          <ChannelOnboardingPanel
+            t={t}
+            identity={identity.identity}
+            canConnectChannel={Boolean(identity.identity?.permissions?.canControlIngest)}
+            permissions={permissions}
+            dashboardMode={dashboardMode}
+            onIdentityRefresh={identity.refresh}
+            selectedChannel={selectedChannel}
+            legacyChannelLogin={twitchIngest.connection?.channelLogin || 'fenya'}
+            onOpenLegacy={openLegacyDashboard}
+            onOpenChannel={openChannelDashboard}
+          />
+        </SettingsPanel>
+      ) : null}
 
       <div className="content-grid" id="dashboard">
+        <SectionGroupHeader kicker={t.overviewGroupKicker} title={t.overviewGroupTitle} note={t.overviewGroupNote} />
         <StreamControlBar
           streams={streams}
           internalSessions={internalSessions}
@@ -318,36 +372,16 @@ function App() {
           onCompareChange={setCompareStreamId}
           twitchMetadata={twitchMetadata}
           twitchIngest={twitchIngest}
-          persistedMessageCount={chatAnalytics.analytics?.totalMessages ?? 0}
+          persistedMessageCount={chatAnalytics.analytics?.totalMessages ?? null}
           isTwitchMode={isTwitchMode}
           dashboardMode={dashboardMode}
           canManageChannel={canManageChannel}
           readOnlyAccess={hasReadOnlyAccess}
           isDataModeLoading={isDataModeLoading}
           sessionDataLoading={selectedSessionReport.isLoading}
-          theme={theme}
-          onToggleTheme={() => setTheme((currentTheme) => (currentTheme === 'light' ? 'dark' : 'light'))}
           replay={isTwitchMode ? clientReplay : replay}
           streamSummary={streamSummary}
           t={t}
-        />
-        <ChannelOnboardingPanel
-          t={t}
-          identity={identity.identity}
-          canConnectChannel={Boolean(identity.identity?.permissions?.canControlIngest)}
-          permissions={permissions}
-          dashboardMode={dashboardMode}
-          onIdentityRefresh={identity.refresh}
-          selectedChannel={selectedChannel}
-          legacyChannelLogin={twitchIngest.connection?.channelLogin || 'fenya'}
-          onOpenLegacy={() => {
-            setSelectedChannel(null)
-            document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }}
-          onOpenChannel={(channel) => {
-            setSelectedChannel(channel)
-            document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }}
         />
         {dashboardRequestFailed ? (
           <AppErrorState compact title={t.apiRequestFailedTitle} message={t.apiRequestFailedMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
@@ -359,10 +393,21 @@ function App() {
         ) : isTwitchMode ? (
           <>
             {dashboardMode === 'connected-channel' && !hasRealStream && !hasRealChat && !hasRealWords ? (
-              <RealModeNotice title={t.modeConnectedChannel} note={t.channelNoDataNotice} />
+              <RealModeNotice title={t.modeConnectedChannel} note={t.channelNoDataNotice} variant="warning" />
             ) : twitchConnected && twitchMetadata.metadata?.isLive === false ? (
-              <RealModeNotice title={t.offlineConnectedTitle} note={t.offlineConnectedNote} />
+              <RealModeNotice title={t.offlineConnectedTitle} note={t.offlineConnectedNote} variant="info" />
             ) : null}
+            <RealDataSummary
+              connection={twitchIngest.connection}
+              ingestStatus={twitchIngest.status}
+              metadata={twitchMetadata.metadata}
+              chatAnalytics={chatAnalytics.analytics}
+              wordAnalytics={wordAnalytics.analytics}
+              vodArchive={twitchVods}
+              dashboardMode={dashboardMode}
+              channelLogin={selectedChannel?.twitchLogin}
+              t={t}
+            />
             {hasRealStream ? (
               <Suspense fallback={<StreamPulseFallback t={t} />}>
                 <StreamPulse stream={realPulseStream} compareStream={realCompareStream} events={selectedSession?.events ?? []} t={t} />
@@ -375,6 +420,7 @@ function App() {
                 minHeight="chart"
               />
             )}
+            <SectionGroupHeader kicker={t.audienceGroupKicker} title={t.audienceGroupTitle} note={t.audienceGroupNote} />
             <Suspense fallback={<AdvancedInsightsFallback t={t} />}>
               <AdvancedInsights
                 data={advancedAnalytics.data}
@@ -389,9 +435,9 @@ function App() {
             <TopChatters
               chatters={[]}
               chatAnalytics={selectedIsCurrent ? chatAnalytics.analytics : selectedSession?.topChatters?.length ? {
-                totalMessages: selectedSession.totalMessages ?? 0,
-                activeNow: selectedSession.uniqueChatters ?? 0,
-                activityPeak: selectedSession.activityPeak ?? 1,
+                totalMessages: selectedSession.totalMessages ?? null,
+                activeNow: selectedSession.uniqueChatters ?? null,
+                activityPeak: selectedSession.activityPeak ?? null,
                 leaderboards: { messages: selectedSession.topChatters.map((item) => ({ nickname: item.nickname, value: item.messages ?? item.value ?? 0 })) },
                 recentMessages: [],
               } : null}
@@ -422,25 +468,23 @@ function App() {
               canManageChannel={canManageChannel}
               t={t}
             />
+            <SectionGroupHeader kicker={t.archiveGroupKicker} title={t.archiveGroupTitle} note={t.archiveGroupNote} />
             <StreamArchive streams={[]} archive={streamArchive.archive} selectedStreamId={activeSelectedStreamId.startsWith('stream-') ? activeSelectedStreamId : `stream-${activeSelectedStreamId}`} realDataMode vodArchive={twitchVods} canSyncVods={canManageChannel} dashboardMode={dashboardMode} t={t} />
-            <RealDataSummary
-              connection={twitchIngest.connection}
-              ingestStatus={twitchIngest.status}
-              metadata={twitchMetadata.metadata}
-              chatAnalytics={chatAnalytics.analytics}
-              wordAnalytics={wordAnalytics.analytics}
-              vodArchive={twitchVods}
-              dashboardMode={dashboardMode}
-              channelLogin={selectedChannel?.twitchLogin}
-              t={t}
-            />
-            <ImportDataPanel t={t} />
           </>
         ) : (
           <>
+            <DashboardOverview
+              stream={selectedStream}
+              moderators={moderators}
+              events={streamEvents}
+              chatters={chatters}
+              streamSummary={streamSummary.summary}
+              t={t}
+            />
             <Suspense fallback={<StreamPulseFallback t={t} />}>
               <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
             </Suspense>
+            <SectionGroupHeader kicker={t.audienceGroupKicker} title={t.audienceGroupTitle} note={t.audienceGroupNote} />
             <Suspense fallback={<AdvancedInsightsFallback t={t} />}>
               <AdvancedInsights
                 data={advancedAnalytics.data}
@@ -483,18 +527,11 @@ function App() {
               moderationAnalytics={replayModerationAnalytics ?? (selectedStream.id === currentStream.id ? moderationAnalytics.analytics : null)}
               t={t}
             />
+            <SectionGroupHeader kicker={t.archiveGroupKicker} title={t.archiveGroupTitle} note={t.archiveGroupNote} />
             <StreamArchive streams={streams} archive={streamArchive.archive} selectedStreamId={selectedStream.id} t={t} />
-            <DashboardOverview
-              stream={selectedStream}
-              moderators={moderators}
-              events={streamEvents}
-              chatters={chatters}
-              streamSummary={streamSummary.summary}
-              t={t}
-            />
-            <ImportDataPanel t={t} />
           </>
         )}
+        <ImportDataPanel t={t} />
       </div>
     </main>
   )

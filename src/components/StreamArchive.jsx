@@ -68,21 +68,26 @@ function StreamArchive({ streams, archive, selectedStreamId, realDataMode = fals
   const activeStreams = adaptBackendStreams(archive) ?? (realDataMode ? [] : streams)
 
   return (
-    <Reveal as="section" className="section-panel stream-archive liquid-glass liquid-surface" id="archive" aria-labelledby="stream-archive-title" data-liquid-interactive>
+    <Reveal
+      as="section"
+      className="section-panel stream-archive liquid-glass liquid-surface"
+      id="archive"
+      aria-labelledby="stream-archive-title"
+      viewport={{ once: true, amount: 'some' }}
+      data-liquid-interactive
+    >
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.archiveKicker}</p>
           <h2 id="stream-archive-title">{t.streamArchive}</h2>
-          <p className="section-note">{t.archiveNote}</p>
         </div>
       </div>
 
       {realDataMode && vodArchive ? <TwitchVodArchive archive={vodArchive} canSync={canSyncVods} dashboardMode={dashboardMode} t={t} /> : null}
 
-      {realDataMode ? <div className="internal-archive-heading"><h3>{t.internalArchiveTitle}</h3><p className="section-note">{t.internalArchiveNote}</p></div> : null}
+      {realDataMode ? <div className="internal-archive-heading"><h3>{t.internalArchiveTitle}</h3></div> : null}
 
       {activeStreams.length === 0 ? (
-        <EmptyPanel message={realDataMode ? t.internalArchiveEmpty : t.noRealArchive} minHeight={realDataMode ? 'medium' : 'small'} compact={!realDataMode} />
+        <EmptyPanel message={realDataMode ? t.internalArchiveEmpty : t.noRealArchive} minHeight="small" compact />
       ) : <div className="archive-bookshelf" aria-label="Stream archive bookshelf">
         <div className="archive-track">
         {activeStreams.map((stream, index) => (

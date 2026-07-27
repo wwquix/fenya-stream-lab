@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Reveal } from './MotionPrimitives.jsx'
 import { formatDataSourceDescription, getRoleBadgeKeys } from '../utils/dashboardUi.js'
+import { SegmentedControl, StatusBanner } from './UiPrimitives.jsx'
 
 function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedChannel = null, legacyChannelLogin = 'fenya', canConnectChannel = false, permissions = null, onIdentityRefresh, onOpenChannel, onOpenLegacy }) {
   const [channels, setChannels] = useState([])
@@ -75,16 +76,35 @@ function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedC
     window.location.assign(`/auth/twitch/login?purpose=ingest&channel=${encodeURIComponent(legacyChannelLogin)}&reauth=1`)
   }
 
+  const connectedChannel = identity?.isLoggedIn && channels.length ? channels[0] : null
+
   return (
-    <Reveal as="section" className="section-panel channel-onboarding liquid-glass liquid-surface" aria-labelledby="channel-onboarding-title" data-liquid-interactive>
-      <div className="section-heading">
+    <Reveal as="section" className={`section-panel channel-onboarding liquid-glass liquid-surface ${connectedChannel ? 'is-connected-compact' : ''}`} aria-labelledby="channel-onboarding-title" data-liquid-interactive>
+      {!connectedChannel ? <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.channelOnboardingKicker}</p>
           <h2 id="channel-onboarding-title">{t.channelOnboardingTitle}</h2>
         </div>
-      </div>
+      </div> : <h2 className="sr-only" id="channel-onboarding-title">{t.channelOnboardingTitle}</h2>}
 
-      <div className="channel-onboarding-toolbar glass-panel">
+      {connectedChannel ? (
+        <article className="connected-channel-compact">
+          {identity?.twitchAccount?.profileImageUrl
+            ? <img src={identity.twitchAccount.profileImageUrl} alt="" />
+            : <span className="channel-avatar-fallback" aria-hidden="true">{connectedChannel.twitchLogin?.slice(0, 1).toUpperCase() || 'F'}</span>}
+          <div>
+            <strong>@{connectedChannel.twitchLogin}</strong>
+            <span><span className={`channel-status-dot is-${connectedChannel.ingest?.status || 'stopped'}`} />{connectedChannel.ingest?.running ? t.channelStatusRunning : t.channelStatusReady}</span>
+          </div>
+          {identity?.roleSummary ? (
+            <div className="identity-role-badges" aria-label={t.rolesLabel}>
+              {getRoleBadgeKeys(identity.roleSummary).map((labelKey) => <span key={labelKey}>{t[labelKey]}</span>)}
+            </div>
+          ) : null}
+          {connectedChannel.needsReauth ? (
+            <button className="button button-secondary" type="button" disabled={state === 'connecting'} onClick={() => startTwitchLogin(true)}>{t.channelReconnectTwitch}</button>
+          ) : null}
+        </article>
+      ) : <div className="channel-onboarding-toolbar glass-panel">
         <div className="account-identity" aria-live="polite">
           {identity?.twitchAccount?.profileImageUrl ? <img src={identity.twitchAccount.profileImageUrl} alt="" /> : null}
           <div>
@@ -109,40 +129,40 @@ function ChannelOnboardingPanel({ t, identity, dashboardMode = 'mock', selectedC
             ) : null}
           </div>
         </div>
-        {state === 'guest' || (channels.length === 0 && canConnectChannel) ? <button className="liquid-button channel-connect-button" type="button" disabled={state === 'loading' || state === 'connecting'} onClick={handleConnect}>
+        {state === 'guest' || (channels.length === 0 && canConnectChannel) ? <button className={`button ${dashboardMode === 'legacy-fenya' ? 'button-secondary' : 'button-primary'} channel-connect-button`} type="button" disabled={state === 'loading' || state === 'connecting'} onClick={handleConnect}>
           {state === 'connecting' ? t.channelConnecting : t.connectMyTwitchChannel}
         </button> : null}
         {dashboardMode === 'legacy-fenya' ? (
           <div>
-            <button className="liquid-button channel-connect-button" type="button" onClick={connectChatReader}>{t.connectChatReader}</button>
+            <button className="button button-primary channel-connect-button" type="button" onClick={connectChatReader}>{t.connectChatReader}</button>
             <span className="role-helper">{t.connectChatReaderHint}</span>
           </div>
         ) : null}
-      </div>
+      </div>}
 
       <div className="identity-mode-row">
-        <div className="data-source-copy">
+        {!connectedChannel ? <div className="data-source-copy">
           <strong>{t.dataSourceLabel}</strong>
           <p>{formatDataSourceDescription(dashboardMode, selectedChannel?.twitchLogin || identity?.twitchAccount?.login, t)}</p>
-        </div>
-        <div className="dashboard-mode-actions" aria-label={t.dataSourceLabel}>
-          <button className={`liquid-button ${dashboardMode === 'legacy-fenya' ? 'is-active' : ''}`} type="button" aria-pressed={dashboardMode === 'legacy-fenya'} onClick={onOpenLegacy}>{t.openLegacyMode}</button>
-          {channels[0] ? <button className={`liquid-button ${dashboardMode === 'connected-channel' ? 'is-active' : ''}`} type="button" aria-pressed={dashboardMode === 'connected-channel'} onClick={() => onOpenChannel?.(channels[0])}>{t.openMyChannelMode} @{channels[0].twitchLogin}</button> : null}
-        </div>
+        </div> : null}
+        <SegmentedControl className="dashboard-mode-actions" label={t.dataSourceLabel}>
+          <button className={`segment-button ${dashboardMode === 'legacy-fenya' ? 'is-active' : ''}`} type="button" aria-pressed={dashboardMode === 'legacy-fenya'} onClick={onOpenLegacy}>{t.openLegacyMode}</button>
+          {channels[0] ? <button className={`segment-button ${dashboardMode === 'connected-channel' ? 'is-active' : ''}`} type="button" aria-pressed={dashboardMode === 'connected-channel'} onClick={() => onOpenChannel?.(channels[0])}>{t.openMyChannelMode} @{channels[0].twitchLogin}</button> : null}
+        </SegmentedControl>
       </div>
 
-      {channels.length ? (
+      {channels.length && !connectedChannel ? (
         <div className="connected-channel-grid">
           {channels.map((channel) => (
             <article className="connected-channel-card glass-panel" key={channel.id}>
               <div>
                 <h3>@{channel.twitchLogin}</h3>
                 <p><span className={`channel-status-dot is-${channel.ingest?.status || 'stopped'}`} />{channel.ingest?.running ? t.channelStatusRunning : t.channelStatusReady}</p>
-                {channel.needsReauth ? <p className="channel-reauth-note" role="status">{channel.message || t.channelReauthMessage}</p> : null}
+                {channel.needsReauth ? <StatusBanner className="channel-reauth-note" variant="warning">{channel.message || t.channelReauthMessage}</StatusBanner> : null}
               </div>
               {channel.needsReauth ? (
-                <button className="channel-dashboard-link" type="button" disabled={state === 'connecting'} onClick={() => startTwitchLogin(true)}>{t.channelReconnectTwitch}</button>
-              ) : <button className="channel-dashboard-link" type="button" onClick={() => onOpenChannel?.(channel)}>{t.openChannelCompact}</button>}
+                <button className="button button-secondary channel-dashboard-link" type="button" disabled={state === 'connecting'} onClick={() => startTwitchLogin(true)}>{t.channelReconnectTwitch}</button>
+              ) : <button className="button button-tertiary channel-dashboard-link" type="button" onClick={() => onOpenChannel?.(channel)}>{t.openChannelCompact}</button>}
             </article>
           ))}
         </div>

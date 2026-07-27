@@ -113,27 +113,56 @@ function DashboardOverview({ stream, moderators, events, chatters, streamSummary
     },
   ]
   const cards = createBackendCards(streamSummary, t) ?? fallbackCards
+  const numberFormat = new Intl.NumberFormat()
+  const summaryMetrics = streamSummary?.metrics
+  const primaryCards = [
+    {
+      label: t.averageViewers,
+      value: summaryMetrics?.averageViewers ?? stream.summary?.averageViewers ?? null,
+    },
+    {
+      label: t.peakViewers,
+      value: summaryMetrics?.peakViewers ?? stream.summary?.peakViewers ?? null,
+    },
+    {
+      label: t.streamMessages,
+      value: summaryMetrics?.totalMessages ?? stream.metrics?.chatMessages ?? null,
+    },
+    {
+      label: t.sessionActiveChatters,
+      value: summaryMetrics?.uniqueChatters ?? summaryMetrics?.activeChatters ?? stream.metrics?.activeChatters ?? null,
+    },
+  ]
 
   return (
     <Reveal as="section" className="section-panel dashboard-overview liquid-glass liquid-surface" id="summary" aria-labelledby="dashboard-overview-title" data-entity-type="stream" data-entity-id={stream.id} data-liquid-interactive>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">{t.summaryKicker}</p>
           <h2 id="dashboard-overview-title">{t.currentStreamSummary}</h2>
-          <p className="section-note">{t.summaryNote}</p>
         </div>
         <span className="section-kicker">{stream.date}</span>
       </div>
 
-      <div className="overview-grid">
-        {cards.map((card, index) => (
-          <MotionCard as="article" className={`overview-card glass-panel liquid-card subtle-shine ${card.variant ? `is-${card.variant}` : ''}`} revealDelay={index * 0.045} key={card.label}>
-            <span>{card.label}</span>
-            <strong>{card.value}</strong>
-            <p>{card.detail}</p>
-          </MotionCard>
+      <div className="overview-kpi-grid">
+        {primaryCards.map((card) => (
+          <article className="metric-card overview-primary-kpi" key={card.label}>
+            <span className="metric-card-label">{card.label}</span>
+            <strong className="metric-card-value">{Number.isFinite(Number(card.value)) ? numberFormat.format(Number(card.value)) : t.notAvailable}</strong>
+          </article>
         ))}
       </div>
+      <details className="methodology-details overview-details">
+        <summary>{t.overviewDetails}</summary>
+        <div className="overview-grid">
+          {cards.map((card, index) => (
+            <MotionCard as="article" className={`overview-card glass-panel liquid-card subtle-shine ${card.variant ? `is-${card.variant}` : ''}`} revealDelay={index * 0.045} key={card.label}>
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              <p>{card.detail}</p>
+            </MotionCard>
+          ))}
+        </div>
+      </details>
     </Reveal>
   )
 }
