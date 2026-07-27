@@ -1,0 +1,591 @@
+/* Readability and visual-hierarchy pass.
+ * This file intentionally overrides presentation only. Data, behavior and API contracts stay unchanged.
+ */
+
+:root,
+:root[data-theme="light"] {
+  --readability-page: #eef1f3;
+  --readability-panel: rgba(255, 255, 255, 0.72);
+  --readability-inner: rgba(255, 255, 255, 0.82);
+  --readability-border: rgba(46, 58, 68, 0.1);
+  --readability-border-strong: rgba(46, 58, 68, 0.16);
+  --readability-shadow: 0 18px 44px rgba(42, 52, 61, 0.08);
+}
+
+:root[data-theme="dark"] {
+  --readability-page: #0f1113;
+  --readability-panel: rgba(25, 28, 32, 0.9);
+  --readability-inner: rgba(38, 41, 46, 0.88);
+  --readability-border: rgba(255, 255, 255, 0.075);
+  --readability-border-strong: rgba(255, 255, 255, 0.13);
+  --readability-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+  --theme-text-primary: rgba(255, 255, 255, 0.96);
+  --theme-text-secondary: rgba(255, 255, 255, 0.72);
+  --theme-text-muted: rgba(255, 255, 255, 0.56);
+}
+
+html,
+body {
+  background: var(--readability-page);
+}
+
+body {
+  line-height: 1.45;
+}
+
+.app-shell {
+  overflow: clip;
+  background:
+    radial-gradient(circle at 10% 10%, var(--liquid-ambient-a), transparent 26rem),
+    radial-gradient(circle at 92% 54%, var(--liquid-ambient-b), transparent 30rem),
+    var(--readability-page);
+}
+
+/* Remove the doubled outline that made every panel look like a wireframe. */
+.section-panel.liquid-glass::after,
+.stream-control-bar.liquid-glass::after,
+.hero-navbar.liquid-glass::after,
+.channel-onboarding-panel.liquid-glass::after,
+.real-mode-state.liquid-glass::after {
+  display: none;
+}
+
+.section-panel.liquid-glass,
+.stream-control-bar.liquid-glass,
+.channel-onboarding-panel.liquid-glass,
+.real-mode-state.liquid-glass {
+  border-color: var(--readability-border-strong);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--liquid-highlight) 52%, transparent), transparent 34%),
+    var(--readability-panel);
+  box-shadow: var(--readability-shadow);
+}
+
+.liquid-inner-surface,
+.liquid-card,
+.glass-panel.liquid-card {
+  border-color: var(--readability-border);
+  background: var(--readability-inner);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--liquid-edge-light) 45%, transparent);
+}
+
+/* Hero: the old 80vh composition was mostly empty space. */
+.hero-wrap {
+  padding: clamp(12px, 2vw, 24px) clamp(12px, 2vw, 24px) 10px;
+}
+
+.hero-section {
+  min-height: clamp(430px, 58vh, 600px);
+  border-color: var(--readability-border-strong);
+  border-radius: clamp(24px, 3vw, 38px);
+  box-shadow: var(--readability-shadow);
+}
+
+.hero-copy {
+  inset: 50% auto auto 50%;
+  width: min(820px, calc(100% - 48px));
+  padding: 0;
+  text-align: center;
+  transform: translate(-50%, -42%);
+}
+
+.hero-copy h1 {
+  max-width: none;
+  margin: 0;
+  font-size: clamp(4rem, 8vw, 7.4rem);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+}
+
+.hero-badge {
+  margin-bottom: 22px;
+}
+
+.hero-navbar {
+  margin: clamp(12px, 1.7vw, 22px);
+  border-color: var(--readability-border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.hero-nav-menu {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--liquid-control-surface) 72%, transparent);
+  box-shadow: none;
+}
+
+/* Main layout and section rhythm. */
+.content-grid {
+  width: min(1420px, calc(100% - 40px));
+  gap: 22px;
+}
+
+.section-panel {
+  padding: clamp(24px, 2.5vw, 34px);
+  border-radius: 24px;
+}
+
+.section-heading {
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-heading h2 {
+  font-size: clamp(1.9rem, 2.8vw, 2.65rem);
+  font-weight: 560;
+  letter-spacing: -0.035em;
+}
+
+/* Keep only the module name at first glance. */
+.section-panel .section-heading .eyebrow,
+.section-panel .section-heading .section-note,
+.internal-archive-heading .section-note,
+.advanced-insights > .section-heading .eyebrow,
+.advanced-insights > .section-heading .section-note {
+  display: none;
+}
+
+.section-kicker {
+  border-color: var(--readability-border);
+  color: var(--theme-text-secondary);
+  background: var(--readability-inner);
+  box-shadow: none;
+}
+
+/* Stream control bar: show state first, controls second, utilities last. */
+.stream-control-bar {
+  width: min(1420px, calc(100% - 40px));
+  margin: 18px auto;
+  padding: 20px 22px;
+  border-radius: 22px;
+}
+
+.twitch-control-bar {
+  grid-template-columns: minmax(300px, 0.9fr) minmax(520px, 1.6fr);
+  align-items: center;
+  gap: 18px 26px;
+}
+
+.twitch-status-panel {
+  gap: 10px;
+}
+
+.twitch-status-metrics {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.twitch-status-metrics > div {
+  min-height: 76px;
+  padding: 11px 12px;
+  border-color: var(--readability-border);
+  background: var(--readability-inner);
+}
+
+.session-control-grid {
+  align-items: end;
+  gap: 10px;
+}
+
+.twitch-ingest-actions.session-export-actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.twitch-status-error,
+.twitch-collection-notice {
+  margin: 0;
+}
+
+/* Side navigation no longer competes with the page. */
+.section-rail {
+  left: 14px;
+  width: 46px;
+  padding: 6px;
+  gap: 4px;
+  border-radius: 18px;
+  transition: width 180ms ease, box-shadow 180ms ease;
+}
+
+.section-rail:hover,
+.section-rail:focus-within {
+  width: 126px;
+}
+
+.section-rail a {
+  min-height: 34px;
+  padding: 0 10px;
+  gap: 8px;
+  overflow: hidden;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.section-rail a > span {
+  flex: 0 0 auto;
+}
+
+.section-rail a strong {
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-size: 0.75rem;
+  transition: width 180ms ease, opacity 120ms ease;
+}
+
+.section-rail:hover a strong,
+.section-rail:focus-within a strong {
+  width: auto;
+  opacity: 1;
+}
+
+.section-rail a.is-active {
+  color: var(--theme-text-primary);
+  background: color-mix(in srgb, var(--theme-accent-soft) 68%, transparent);
+}
+
+/* Metrics: fewer decorative layers, stronger primary values. */
+.chat-summary-metrics,
+.advanced-metric-grid {
+  gap: 12px;
+}
+
+.chat-summary-metrics > div,
+.advanced-metric-card {
+  min-height: 104px;
+  padding: 16px 18px;
+  border-radius: 16px;
+}
+
+.chat-summary-metrics strong,
+.advanced-metric-card strong {
+  color: var(--theme-text-primary);
+  font-size: clamp(1.65rem, 2.5vw, 2.25rem);
+  font-weight: 560;
+  letter-spacing: -0.035em;
+}
+
+.chat-summary-metrics span,
+.advanced-metric-card span,
+.advanced-metric-card small {
+  font-size: 0.73rem;
+  font-weight: 650;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.advanced-metric-card:first-child,
+.chat-summary-metrics > div:first-child {
+  border-color: color-mix(in srgb, var(--theme-accent) 30%, var(--readability-border));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--theme-accent-soft) 58%, transparent), transparent 62%),
+    var(--readability-inner);
+}
+
+/* Charts should carry the visual weight, not their containers. */
+.chart-shell,
+.advanced-retention-chart {
+  border: 1px solid var(--readability-border);
+  background: color-mix(in srgb, var(--readability-inner) 92%, var(--readability-page));
+  box-shadow: none;
+}
+
+.chart-shell {
+  padding: 14px 12px 8px;
+}
+
+.recharts-cartesian-grid line {
+  stroke-opacity: 0.55;
+}
+
+/* Advanced analytics: collapse documentation-like copy and tighten data quality. */
+.advanced-quality {
+  padding: 18px;
+}
+
+.advanced-quality .eyebrow,
+.advanced-quality-note,
+.advanced-context-note,
+.advanced-partial-notice,
+.advanced-subcard > p,
+.advanced-card-heading p,
+.advanced-retention-chart figcaption,
+.advanced-event-explanation,
+.advanced-reasons > strong,
+.advanced-marker-note > strong {
+  display: none;
+}
+
+.advanced-quality-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.advanced-quality-grid > div,
+.advanced-compact-metrics > div,
+.advanced-event-meta > div {
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--readability-inner) 88%, transparent);
+}
+
+.advanced-warning-list {
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.advanced-warning-list strong {
+  font-size: 0.78rem;
+}
+
+.advanced-insights-tabs {
+  position: sticky;
+  top: 12px;
+  z-index: 8;
+  margin-top: 16px;
+  border-color: var(--readability-border);
+  background: color-mix(in srgb, var(--readability-panel) 92%, transparent);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+.advanced-insights-tabs button {
+  min-height: 38px;
+}
+
+.advanced-two-column,
+.advanced-event-layout,
+.advanced-impact-groups {
+  gap: 12px;
+}
+
+.advanced-subcard,
+.advanced-event-detail,
+.advanced-clip-card,
+.advanced-retention-chart {
+  padding: 18px;
+  border-radius: 16px;
+}
+
+.advanced-table th,
+.advanced-table td {
+  padding: 10px 12px;
+}
+
+.advanced-table tbody tr:hover {
+  background: color-mix(in srgb, var(--theme-accent-soft) 45%, transparent);
+}
+
+/* Chat dashboard: emphasize names and values, suppress repetitive helper copy. */
+.chat-dashboard {
+  gap: 14px;
+}
+
+.chat-leaderboard,
+.session-insights {
+  border-radius: 18px;
+}
+
+.leaderboard-calculated-note,
+.leaderboard-empty,
+.chat-leaderboard li small,
+.session-insights .section-note {
+  display: none;
+}
+
+.chat-leaderboard li {
+  min-height: 54px;
+}
+
+.chat-leaderboard li strong {
+  font-size: 0.92rem;
+}
+
+/* Word cloud: remove the huge empty canvas and rank words visually. */
+.word-cloud {
+  min-height: 0;
+  padding: clamp(24px, 4vw, 48px);
+  gap: 10px 14px;
+  justify-content: center;
+  border: 1px solid var(--readability-border);
+  background: var(--readability-inner);
+}
+
+.word-token {
+  padding: 7px 11px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.word-token:hover {
+  border-color: var(--readability-border-strong);
+  background: color-mix(in srgb, var(--theme-accent-soft) 48%, transparent);
+  transform: none;
+}
+
+.word-token small {
+  display: none;
+}
+
+.word-token span {
+  color: var(--theme-text-secondary);
+  font-weight: 500;
+}
+
+.word-token:nth-child(-n + 3) span {
+  color: var(--theme-text-primary);
+  font-weight: 620;
+}
+
+/* Archive: reduce card height and make the title the first thing seen. */
+.archive-track {
+  gap: 12px;
+}
+
+.archive-book,
+.archive-capsule {
+  min-height: 190px;
+  border-radius: 18px;
+  transform: none !important;
+}
+
+.archive-book-content,
+.archive-capsule {
+  padding: 18px;
+}
+
+.archive-book-title {
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.archive-book dl,
+.archive-capsule dl {
+  gap: 8px;
+}
+
+.archive-book dt,
+.archive-capsule dt {
+  font-size: 0.67rem;
+}
+
+/* Forms and empty states. */
+.import-panel,
+.import-status-panel,
+.channel-onboarding-panel {
+  border-radius: 18px;
+}
+
+.empty-panel,
+.real-data-empty,
+.advanced-insights-state {
+  min-height: 120px;
+}
+
+.section-inline-error,
+.app-inline-error {
+  border-left: 3px solid var(--danger-red);
+  border-radius: 10px;
+}
+
+@media (max-width: 1180px) {
+  .section-rail {
+    display: none;
+  }
+
+  .twitch-control-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .session-control-grid,
+  .twitch-ingest-actions.session-export-actions {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-section {
+    min-height: 420px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3.5rem, 13vw, 5.5rem);
+  }
+
+  .content-grid,
+  .stream-control-bar {
+    width: min(100% - 24px, 1420px);
+  }
+
+  .advanced-quality-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .hero-navbar {
+    margin: 10px;
+  }
+
+  .hero-nav-menu {
+    display: none;
+  }
+
+  .hero-copy {
+    width: calc(100% - 32px);
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3.2rem, 18vw, 4.7rem);
+  }
+
+  .section-panel,
+  .stream-control-bar {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .section-heading {
+    margin-bottom: 16px;
+  }
+
+  .section-heading h2 {
+    font-size: 1.85rem;
+  }
+
+  .advanced-insights-tabs {
+    top: 6px;
+  }
+
+  .advanced-quality-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 430px) {
+  .hero-section {
+    min-height: 360px;
+  }
+
+  .hero-nav-cta {
+    display: none;
+  }
+
+  .advanced-quality-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advanced-insights-tabs button {
+    padding-inline: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-rail,
+  .section-rail a strong {
+    transition: none;
+  }
+}
