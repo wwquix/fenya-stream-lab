@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createApp } from "./app.js";
 import { getTwitchChannelMetadata } from "./providers/twitchProvider.js";
-import { getAppAccessToken, resetTwitchAuthCache } from "./services/twitchAuthService.js";
+import { getAppAccessToken, refreshUserAccessToken, resetTwitchAuthCache } from "./services/twitchAuthService.js";
 
 const app = createApp();
 
@@ -106,6 +106,25 @@ describe("Twitch integration foundation", () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual(["shared-app-token", "shared-app-token"]);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  test("rejects incomplete app and user token responses", async () => {
+    process.env.TWITCH_CLIENT_ID = "client-id";
+    process.env.TWITCH_CLIENT_SECRET = "client-secret";
+    process.env.TWITCH_REFRESH_TOKEN = "refresh-token";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ access_token: "user-token", expires_in: "not-a-number" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getAppAccessToken()).rejects.toMatchObject({
+      status: 502,
+      message: "Twitch app token response was invalid",
+    });
+    await expect(refreshUserAccessToken()).rejects.toMatchObject({
+      status: 502,
+      message: "Twitch user token refresh response was invalid",
+    });
   });
 
   test("connection diagnostics expose flags but never credential values", async () => {

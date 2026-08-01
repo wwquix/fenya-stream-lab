@@ -203,6 +203,23 @@ describe("stored Twitch token refresh lifecycle", () => {
     expect(findTwitchAccountById(account.id).needs_reauth).toBe(1);
   });
 
+  test("an invalid refresh lifetime is rejected instead of being persisted", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      access_token: "invalid-lifetime-access",
+      refresh_token: "invalid-lifetime-refresh",
+      expires_in: "never",
+      scope: ["user:read:chat"],
+    })));
+
+    await expect(refreshTwitchAccountToken(account.id)).rejects.toMatchObject({
+      status: 401,
+      message: "Twitch account requires reauthorization",
+    });
+    const stored = findTwitchAccountById(account.id);
+    expect(stored.needs_reauth).toBe(1);
+    expect(decryptToken(stored.access_token_encrypted)).toBe("old-access-secret");
+  });
+
   test("refresh failures do not expose raw tokens in errors or logs", async () => {
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("upstream unavailable")));

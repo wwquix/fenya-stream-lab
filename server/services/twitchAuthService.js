@@ -25,6 +25,14 @@ async function readJson(response, fallbackMessage) {
   return payload;
 }
 
+function assertTokenPayload(payload, message) {
+  const expiresIn = Number(payload?.expires_in);
+  if (typeof payload?.access_token !== "string" || !payload.access_token.trim() || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw new HttpError(502, message);
+  }
+  return expiresIn;
+}
+
 export async function getAppAccessToken() {
   if (appTokenCache?.expiresAt > Date.now() + EXPIRY_MARGIN_MS) return appTokenCache.token;
   if (appTokenRequest) return appTokenRequest;
@@ -35,10 +43,11 @@ export async function getAppAccessToken() {
     const query = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
     const response = await fetchTwitch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
     const payload = await readJson(response, "Twitch app token request failed");
+    const expiresIn = assertTokenPayload(payload, "Twitch app token response was invalid");
 
     appTokenCache = {
       token: payload.access_token,
-      expiresAt: Date.now() + Number(payload.expires_in || 0) * 1000,
+      expiresAt: Date.now() + expiresIn * 1000,
     };
     return appTokenCache.token;
   })().finally(() => {
@@ -65,6 +74,7 @@ export async function refreshUserAccessToken() {
   });
   const response = await fetchTwitch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
   const payload = await readJson(response, "Twitch user token refresh failed");
+  assertTokenPayload(payload, "Twitch user token refresh response was invalid");
   refreshedUserToken = {
     token: payload.access_token,
     refreshToken: payload.refresh_token || refreshToken,

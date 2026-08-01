@@ -61,10 +61,14 @@ async function performRefresh(twitchAccountId) {
       body,
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload.access_token) throw new Error("Twitch rejected the refresh request");
+    const expiresIn = Number(payload.expires_in);
+    if (!response.ok || typeof payload.access_token !== "string" || !payload.access_token.trim()
+      || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+      throw new Error("Twitch rejected the refresh request");
+    }
 
     const rotatedRefreshToken = payload.refresh_token || refreshToken;
-    const expiresAt = new Date(Date.now() + Number(payload.expires_in || 0) * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
     updateTwitchAccountEncryptedTokens(twitchAccountId, {
       accessTokenEncrypted: encryptToken(payload.access_token),
       refreshTokenEncrypted: encryptToken(rotatedRefreshToken),
