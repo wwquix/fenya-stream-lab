@@ -8,6 +8,7 @@ import {
   updateTwitchAccountEncryptedTokens,
 } from "../repositories/twitchAccountRepository.js";
 import { decryptToken, encryptToken, TokenCryptoConfigError } from "./tokenCryptoService.js";
+import { fetchTwitch } from "./twitchHttpService.js";
 
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const EXPIRING_SOON_MS = 10 * 60 * 1000;
@@ -54,7 +55,7 @@ async function performRefresh(twitchAccountId) {
       grant_type: "refresh_token",
       refresh_token: refreshToken,
     });
-    const response = await fetch(TWITCH_TOKEN_URL, {
+    const response = await fetchTwitch(TWITCH_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,

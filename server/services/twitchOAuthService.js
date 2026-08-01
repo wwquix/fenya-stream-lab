@@ -4,6 +4,7 @@ import process from "node:process";
 
 import { HttpError } from "../middleware/errorHandlers.js";
 import { twitchHelixRequest } from "./twitchHelixClient.js";
+import { fetchTwitch } from "./twitchHttpService.js";
 
 const TWITCH_AUTHORIZE_URL = "https://id.twitch.tv/oauth2/authorize";
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -88,7 +89,7 @@ export async function exchangeAuthorizationCode(code) {
     grant_type: "authorization_code",
     redirect_uri: getTwitchRedirectUri(),
   });
-  const response = await fetch(TWITCH_TOKEN_URL, {
+  const response = await fetchTwitch(TWITCH_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -99,7 +100,7 @@ export async function exchangeAuthorizationCode(code) {
 }
 
 export async function validateOAuthAccessToken(accessToken) {
-  const response = await fetch(TWITCH_VALIDATE_URL, { headers: { Authorization: `OAuth ${accessToken}` } });
+  const response = await fetchTwitch(TWITCH_VALIDATE_URL, { headers: { Authorization: `OAuth ${accessToken}` } });
   const payload = await readJson(response, "Twitch token validation failed");
   if (!payload.user_id) throw new HttpError(502, "Twitch token validation returned an invalid response");
   return payload;

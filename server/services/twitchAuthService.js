@@ -1,6 +1,7 @@
 import process from "node:process";
 
 import { HttpError } from "../middleware/errorHandlers.js";
+import { fetchTwitch } from "./twitchHttpService.js";
 
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
@@ -29,7 +30,7 @@ export async function getAppAccessToken() {
   const clientId = requiredEnv("TWITCH_CLIENT_ID");
   const clientSecret = requiredEnv("TWITCH_CLIENT_SECRET");
   const query = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
-  const response = await fetch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
+  const response = await fetchTwitch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
   const payload = await readJson(response, "Twitch app token request failed");
 
   appTokenCache = {
@@ -55,7 +56,7 @@ export async function refreshUserAccessToken() {
     grant_type: "refresh_token",
     refresh_token: refreshToken,
   });
-  const response = await fetch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
+  const response = await fetchTwitch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
   const payload = await readJson(response, "Twitch user token refresh failed");
   refreshedUserToken = {
     token: payload.access_token,
@@ -68,7 +69,7 @@ export async function validateUserToken() {
   const token = getConfiguredUserToken();
   if (!token) return null;
 
-  const response = await fetch(TWITCH_VALIDATE_URL, { headers: { Authorization: `OAuth ${token}` } });
+  const response = await fetchTwitch(TWITCH_VALIDATE_URL, { headers: { Authorization: `OAuth ${token}` } });
   const payload = await readJson(response, "Twitch user token validation failed");
   return {
     user_id: payload.user_id ?? null,

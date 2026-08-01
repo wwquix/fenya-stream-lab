@@ -3,6 +3,7 @@ import process from "node:process";
 import { HttpError } from "../middleware/errorHandlers.js";
 import { markTwitchAccountNeedsReauth } from "../repositories/twitchAccountRepository.js";
 import { getAppAccessToken } from "./twitchAuthService.js";
+import { fetchTwitch } from "./twitchHttpService.js";
 import { getValidUserAccessTokenForAccount, refreshTwitchAccountToken } from "./twitchTokenRefreshService.js";
 
 const HELIX_BASE_URL = "https://api.twitch.tv/helix";
@@ -11,7 +12,7 @@ async function sendHelixRequest(endpoint, { token, method, body }) {
   const clientId = process.env.TWITCH_CLIENT_ID?.trim();
   if (!clientId) throw new HttpError(503, "Missing TWITCH_CLIENT_ID");
   const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-  const response = await fetch(`${HELIX_BASE_URL}${normalizedEndpoint}`, {
+  const response = await fetchTwitch(`${HELIX_BASE_URL}${normalizedEndpoint}`, {
     method,
     headers: {
       "Client-Id": clientId,
