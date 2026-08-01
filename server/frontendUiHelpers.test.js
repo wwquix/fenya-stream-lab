@@ -212,6 +212,14 @@ describe("frontend dashboard UI helpers", () => {
     expect(markup).not.toContain("replay-strip");
   });
 
+  test("memoizes Stream Pulse chart transforms across hover renders", () => {
+    const source = readFileSync(new URL("../src/components/StreamPulse.jsx", import.meta.url), "utf8");
+    expect(source).toContain("const normalizedChartData = useMemo")
+    expect(source).toContain("const compareChartData = useMemo")
+    expect(source).toContain("const eventMarkers = useMemo")
+    expect(source).toContain("const yAxisTicks = useMemo")
+  });
+
   test("read-only Twitch UI omits ingest mutation buttons", () => {
     const stream = {
       id: "stream-1", title: "Live", category: "CS2", summary: {}, chartData: [], categorySegments: [],

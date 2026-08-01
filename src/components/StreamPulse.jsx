@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from "motion/react"
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Reveal } from './MotionPrimitives.jsx'
@@ -185,22 +185,30 @@ function StreamPulse({ stream, compareStream, events, t }) {
   const [replayPreview, setReplayPreview] = useState(null)
   const [failedThumbnail, setFailedThumbnail] = useState(null)
   const prefersReducedMotion = useReducedMotion()
-  const streamEvents = events.filter((event) => event.streamId === stream.id)
-  const streamDuration = getStreamDuration(stream.chartData)
-  const normalizedChartData = normalizeChartData(stream.chartData)
+  const streamEvents = useMemo(() => events.filter((event) => event.streamId === stream.id), [events, stream.id])
+  const streamDuration = useMemo(() => getStreamDuration(stream.chartData), [stream.chartData])
+  const normalizedChartData = useMemo(() => normalizeChartData(stream.chartData), [stream.chartData])
   const visibleChartData = normalizedChartData
   const visibleDomain = [
     visibleChartData[0]?.elapsedMinute ?? 0,
     visibleChartData[visibleChartData.length - 1]?.elapsedMinute ?? streamDuration,
   ]
-  const compareChartData = compareStream ? normalizeChartData(compareStream.chartData, streamDuration) : []
-  const yAxisTicks = getYAxisTicks(visibleChartData, compareChartData)
-  const visibleTimes = new Set(visibleChartData.map((point) => point.time))
-  const eventMarkers = streamEvents.map((event) => ({
-    ...event,
-    point: normalizedChartData.find((point) => point.time === getNearestChartPoint(event.time, stream.chartData).time),
-  })).filter((event) => visibleTimes.has(event.point.time))
-  const totalSegmentMinutes = stream.categorySegments.reduce((total, segment) => total + getSegmentSize(segment), 0)
+  const compareChartData = useMemo(
+    () => (compareStream ? normalizeChartData(compareStream.chartData, streamDuration) : []),
+    [compareStream, streamDuration],
+  )
+  const yAxisTicks = useMemo(() => getYAxisTicks(visibleChartData, compareChartData), [visibleChartData, compareChartData])
+  const eventMarkers = useMemo(() => {
+    const visibleTimes = new Set(visibleChartData.map((point) => point.time))
+    return streamEvents.map((event) => ({
+      ...event,
+      point: normalizedChartData.find((point) => point.time === getNearestChartPoint(event.time, stream.chartData).time),
+    })).filter((event) => visibleTimes.has(event.point.time))
+  }, [normalizedChartData, stream.chartData, streamEvents, visibleChartData])
+  const totalSegmentMinutes = useMemo(
+    () => stream.categorySegments.reduce((total, segment) => total + getSegmentSize(segment), 0),
+    [stream.categorySegments],
+  )
   const activeSelectedSegmentId = stream.categorySegments.some((segment) => segment.id === selectedSegmentId)
     ? selectedSegmentId
     : null
