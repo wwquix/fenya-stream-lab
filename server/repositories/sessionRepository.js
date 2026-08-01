@@ -9,11 +9,15 @@ export function createSession(session, database = getDatabase()) {
 }
 
 export function findSessionByTokenHash(tokenHash, database = getDatabase()) {
-  return database.prepare(`
-    SELECT sessions.*, users.display_name, users.avatar_url
-    FROM sessions JOIN users ON users.id = sessions.user_id
-    WHERE sessions.token_hash = ? AND sessions.expires_at > ?
-  `).get(tokenHash, new Date().toISOString()) ?? null;
+  const now = new Date().toISOString();
+  return database.transaction(() => {
+    database.prepare("DELETE FROM sessions WHERE token_hash = ? AND expires_at <= ?").run(tokenHash, now);
+    return database.prepare(`
+      SELECT sessions.*, users.display_name, users.avatar_url
+      FROM sessions JOIN users ON users.id = sessions.user_id
+      WHERE sessions.token_hash = ? AND sessions.expires_at > ?
+    `).get(tokenHash, now) ?? null;
+  })();
 }
 
 export function deleteSession(id, database = getDatabase()) {

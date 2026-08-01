@@ -152,6 +152,7 @@ describe("multi-user database and security foundation", () => {
     const user = findOrCreateUserFromTwitchProfile(twitchProfile);
     const { rawToken } = startSession(user.id, {}, -1);
     expect(findSessionByRawToken(rawToken)).toBeNull();
+    expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM sessions").get().count).toBe(0);
   });
 
   test("creates a channel and assigns its owner membership", () => {
