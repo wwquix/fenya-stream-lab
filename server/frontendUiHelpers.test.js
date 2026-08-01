@@ -9,6 +9,7 @@ import TwitchVodArchive from "../src/components/TwitchVodArchive.jsx";
 import StreamPulse from "../src/components/StreamPulse.jsx";
 import StreamControlBar from "../src/components/StreamControlBar.jsx";
 import { translations } from "../src/i18n/translations.js";
+import { getNextOptionIndex } from "../src/utils/customSelect.js";
 
 const t = { modePrefix: "Режим", myChannelMode: "мой канал" };
 
@@ -147,6 +148,14 @@ describe("frontend dashboard UI helpers", () => {
 
     expect(markup).toContain("Saved stream");
     expect(markup).not.toContain("Twitch returned no VODs");
+  });
+
+  test("cycles custom-select focus with arrow and boundary keys", () => {
+    expect(getNextOptionIndex(0, "ArrowUp", 3)).toBe(2);
+    expect(getNextOptionIndex(2, "ArrowDown", 3)).toBe(0);
+    expect(getNextOptionIndex(1, "Home", 3)).toBe(0);
+    expect(getNextOptionIndex(1, "End", 3)).toBe(2);
+    expect(getNextOptionIndex(0, "ArrowDown", 0)).toBe(-1);
   });
 
   test("guards Twitch metadata polling against overlapping requests", () => {
