@@ -67,9 +67,15 @@ export function syncVodBatch(channelId, vods, database = getDatabase()) {
   return database.transaction(() => vods.map((vod) => upsertVod(channelId, vod, database)))();
 }
 
+function boundedInteger(value, { fallback, minimum, maximum = Number.MAX_SAFE_INTEGER }) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Math.trunc(numeric)));
+}
+
 export function listVodsByChannel(channelId, { limit = 50, offset = 0 } = {}, database = getDatabase()) {
-  const safeLimit = Math.min(50, Math.max(1, Number(limit) || 50));
-  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeLimit = boundedInteger(limit, { fallback: 50, minimum: 1, maximum: 50 });
+  const safeOffset = boundedInteger(offset, { fallback: 0, minimum: 0 });
   return database.prepare(`
     SELECT * FROM twitch_vods WHERE channel_id = ?
     ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?

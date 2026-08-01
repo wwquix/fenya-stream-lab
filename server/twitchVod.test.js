@@ -104,6 +104,20 @@ describe("Twitch VOD archive", () => {
     expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM twitch_vods").get().count).toBe(2);
   });
 
+  test("normalizes fractional and non-finite VOD pagination values", () => {
+    syncVodBatch(channel.id, [
+      vod(1, "2026-07-01T18:00:00Z"),
+      vod(2, "2026-07-02T18:00:00Z"),
+      vod(3, "2026-07-03T18:00:00Z"),
+    ]);
+
+    expect(listVodsByChannel(channel.id, { limit: "1.9", offset: "1.8" }).map((row) => row.twitch_video_id))
+      .toEqual(["2"]);
+    expect(listVodsByChannel(channel.id, { limit: "Infinity", offset: "Infinity" })).toHaveLength(3);
+    expect(listVodsByChannel(channel.id, { limit: "-5", offset: "-5" }).map((row) => row.twitch_video_id))
+      .toEqual(["3"]);
+  });
+
   test("VOD-only rows never claim internal analytics", () => {
     const row = upsertVod(channel.id, vod(1));
     expect(row.has_internal_analytics).toBe(0);
