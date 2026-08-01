@@ -199,7 +199,14 @@ export function createReplayScheduler({ schedule = setTimeout, cancel = clearTim
     timer = null
   }
   function start(samples, speed, onFrame, onFinish) {
-    if (active || !Array.isArray(samples) || samples.length < 2) return false
+    if (
+      active
+      || !Array.isArray(samples)
+      || samples.length < 2
+      || !Number.isFinite(speed)
+      || speed <= 0
+      || typeof onFrame !== 'function'
+    ) return false
     active = true
     const currentRun = ++runId
     let index = 0
