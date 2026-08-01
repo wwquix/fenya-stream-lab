@@ -51,8 +51,12 @@ export function useTwitchMetadata({ channelId = null } = {}) {
   useEffect(() => {
     const controller = new AbortController()
     let isActive = true
+    let isRequestInFlight = false
 
     async function loadMetadata() {
+      if (isRequestInFlight) return
+      isRequestInFlight = true
+
       try {
         const response = await fetch(endpoint, {
           signal: controller.signal,
@@ -76,6 +80,8 @@ export function useTwitchMetadata({ channelId = null } = {}) {
         setMetadata(null)
         setError(requestError)
       } finally {
+        isRequestInFlight = false
+
         if (isActive && !controller.signal.aborted) {
           setIsLoading(false)
         }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 
 import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeExternalHttpUrl, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialLanguage, resolveInitialTheme } from "../src/utils/dashboardUi.js";
 import EmptyPanel from "../src/components/EmptyPanel.jsx";
@@ -146,6 +147,14 @@ describe("frontend dashboard UI helpers", () => {
 
     expect(markup).toContain("Saved stream");
     expect(markup).not.toContain("Twitch returned no VODs");
+  });
+
+  test("guards Twitch metadata polling against overlapping requests", () => {
+    const source = readFileSync(new URL("../src/hooks/useTwitchMetadata.js", import.meta.url), "utf8");
+    expect(source).toContain("let isRequestInFlight = false");
+    expect(source).toContain("if (isRequestInFlight) return");
+    expect(source).toContain("isRequestInFlight = true");
+    expect(source).toContain("isRequestInFlight = false");
   });
 
   test("accepts only supported stored languages", () => {
