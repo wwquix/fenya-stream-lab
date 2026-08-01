@@ -11,27 +11,29 @@ const defaultDatabasePath = fileURLToPath(new URL("../data/fenya-stream-lab.sqli
 let database = null;
 
 export function applySafeMigrations(targetDatabase) {
-  const twitchAccountColumns = targetDatabase.prepare("PRAGMA table_info(twitch_accounts)").all();
-  if (!twitchAccountColumns.some((column) => column.name === "needs_reauth")) {
-    targetDatabase.exec("ALTER TABLE twitch_accounts ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0 CHECK (needs_reauth IN (0, 1))");
-  }
-  const channelColumns = targetDatabase.prepare("PRAGMA table_info(channels)").all();
-  if (!channelColumns.some((column) => column.name === "ingest_twitch_account_id")) {
-    targetDatabase.exec("ALTER TABLE channels ADD COLUMN ingest_twitch_account_id INTEGER REFERENCES twitch_accounts(id) ON DELETE SET NULL");
-  }
-  for (const table of ["streams", "viewer_samples", "chat_messages"]) {
-    const columns = targetDatabase.prepare(`PRAGMA table_info(${table})`).all();
-    if (!columns.some((column) => column.name === "channel_id")) {
-      targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN channel_id INTEGER REFERENCES channels(id) ON DELETE SET NULL`);
+  return targetDatabase.transaction(() => {
+    const twitchAccountColumns = targetDatabase.prepare("PRAGMA table_info(twitch_accounts)").all();
+    if (!twitchAccountColumns.some((column) => column.name === "needs_reauth")) {
+      targetDatabase.exec("ALTER TABLE twitch_accounts ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0 CHECK (needs_reauth IN (0, 1))");
     }
-    if (!columns.some((column) => column.name === "stream_session_id")) {
-      targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN stream_session_id TEXT`);
+    const channelColumns = targetDatabase.prepare("PRAGMA table_info(channels)").all();
+    if (!channelColumns.some((column) => column.name === "ingest_twitch_account_id")) {
+      targetDatabase.exec("ALTER TABLE channels ADD COLUMN ingest_twitch_account_id INTEGER REFERENCES twitch_accounts(id) ON DELETE SET NULL");
     }
-  }
-  const streamColumns = targetDatabase.prepare("PRAGMA table_info(streams)").all();
-  if (!streamColumns.some((column) => column.name === "collected_from")) {
-    targetDatabase.exec("ALTER TABLE streams ADD COLUMN collected_from TEXT");
-  }
+    for (const table of ["streams", "viewer_samples", "chat_messages"]) {
+      const columns = targetDatabase.prepare(`PRAGMA table_info(${table})`).all();
+      if (!columns.some((column) => column.name === "channel_id")) {
+        targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN channel_id INTEGER REFERENCES channels(id) ON DELETE SET NULL`);
+      }
+      if (!columns.some((column) => column.name === "stream_session_id")) {
+        targetDatabase.exec(`ALTER TABLE ${table} ADD COLUMN stream_session_id TEXT`);
+      }
+    }
+    const streamColumns = targetDatabase.prepare("PRAGMA table_info(streams)").all();
+    if (!streamColumns.some((column) => column.name === "collected_from")) {
+      targetDatabase.exec("ALTER TABLE streams ADD COLUMN collected_from TEXT");
+    }
+  })();
 }
 
 export function getDatabasePath() {

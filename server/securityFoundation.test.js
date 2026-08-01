@@ -91,6 +91,24 @@ describe("multi-user database and security foundation", () => {
     });
   });
 
+  test("rolls back the full safe migration set when a later migration fails", () => {
+    const partialDatabase = new Database(":memory:");
+    partialDatabase.exec(`
+      CREATE TABLE twitch_accounts (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        twitch_user_id TEXT NOT NULL UNIQUE,
+        twitch_login TEXT NOT NULL,
+        twitch_display_name TEXT NOT NULL
+      );
+    `);
+
+    expect(() => applySafeMigrations(partialDatabase)).toThrow(/no such table: channels/);
+    expect(partialDatabase.prepare("PRAGMA table_info(twitch_accounts)").all().map((column) => column.name))
+      .not.toContain("needs_reauth");
+    partialDatabase.close();
+  });
+
   test("creates a user and links only encrypted Twitch tokens", () => {
     const user = findOrCreateUserFromTwitchProfile(twitchProfile);
     const publicAccount = upsertTwitchAccount(user.id, twitchProfile, {
