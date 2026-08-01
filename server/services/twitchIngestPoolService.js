@@ -284,9 +284,15 @@ export function processChannelEventSubNotification(channelId, message) {
   const state = ingestPool.get(String(channelId));
   if (ingestPoolShuttingDown || !state?.desiredRunning || message?.metadata?.message_type !== "notification") return null;
   if (message.payload?.subscription?.type !== "channel.chat.message") return null;
-  if (message.payload.event?.broadcaster_user_id !== state.broadcasterId) return null;
-  const timestamp = message.metadata.message_timestamp || new Date().toISOString();
-  const result = saveTwitchChatMessage(message.payload.event, timestamp, {
+  const event = message.payload?.event;
+  if (event?.broadcaster_user_id !== state.broadcasterId) return null;
+  const messageId = typeof event.message_id === "string" ? event.message_id.trim() : "";
+  const chatterLogin = String(event.chatter_user_login || event.chatter_user_name || "").trim();
+  const messageText = event.message?.text;
+  const timestampMs = Date.parse(message.metadata?.message_timestamp);
+  if (!messageId || !chatterLogin || typeof messageText !== "string" || !Number.isFinite(timestampMs)) return null;
+  const timestamp = new Date(timestampMs).toISOString();
+  const result = saveTwitchChatMessage(event, timestamp, {
     channelId: state.legacy ? null : state.channelId,
     streamSessionId: state.currentStreamId,
     collectedFrom: state.collectedFrom ?? timestamp,

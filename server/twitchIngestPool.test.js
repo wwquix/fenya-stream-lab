@@ -372,6 +372,34 @@ describe("multi-channel Twitch ingest pool", () => {
     expect(socket.terminateCalls).toBe(1);
   });
 
+  test("malformed chat notifications do not pollute stored or runtime counts", async () => {
+    await startChannelIngest(channelA.id);
+    const socket = sockets.get(String(channelA.id));
+    const baseEvent = {
+      broadcaster_user_id: channelA.twitch_broadcaster_id,
+      broadcaster_user_login: channelA.twitch_login,
+      chatter_user_login: "viewer-a",
+      message_id: "valid-message-id",
+      message: { text: "valid text" },
+    };
+    const invalidMessages = [
+      { event: { ...baseEvent, message_id: "  " }, timestamp: "2026-07-12T08:00:00Z" },
+      { event: { ...baseEvent, chatter_user_login: "" }, timestamp: "2026-07-12T08:00:00Z" },
+      { event: { ...baseEvent, message: null }, timestamp: "2026-07-12T08:00:00Z" },
+      { event: baseEvent, timestamp: "not-a-timestamp" },
+    ];
+
+    for (const invalid of invalidMessages) {
+      emitEventSub(socket, "notification", {
+        subscription: { type: "channel.chat.message" },
+        event: invalid.event,
+      }, { message_timestamp: invalid.timestamp });
+    }
+
+    expect(getDatabase().prepare("SELECT COUNT(*) AS count FROM chat_messages").get().count).toBe(0);
+    expect(getChannelIngestStatus(channelA.id).messagesStored).toBe(0);
+  });
+
   test("session reconnect does not reset the old active socket watchdog", async () => {
     vi.useFakeTimers({ now: Date.now() });
     const socket = await startWithWatchdog(channelA);
