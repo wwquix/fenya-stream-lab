@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { Buffer } from "node:buffer";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
@@ -12,7 +13,7 @@ import { deleteSession } from "./repositories/sessionRepository.js";
 import { findTwitchAccountWithEncryptedTokens, upsertTwitchAccount } from "./repositories/twitchAccountRepository.js";
 import { findOrCreateUserFromTwitchProfile } from "./repositories/userRepository.js";
 import { findSessionByRawToken, hashSessionToken, startSession } from "./services/sessionService.js";
-import { decryptToken } from "./services/tokenCryptoService.js";
+import { decryptToken, encryptToken, TokenCryptoConfigError } from "./services/tokenCryptoService.js";
 import { applySafeMigrations, closeDatabase, getDatabase } from "./storage/db.js";
 
 let tempDirectory;
@@ -108,6 +109,12 @@ describe("multi-user database and security foundation", () => {
     expect(stored.refresh_token_encrypted).not.toContain("refresh-secret");
     expect(decryptToken(stored.access_token_encrypted)).toBe("access-secret");
     expect(decryptToken(stored.refresh_token_encrypted)).toBe("refresh-secret");
+  });
+
+  test("token encryption rejects malformed base64 keys at runtime", () => {
+    process.env.TOKEN_ENCRYPTION_KEY = `${Buffer.alloc(32, 3).toString("base64")}!`;
+
+    expect(() => encryptToken("access-secret")).toThrow(TokenCryptoConfigError);
   });
 
   test("stores only a session hash, resolves an active session, and deletes it", () => {

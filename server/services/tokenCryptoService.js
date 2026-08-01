@@ -2,6 +2,8 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 import process from "node:process";
 
+import { decodeTokenEncryptionKey } from "../config/tokenEncryptionKey.js";
+
 const ALGORITHM = "aes-256-gcm";
 const VERSION = "v1";
 
@@ -16,10 +18,8 @@ function getEncryptionKey() {
   const configured = process.env.TOKEN_ENCRYPTION_KEY?.trim();
   if (!configured) throw new TokenCryptoConfigError("TOKEN_ENCRYPTION_KEY is required for encrypted token storage");
 
-  const key = /^[a-f\d]{64}$/i.test(configured)
-    ? Buffer.from(configured, "hex")
-    : Buffer.from(configured, "base64");
-  if (key.length !== 32) throw new TokenCryptoConfigError("TOKEN_ENCRYPTION_KEY must encode exactly 32 bytes");
+  const key = decodeTokenEncryptionKey(configured);
+  if (!key) throw new TokenCryptoConfigError("TOKEN_ENCRYPTION_KEY must encode exactly 32 bytes");
   return key;
 }
 

@@ -1,5 +1,6 @@
 import process from "node:process";
-import { Buffer } from "node:buffer";
+
+import { decodeTokenEncryptionKey } from "./tokenEncryptionKey.js";
 
 const VALID_NODE_ENVS = new Set(["development", "test", "production"]);
 const VALID_TWITCH_PROVIDERS = new Set(["mock", "twitch", "real"]);
@@ -30,13 +31,7 @@ function hasValidUrl(value) {
 }
 
 function tokenKeyLooksValid(value) {
-  if (!value) return false;
-  if (/^[a-f\d]{64}$/i.test(value)) return true;
-  try {
-    return Buffer.from(value, "base64").length === 32;
-  } catch {
-    return false;
-  }
+  return decodeTokenEncryptionKey(value) !== null;
 }
 
 export function validateEnv(env = process.env) {
