@@ -32,7 +32,7 @@ import { useTwitchVods } from './hooks/useTwitchVods.js'
 import { useTwitchModerators } from './hooks/useTwitchModerators.js'
 import { translations } from './i18n/translations.js'
 import AppErrorState from './components/AppErrorState.jsx'
-import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
+import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialLanguage, resolveInitialTheme } from './utils/dashboardUi.js'
 import { buildInternalSessions, chooseDefaultSessionId, mergeSessionData } from './utils/sessionDashboard.js'
 
 const allSectionIds = ['top', 'pulse', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
@@ -65,7 +65,13 @@ function adaptSessionToPulse(session, fallbackStream) {
 }
 
 function App() {
-  const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
+  const [language, setLanguage] = useState(() => {
+    try {
+      return resolveInitialLanguage(localStorage.getItem('fenya-language'))
+    } catch {
+      return 'ru'
+    }
+  })
   const [theme, setTheme] = useState(() => {
     try {
       return resolveInitialTheme(localStorage.getItem('fenya-theme'))
@@ -219,8 +225,13 @@ function App() {
     }
   }, [replay.data.moderationActions, moderationAnalytics.analytics])
   useEffect(() => {
-    localStorage.setItem('fenya-language', language)
     document.documentElement.lang = language
+
+    try {
+      localStorage.setItem('fenya-language', language)
+    } catch {
+      // The selected language still applies when storage is unavailable.
+    }
   }, [language])
 
   useEffect(() => {

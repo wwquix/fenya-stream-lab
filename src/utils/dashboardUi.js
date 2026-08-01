@@ -116,3 +116,7 @@ export function normalizeTwitchThumbnailUrl(value, width = 320, height = 180) {
 export function resolveInitialTheme(storedTheme) {
   return storedTheme === 'light' ? 'light' : 'dark'
 }
+
+export function resolveInitialLanguage(storedLanguage) {
+  return storedLanguage === 'en' ? 'en' : 'ru'
+}

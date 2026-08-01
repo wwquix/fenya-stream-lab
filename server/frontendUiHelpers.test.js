@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeExternalHttpUrl, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialTheme } from "../src/utils/dashboardUi.js";
+import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeExternalHttpUrl, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialLanguage, resolveInitialTheme } from "../src/utils/dashboardUi.js";
 import EmptyPanel from "../src/components/EmptyPanel.jsx";
 import TwitchVodArchive from "../src/components/TwitchVodArchive.jsx";
 import StreamPulse from "../src/components/StreamPulse.jsx";
@@ -146,6 +146,13 @@ describe("frontend dashboard UI helpers", () => {
 
     expect(markup).toContain("Saved stream");
     expect(markup).not.toContain("Twitch returned no VODs");
+  });
+
+  test("accepts only supported stored languages", () => {
+    expect(resolveInitialLanguage("en")).toBe("en");
+    expect(resolveInitialLanguage("ru")).toBe("ru");
+    expect(resolveInitialLanguage("de")).toBe("ru");
+    expect(resolveInitialLanguage(null)).toBe("ru");
   });
 
   test("renders malformed VOD links as disabled text", () => {
