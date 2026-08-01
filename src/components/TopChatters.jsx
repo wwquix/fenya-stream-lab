@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { AnimatedNumber, MotionCard, Reveal } from './MotionPrimitives.jsx'
 import SessionInsights from './SessionInsights.jsx'
 import { buildChatLeaderboards } from '../utils/sessionDashboard.js'
+import { getNextTabIndex } from '../utils/tabNavigation.js'
 
 function formatPlainInteger(value) {
   return Math.round(value).toLocaleString()
@@ -34,16 +35,54 @@ function LeaderboardList({ metricLabel, items, renderMetric, emptyMessage, calcu
 
 function TabbedLeaderboard({ title, tabs, initialTabId, revealDelay = 0 }) {
   const [activeTabId, setActiveTabId] = useState(initialTabId ?? tabs[0].id)
+  const tabGroupId = useId()
+  const tabRefs = useRef([])
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
+  const activeTabIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeTab.id))
+
+  function handleTabKeyDown(event, index) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const nextIndex = getNextTabIndex(index, event.key, tabs.length)
+    setActiveTabId(tabs[nextIndex].id)
+    tabRefs.current[nextIndex]?.focus()
+  }
+
   return (
     <MotionCard as="article" className="chat-leaderboard glass-panel liquid-card subtle-shine" revealDelay={revealDelay}>
       <div className="chat-leaderboard-header">
         <h3>{title}</h3>
         <div className="leaderboard-tabs" role="tablist" aria-label={title}>
-          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab.id === tab.id} className={activeTab.id === tab.id ? 'is-active' : ''} onClick={() => setActiveTabId(tab.id)}>{tab.label}</button>)}
+          {tabs.map((tab, index) => (
+            <button
+              id={`${tabGroupId}-${tab.id}-tab`}
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-controls={`${tabGroupId}-${tab.id}-panel`}
+              aria-selected={activeTab.id === tab.id}
+              className={activeTab.id === tab.id ? 'is-active' : ''}
+              tabIndex={activeTabIndex === index ? 0 : -1}
+              ref={(element) => { tabRefs.current[index] = element }}
+              onClick={() => setActiveTabId(tab.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
-      <LeaderboardList {...activeTab} />
+      {tabs.map((tab) => (
+        <div
+          id={`${tabGroupId}-${tab.id}-panel`}
+          key={tab.id}
+          role="tabpanel"
+          aria-labelledby={`${tabGroupId}-${tab.id}-tab`}
+          hidden={activeTab.id !== tab.id}
+        >
+          {activeTab.id === tab.id ? <LeaderboardList {...tab} /> : null}
+        </div>
+      ))}
     </MotionCard>
   )
 }

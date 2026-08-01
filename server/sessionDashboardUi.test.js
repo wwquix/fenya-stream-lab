@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import SessionInsights from '../src/components/SessionInsights.jsx'
 import TopChatters from '../src/components/TopChatters.jsx'
+import { getNextTabIndex } from '../src/utils/tabNavigation.js'
 import { translations } from '../src/i18n/translations.js'
 import {
   buildChatLeaderboards,
@@ -131,5 +132,24 @@ describe('restored session dashboard controls', () => {
     for (const label of [translations.en.messagesTab, translations.en.watchTimeTab, translations.en.paceTab, translations.en.engagementTab]) expect(markup).toContain(label)
     expect(markup).not.toContain('Console Rush')
     expect(markup).not.toContain('viewer_')
+  })
+
+  test('leaderboard tabs expose linked panels and wrap keyboard navigation', () => {
+    expect(getNextTabIndex(0, 'ArrowLeft', 2)).toBe(1)
+    expect(getNextTabIndex(1, 'ArrowRight', 2)).toBe(0)
+    expect(getNextTabIndex(1, 'Home', 2)).toBe(0)
+    expect(getNextTabIndex(0, 'End', 2)).toBe(1)
+
+    const markup = renderToStaticMarkup(createElement(TopChatters, {
+      chatters: [],
+      chatAnalytics: null,
+      realDataMode: true,
+      session: null,
+      t: translations.en,
+    }))
+    expect(markup).toContain('role="tabpanel"')
+    expect(markup).toContain('aria-controls=')
+    expect(markup).toContain('tabindex="0"')
+    expect(markup).toContain('tabindex="-1"')
   })
 })
