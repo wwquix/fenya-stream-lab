@@ -69,6 +69,21 @@ describe('restored session dashboard controls', () => {
     expect(sessionExportFilename(session, 'csv')).toBe('2026-07-12-title-quoted.csv')
   })
 
+  test('CSV export neutralizes spreadsheet formulas from stream metadata', () => {
+    const session = {
+      streamId: 'stream-1',
+      sessionId: 'session-1',
+      title: '=HYPERLINK("https://example.test")',
+      category: '  +SUM(1,1)',
+      samples: [{ time: '10:00', viewers: 12, messagesPerMinute: 3 }],
+    }
+    const csv = createSessionCsv(session)
+
+    expect(csv).toContain('"\'=HYPERLINK(""https://example.test"")"')
+    expect(csv).toContain('"\'  +SUM(1,1)"')
+    expect(csv).not.toContain('"=HYPERLINK')
+  })
+
   test('HTML report marks missing metrics as unavailable and escapes session text', () => {
     const html = createSessionReportHtml({ title: '<Unsafe>', date: null, samples: [], topChatters: [], topWords: [] }, 'Not available')
     expect(html).toContain('&lt;Unsafe&gt;')
