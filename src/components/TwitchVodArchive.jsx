@@ -1,13 +1,9 @@
 import EmptyPanel from './EmptyPanel.jsx'
-import { getVodRowPresentation } from '../utils/dashboardUi.js'
+import { getVodRowPresentation, normalizeExternalHttpUrl, normalizeTwitchThumbnailUrl } from '../utils/dashboardUi.js'
 
 function formatVodDate(value, russian) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(russian ? 'ru-RU' : 'en-US', { dateStyle: 'medium' }).format(date)
-}
-
-function thumbnailUrl(value) {
-  return value?.replace('%{width}', '320').replace('%{height}', '180')
 }
 
 function formatTotalDuration(seconds, russian) {
@@ -54,17 +50,21 @@ export default function TwitchVodArchive({ archive, canSync, dashboardMode = 'le
           </div>
           {archive.vods.map((vod) => {
             const row = getVodRowPresentation(vod, t)
+            const vodUrl = normalizeExternalHttpUrl(vod.url)
+            const vodThumbnailUrl = normalizeTwitchThumbnailUrl(vod.thumbnailUrl)
             return (
             <article className="vod-list-row glass-panel" key={vod.twitchVideoId} role="listitem">
               <div className="vod-list-thumbnail">
-                {vod.thumbnailUrl ? <img src={thumbnailUrl(vod.thumbnailUrl)} alt="" loading="lazy" /> : <span aria-hidden="true">VOD</span>}
+                {vodThumbnailUrl ? <img src={vodThumbnailUrl} alt="" loading="lazy" /> : <span aria-hidden="true">VOD</span>}
               </div>
               <h4 className="vod-list-title">{vod.title}</h4>
               <span className="vod-list-value">{formatVodDate(vod.createdAt, russian)}</span>
               <span className="vod-list-value">{vod.duration || '—'}</span>
               <span className="vod-list-value">{vod.viewCount ?? 0}</span>
               <span className={row.statusClassName}>{row.statusLabel}</span>
-              <a className="vod-list-open" href={vod.url} target="_blank" rel="noreferrer">{row.actionLabel}</a>
+              {vodUrl
+                ? <a className="vod-list-open" href={vodUrl} target="_blank" rel="noreferrer">{row.actionLabel}</a>
+                : <span className="vod-list-open is-disabled" aria-disabled="true">{row.actionLabel}</span>}
             </article>
             )
           })}

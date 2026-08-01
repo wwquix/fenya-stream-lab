@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialTheme } from "../src/utils/dashboardUi.js";
+import { canControlIngest, formatDashboardModeDescription, formatDashboardModeLabel, getRoleBadgeKeys, getVodRowPresentation, hasCollectionGap, isBackendUnavailable, isKnownFrontendPath, normalizeEmptyPanelVariant, normalizeExternalHttpUrl, normalizeRole, normalizeTwitchThumbnailUrl, resolveDashboardPermissions, resolveInitialTheme } from "../src/utils/dashboardUi.js";
 import EmptyPanel from "../src/components/EmptyPanel.jsx";
 import TwitchVodArchive from "../src/components/TwitchVodArchive.jsx";
 import StreamPulse from "../src/components/StreamPulse.jsx";
@@ -97,6 +97,9 @@ describe("frontend dashboard UI helpers", () => {
     expect(normalizeTwitchThumbnailUrl("https://static.test/live-{width}x%{height}.jpg"))
       .toBe("https://static.test/live-320x180.jpg");
     expect(normalizeTwitchThumbnailUrl("  ")).toBeNull();
+    expect(normalizeTwitchThumbnailUrl("javascript:alert(1)")).toBeNull();
+    expect(normalizeExternalHttpUrl("data:text/html,unsafe")).toBeNull();
+    expect(normalizeExternalHttpUrl("https://twitch.tv/videos/1")).toBe("https://twitch.tv/videos/1");
   });
 
   test("defaults new visitors to dark while preserving an explicit light preference", () => {
@@ -143,6 +146,25 @@ describe("frontend dashboard UI helpers", () => {
 
     expect(markup).toContain("Saved stream");
     expect(markup).not.toContain("Twitch returned no VODs");
+  });
+
+  test("renders malformed VOD links as disabled text", () => {
+    const vodText = {
+      navTop: "Топ", vodArchiveTitle: "Архив Twitch VOD", vodArchiveNote: "VOD metadata",
+      vodSyncing: "Syncing", vodSync: "Sync", vodSyncedCount: "Synced", vodSyncedTotal: "Total",
+      vodTotalDuration: "Duration", vodTopViews: "Views", vodColumnTitle: "Title", vodColumnDate: "Date",
+      duration: "Duration", vodViews: "Views", vodColumnStatus: "Status", vodColumnAction: "Action",
+      vodHasAnalytics: "Analytics", vodOnly: "VOD only", vodOpenTwitch: "Open",
+      vodNoResults: "No VODs", vodNotSynced: "Not synced", vodLegacyHint: "Legacy hint",
+    };
+    const archive = {
+      hasLoaded: true,
+      vods: [{ twitchVideoId: "vod-unsafe", title: "Unsafe", createdAt: "2026-07-05", url: "javascript:alert(1)" }],
+    };
+    const markup = renderToStaticMarkup(createElement(TwitchVodArchive, { archive, canSync: false, t: vodText }));
+
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).not.toContain("javascript:");
   });
 
   test("does not render an empty replay rail when Pulse has no category segments", () => {

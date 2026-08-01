@@ -93,13 +93,24 @@ export function hasCollectionGap(streamStartedAt, collectedFrom) {
   return Number.isFinite(streamStart) && Number.isFinite(collectionStart) && streamStart < collectionStart
 }
 
+export function normalizeExternalHttpUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    const url = new URL(value.trim())
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 export function normalizeTwitchThumbnailUrl(value, width = 320, height = 180) {
   if (typeof value !== 'string' || !value.trim()) return null
-  return value.trim()
+  const normalized = value.trim()
     .replaceAll('%{width}', String(width))
     .replaceAll('%{height}', String(height))
     .replaceAll('{width}', String(width))
     .replaceAll('{height}', String(height))
+  return normalizeExternalHttpUrl(normalized)
 }
 
 export function resolveInitialTheme(storedTheme) {

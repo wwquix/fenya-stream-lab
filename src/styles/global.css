@@ -9301,6 +9301,11 @@ dt,
   outline: none;
 }
 
+.vod-list-open.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 700px) {
   .vod-summary {
     grid-template-columns: 1fr;
