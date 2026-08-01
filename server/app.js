@@ -43,6 +43,7 @@ export function createApp({
   app.use(attachCurrentUser);
 
   app.get("/health", (_req, res) => {
+    res.set("Cache-Control", "no-store");
     res.json({ ok: true, service: "fenya-stream-lab" });
   });
 

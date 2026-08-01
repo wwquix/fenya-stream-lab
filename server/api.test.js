@@ -70,6 +70,7 @@ describe("Fenya Stream Lab API", () => {
     const response = await request(app).get("/api/health");
 
     expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toMatchObject({ status: "ok", service: "fenya-stream-lab-api", provider: "mock" });
   });
 
@@ -77,6 +78,7 @@ describe("Fenya Stream Lab API", () => {
     const response = await request(app).get("/health");
 
     expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).toEqual({ ok: true, service: "fenya-stream-lab" });
   });
 

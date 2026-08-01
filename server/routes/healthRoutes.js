@@ -4,6 +4,7 @@ import process from "node:process";
 const router = Router();
 
 router.get("/", (_req, res) => {
+  res.set("Cache-Control", "no-store");
   res.json({
     status: "ok",
     service: "fenya-stream-lab-api",
