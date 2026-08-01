@@ -1,4 +1,5 @@
 import express from "express";
+import { Buffer } from "node:buffer";
 import process from "node:process";
 import request from "supertest";
 import { afterEach, describe, expect, test } from "vitest";
@@ -42,6 +43,16 @@ describe("environment validation", () => {
       TWITCH_CHANNEL_LOGIN: "fenya",
       DATABASE_PATH: "/srv/fenya.sqlite",
       TOKEN_ENCRYPTION_KEY: "too-short",
+    })).toThrow(/TOKEN_ENCRYPTION_KEY must encode exactly 32 bytes/);
+  });
+
+  test("rejects malformed base64 token keys instead of ignoring invalid characters", () => {
+    const validBase64Key = Buffer.alloc(32, 7).toString("base64");
+    const malformedKey = `${validBase64Key.slice(0, 10)}!${validBase64Key.slice(10)}`;
+
+    expect(() => validateEnv({
+      NODE_ENV: "development",
+      TOKEN_ENCRYPTION_KEY: malformedKey,
     })).toThrow(/TOKEN_ENCRYPTION_KEY must encode exactly 32 bytes/);
   });
 
