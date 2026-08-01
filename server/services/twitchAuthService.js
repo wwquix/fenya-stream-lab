@@ -8,6 +8,7 @@ const TWITCH_VALIDATE_URL = "https://id.twitch.tv/oauth2/validate";
 const EXPIRY_MARGIN_MS = 60_000;
 
 let appTokenCache = null;
+let appTokenRequest = null;
 let refreshedUserToken = null;
 
 function requiredEnv(name) {
@@ -26,18 +27,24 @@ async function readJson(response, fallbackMessage) {
 
 export async function getAppAccessToken() {
   if (appTokenCache?.expiresAt > Date.now() + EXPIRY_MARGIN_MS) return appTokenCache.token;
+  if (appTokenRequest) return appTokenRequest;
 
-  const clientId = requiredEnv("TWITCH_CLIENT_ID");
-  const clientSecret = requiredEnv("TWITCH_CLIENT_SECRET");
-  const query = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
-  const response = await fetchTwitch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
-  const payload = await readJson(response, "Twitch app token request failed");
+  appTokenRequest = (async () => {
+    const clientId = requiredEnv("TWITCH_CLIENT_ID");
+    const clientSecret = requiredEnv("TWITCH_CLIENT_SECRET");
+    const query = new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "client_credentials" });
+    const response = await fetchTwitch(`${TWITCH_TOKEN_URL}?${query}`, { method: "POST" });
+    const payload = await readJson(response, "Twitch app token request failed");
 
-  appTokenCache = {
-    token: payload.access_token,
-    expiresAt: Date.now() + Number(payload.expires_in || 0) * 1000,
-  };
-  return appTokenCache.token;
+    appTokenCache = {
+      token: payload.access_token,
+      expiresAt: Date.now() + Number(payload.expires_in || 0) * 1000,
+    };
+    return appTokenCache.token;
+  })().finally(() => {
+    appTokenRequest = null;
+  });
+  return appTokenRequest;
 }
 
 export function getConfiguredUserToken() {
@@ -81,5 +88,6 @@ export async function validateUserToken() {
 
 export function resetTwitchAuthCache() {
   appTokenCache = null;
+  appTokenRequest = null;
   refreshedUserToken = null;
 }

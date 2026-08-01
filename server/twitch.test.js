@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { createApp } from "./app.js";
 import { getTwitchChannelMetadata } from "./providers/twitchProvider.js";
-import { resetTwitchAuthCache } from "./services/twitchAuthService.js";
+import { getAppAccessToken, resetTwitchAuthCache } from "./services/twitchAuthService.js";
 
 const app = createApp();
 
@@ -88,6 +88,24 @@ describe("Twitch integration foundation", () => {
       language: "ru",
     });
     expect(result.fetchedAt).toEqual(expect.any(String));
+  });
+
+  test("concurrent Helix calls share one app access token request", async () => {
+    process.env.TWITCH_CLIENT_ID = "client-id";
+    process.env.TWITCH_CLIENT_SECRET = "client-secret";
+    let resolveToken;
+    const fetchMock = vi.fn(() => new Promise((resolve) => {
+      resolveToken = resolve;
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = getAppAccessToken();
+    const second = getAppAccessToken();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    resolveToken(jsonResponse({ access_token: "shared-app-token", expires_in: 3600 }));
+
+    await expect(Promise.all([first, second])).resolves.toEqual(["shared-app-token", "shared-app-token"]);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   test("connection diagnostics expose flags but never credential values", async () => {
