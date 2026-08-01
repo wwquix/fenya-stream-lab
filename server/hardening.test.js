@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { createApp } from "./app.js";
 import { validateEnv } from "./config/validateEnv.js";
 import { errorHandler, routeHandler } from "./middleware/errorHandlers.js";
+import { createRateLimitMiddleware } from "./middleware/httpHardening.js";
 
 const originalEnv = { ...process.env };
 const validTokenKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -176,5 +177,26 @@ describe("HTTP hardening", () => {
     expect(response.status).toBe(500);
     expect(response.body).toEqual({ error: true, message: "Failed to load unsafe route" });
     expect(response.text).not.toContain("SQLITE_SECRET_TOKEN");
+  });
+
+  test("shares one mutation rate limit across paths and resets after the window", async () => {
+    let currentTime = 0;
+    const app = express();
+    app.use(createRateLimitMiddleware({
+      windowMs: 1_000,
+      max: 2,
+      matcher: () => true,
+      now: () => currentTime,
+    }));
+    app.use((_req, res) => res.json({ ok: true }));
+
+    expect((await request(app).post("/first")).status).toBe(200);
+    expect((await request(app).post("/second")).status).toBe(200);
+    const blocked = await request(app).post("/third");
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers["retry-after"]).toBe("1");
+
+    currentTime = 1_001;
+    expect((await request(app).post("/fourth")).status).toBe(200);
   });
 });

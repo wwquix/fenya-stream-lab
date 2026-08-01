@@ -77,8 +77,10 @@ export function createRateLimitMiddleware({
   windowMs = 60_000,
   max = 120,
   matcher = () => false,
+  now = () => Date.now(),
 } = {}) {
   const buckets = new Map();
+  let nextCleanupAt = 0;
 
   return function rateLimit(req, res, next) {
     if (!matcher(req)) {
@@ -86,18 +88,25 @@ export function createRateLimitMiddleware({
       return;
     }
 
-    const now = Date.now();
-    const key = `${req.ip || req.socket?.remoteAddress || "unknown"}:${req.method}:${req.path}`;
+    const currentTime = now();
+    if (currentTime >= nextCleanupAt) {
+      for (const [key, bucket] of buckets) {
+        if (bucket.resetAt <= currentTime) buckets.delete(key);
+      }
+      nextCleanupAt = currentTime + windowMs;
+    }
+
+    const key = req.ip || req.socket?.remoteAddress || "unknown";
     const bucket = buckets.get(key);
-    const current = bucket && bucket.resetAt > now
+    const current = bucket && bucket.resetAt > currentTime
       ? bucket
-      : { count: 0, resetAt: now + windowMs };
+      : { count: 0, resetAt: currentTime + windowMs };
 
     current.count += 1;
     buckets.set(key, current);
 
     if (current.count > max) {
-      res.setHeader("Retry-After", String(Math.ceil((current.resetAt - now) / 1000)));
+      res.setHeader("Retry-After", String(Math.ceil((current.resetAt - currentTime) / 1000)));
       res.status(429).json({ error: true, message: "Too many requests. Try again shortly." });
       return;
     }
