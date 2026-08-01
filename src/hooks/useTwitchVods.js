@@ -24,33 +24,41 @@ export function useTwitchVods({ channelId = null, enabled = false } = {}) {
   const [syncedCount, setSyncedCount] = useState(null)
   const base = channelId ? `/api/channels/${encodeURIComponent(channelId)}/archive` : '/api/twitch/fenya/archive'
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal) => {
     if (!enabled) return
     setIsLoading(true)
     setError(null)
     try {
-      const vodPayload = await readPayload(await fetch(`${base}/vods`))
+      const vodPayload = await readPayload(await fetch(`${base}/vods`, { signal }))
+      if (signal?.aborted) return
       setVods(normalizeVodPayload(vodPayload))
       setHasLoaded(true)
 
       try {
-        const comparisonPayload = await readPayload(await fetch(`${base}/vods/comparison`))
+        const comparisonPayload = await readPayload(await fetch(`${base}/vods/comparison`, { signal }))
+        if (signal?.aborted) return
         setComparison(comparisonPayload)
       } catch (comparisonError) {
+        if (signal?.aborted) return
         setComparison(null)
         setError(comparisonError)
       }
     } catch (requestError) {
+      if (signal?.aborted) return
       setError(requestError)
       setHasLoaded(true)
     } finally {
-      setIsLoading(false)
+      if (!signal?.aborted) setIsLoading(false)
     }
   }, [base, enabled])
 
   useEffect(() => {
-    const timer = window.setTimeout(load, 0)
-    return () => window.clearTimeout(timer)
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => load(controller.signal), 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
   }, [load])
 
   const sync = useCallback(async () => {

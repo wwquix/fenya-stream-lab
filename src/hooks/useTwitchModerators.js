@@ -15,25 +15,31 @@ export function useTwitchModerators({ channelId = null, enabled = false } = {}) 
     ? `/api/channels/${encodeURIComponent(channelId)}/moderators`
     : '/api/twitch/fenya/moderators'
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal) => {
     if (!enabled) return null
     setIsLoading(true)
     try {
-      const payload = await readPayload(await fetch(endpoint))
+      const payload = await readPayload(await fetch(endpoint, { signal }))
+      if (signal?.aborted) return null
       setData(payload)
       setError(null)
       return payload
     } catch (requestError) {
+      if (signal?.aborted) return null
       setError(requestError)
       return null
     } finally {
-      setIsLoading(false)
+      if (!signal?.aborted) setIsLoading(false)
     }
   }, [enabled, endpoint])
 
   useEffect(() => {
-    const timer = window.setTimeout(load, 0)
-    return () => window.clearTimeout(timer)
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => load(controller.signal), 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
   }, [load])
 
   const sync = useCallback(async () => {
