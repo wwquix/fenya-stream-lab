@@ -32,6 +32,10 @@ function parseCsvRows(contents) {
     }
   }
 
+  if (quoted) {
+    throw new TypeError("CSV contains an unterminated quoted field.");
+  }
+
   row.push(field);
   if (row.some((value) => value.trim())) {
     rows.push(row);
@@ -86,7 +90,18 @@ export function parseCsvImport(contents) {
   }
 
   const headers = rows[0].map(normalizeHeader);
+  if (headers.some((header) => !header)) {
+    throw new TypeError("CSV header names must not be empty.");
+  }
+  const duplicateHeader = headers.find((header, index) => headers.indexOf(header) !== index);
+  if (duplicateHeader) {
+    throw new TypeError(`CSV contains a duplicate header: ${duplicateHeader}.`);
+  }
+
   return rows.slice(1).map((values, index) => {
+    if (values.length > headers.length) {
+      throw new TypeError(`CSV row ${index + 2} contains more fields than the header.`);
+    }
     const record = Object.fromEntries(headers.map((header, columnIndex) => [
       header,
       values[columnIndex]?.trim() ?? "",
