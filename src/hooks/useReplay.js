@@ -2,6 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 
 const initialStatus = { status: 'idle', isActive: false, speed: null, progress: 0 }
 
+export function parseReplayEventPayload(data) {
+  let payload
+  try {
+    payload = JSON.parse(data)
+  } catch {
+    throw new TypeError('Replay event contains invalid JSON')
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new TypeError('Replay event payload must be a JSON object')
+  }
+  return payload
+}
+
 export function useReplay(streamId, { enabled = true } = {}) {
   const [status, setStatus] = useState(initialStatus)
   const [speed, setSpeed] = useState(5)
@@ -15,7 +28,14 @@ export function useReplay(streamId, { enabled = true } = {}) {
     const eventTypes = ['replay_started', 'chat_message', 'viewer_sample', 'moderation_action', 'stream_marker', 'replay_finished', 'replay_error']
 
     function handleEvent(event) {
-      const payload = JSON.parse(event.data)
+      let payload
+      try {
+        payload = parseReplayEventPayload(event.data)
+        setError(null)
+      } catch (parseError) {
+        setError(parseError)
+        return
+      }
       if (event.type === 'replay_started' || event.type === 'replay_finished' || event.type === 'replay_error') {
         setStatus(payload)
         if (event.type === 'replay_started' && payload.cursor === 0) setEvents([])
