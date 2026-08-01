@@ -15,7 +15,7 @@ import { syncTwitchVods } from "../services/twitchVodService.js";
 import { getChannelModeratorDirectory } from "../services/twitchModeratorService.js";
 
 const router = Router();
-const manageIngest = requireChannelRole(["channel_owner"]);
+const manageIngest = requireChannelRole(["channel_owner", "channel_admin"]);
 
 router.post("/connect-my-channel", requireUser, routeHandler(async (req, res) => {
   res.json({ channel: connectMyTwitchChannel(req.user.id) });

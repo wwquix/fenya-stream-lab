@@ -58,6 +58,7 @@ let channelA;
 let channelB;
 let outsiderCookie;
 let ownerCookie;
+let channelAdminCookie;
 let chatterCookie;
 let moderatorCookie;
 let platformAdminCookie;
@@ -208,6 +209,9 @@ beforeEach(() => {
   channelA = createChannel("A");
   channelB = createChannel("B");
   ownerCookie = `${SESSION_COOKIE_NAME}=${startSession(channelA.owner.id).rawToken}`;
+  const channelAdmin = findOrCreateUserFromTwitchProfile({ id: "channel-admin", login: "channel-admin", display_name: "Channel Admin" });
+  addOrUpdateChannelMembership(channelA.id, channelAdmin.id, "channel_admin");
+  channelAdminCookie = `${SESSION_COOKIE_NAME}=${startSession(channelAdmin.id).rawToken}`;
   const chatter = findOrCreateUserFromTwitchProfile({ id: "chatter", login: "chatter", display_name: "Chatter" });
   addOrUpdateChannelMembership(channelA.id, chatter.id, "chatter");
   chatterCookie = `${SESSION_COOKIE_NAME}=${startSession(chatter.id).rawToken}`;
@@ -1051,6 +1055,14 @@ describe("multi-channel Twitch ingest pool", () => {
     const started = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", platformAdminCookie);
     expect(started.status).toBe(202);
     const stopped = await request(app).post(`/api/channels/${channelA.id}/ingest/stop`).set("Cookie", platformAdminCookie);
+    expect(stopped.status).toBe(200);
+    expect(stopped.body.running).toBe(false);
+  });
+
+  test("channel admin can control ingest", async () => {
+    const started = await request(app).post(`/api/channels/${channelA.id}/ingest/start`).set("Cookie", channelAdminCookie);
+    expect(started.status).toBe(202);
+    const stopped = await request(app).post(`/api/channels/${channelA.id}/ingest/stop`).set("Cookie", channelAdminCookie);
     expect(stopped.status).toBe(200);
     expect(stopped.body.running).toBe(false);
   });

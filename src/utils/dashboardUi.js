@@ -19,11 +19,11 @@ export function getRoleBadgeKeys(roleSummary) {
 
 export function normalizeRole(role) {
   const normalized = String(role || 'chatter').trim().toLowerCase()
-  return ['platform_admin', 'channel_owner', 'moderator', 'chatter'].includes(normalized) ? normalized : 'chatter'
+  return ['platform_admin', 'channel_owner', 'channel_admin', 'moderator', 'chatter'].includes(normalized) ? normalized : 'chatter'
 }
 
 export function canControlIngest(role) {
-  return ['platform_admin', 'channel_owner'].includes(normalizeRole(role))
+  return ['platform_admin', 'channel_owner', 'channel_admin'].includes(normalizeRole(role))
 }
 
 export function resolveDashboardPermissions({ identity, dashboardMode, selectedChannel, legacyChannelLogin }) {

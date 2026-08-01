@@ -54,10 +54,12 @@ describe("frontend dashboard UI helpers", () => {
       .toEqual(["rolePlatformAdmin", "roleChannelOwner"]);
   });
 
-  test("normalizes the four permission roles and resolves contextual ingest control", () => {
+  test("normalizes channel-admin permissions and resolves contextual ingest control", () => {
     expect(normalizeRole(" CHANNEL_OWNER ")).toBe("channel_owner");
+    expect(normalizeRole("CHANNEL_ADMIN")).toBe("channel_admin");
     expect(normalizeRole("unknown")).toBe("chatter");
     expect(canControlIngest("platform_admin")).toBe(true);
+    expect(canControlIngest("channel_admin")).toBe(true);
     expect(canControlIngest("moderator")).toBe(false);
 
     const identity = {
@@ -72,6 +74,8 @@ describe("frontend dashboard UI helpers", () => {
       .toEqual({ role: "chatter", canControlIngest: false, readOnly: true });
     expect(resolveDashboardPermissions({ identity, dashboardMode: "connected-channel", selectedChannel: { id: 9, role: "channel_owner" } }))
       .toEqual({ role: "channel_owner", canControlIngest: true, readOnly: false });
+    expect(resolveDashboardPermissions({ identity, dashboardMode: "connected-channel", selectedChannel: { id: 10, role: "channel_admin" } }))
+      .toEqual({ role: "channel_admin", canControlIngest: true, readOnly: false });
     expect(resolveDashboardPermissions({
       identity: { ...identity, ingestChannels: [{ id: 11, twitchLogin: "fenya" }] },
       dashboardMode: "legacy-fenya",

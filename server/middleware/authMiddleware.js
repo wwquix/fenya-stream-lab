@@ -141,8 +141,11 @@ export function requireApiMutationPermission(req, res, next) {
     }
 
     const channelMatch = req.path.match(/^\/channels\/(\d+)(?:\/|$)/);
-    if (channelMatch && userOwnsChannel(req.user.id, Number(channelMatch[1]))) {
-      req.channelRole = "channel_owner";
+    const channelRole = channelMatch
+      ? getUserChannelRole(Number(channelMatch[1]), req.user.id)
+      : null;
+    if (["channel_owner", "channel_admin"].includes(channelRole)) {
+      req.channelRole = channelRole;
       next();
       return;
     }
