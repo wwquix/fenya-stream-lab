@@ -40,7 +40,7 @@ function TabbedLeaderboard({ title, tabs, initialTabId, revealDelay = 0 }) {
       <div className="chat-leaderboard-header">
         <h3>{title}</h3>
         <div className="leaderboard-tabs" role="tablist" aria-label={title}>
-          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab.id === tab.id} className={activeTab.id === tab.id ? 'is-active' : ''} onClick={() => setActiveTabId(tab.id)}>{tab.label}</button>)}
+          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab.id === tab.id} className={`liquid-control ${activeTab.id === tab.id ? 'is-active' : ''}`} onClick={() => setActiveTabId(tab.id)}>{tab.label}</button>)}
         </div>
       </div>
       <LeaderboardList {...activeTab} />
@@ -62,7 +62,7 @@ function TopChatters({ chatters, chatAnalytics = null, realDataMode = false, ses
   const activeChatters = session?.uniqueChatters ?? chatAnalytics?.activeNow ?? (realDataMode ? 0 : chatters.length)
   const activityPeak = session?.activityPeak ?? chatAnalytics?.activityPeak ?? null
   return (
-    <Reveal as="section" className="section-panel top-chatters" id="chatters" aria-labelledby="top-chatters-title">
+    <Reveal as="section" className="section-panel top-chatters liquid-glass liquid-surface" id="chatters" aria-labelledby="top-chatters-title" data-liquid-interactive>
       <div className="section-heading"><div><h2 id="top-chatters-title">{t.viewersAndChat}</h2></div></div>
       {error ? <p className="section-inline-error" role="alert">{t.chatSectionPartialError}</p> : null}
       <div className="chat-summary-metrics" aria-label={t.viewersAndChat}>

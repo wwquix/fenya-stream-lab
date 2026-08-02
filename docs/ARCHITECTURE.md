@@ -18,14 +18,17 @@ React hooks -> Express routes -> services/providers |
 
 The frontend keeps committed mock datasets as a defensive fallback only in mock mode. With `TWITCH_PROVIDER=twitch`, dashboard routes and components accept only SQLite rows sourced from Twitch and render explicit empty states instead of demo fallback data.
 
+Advanced stream analytics stays inside this flow. A route selects one stored stream, the repository loads its viewer samples, chat messages, markers, segments, and channel history, and pure service functions calculate loyalty, clip windows, event correlation, and viewer-curve retention. Results are computed on demand and are not written to a second store.
+
 ## Backend layers
 
 - `server/index.js`: loads `.env`, starts Express, and optionally starts the mock sampler.
 - `server/app.js`: composes middleware, routers, 404 handling, and the JSON error boundary.
 - `server/routes/`: maps HTTP endpoints to domain operations.
 - `server/services/`: orchestrates imports, reports, provider selection, Twitch auth/Helix calls, replay timing, and SSE clients.
+- `server/services/advancedAnalyticsService.js`: exports deterministic analytical configuration and pure dataset calculations, plus the thin service entry point that asks the repository for a dataset.
 - `server/providers/`: deterministic mock sources, real normalized Twitch metadata, and local summary calculation.
-- `server/repositories/`: owns SQLite queries and row-to-contract mapping.
+- `server/repositories/`: owns SQLite queries, channel/source isolation, and row-to-contract mapping, including the advanced-analytics dataset.
 - `server/storage/`: initializes SQLite and preserves legacy JSON/mock compatibility stores.
 - `server/validation/`: defines normalized import contracts with Zod.
 
@@ -56,6 +59,8 @@ users
 
 Runtime database files are ignored. Schema migration/version tooling is not implemented yet.
 
+Advanced analytics reuses these existing rows and does not add a cache table. `stream_id` remains the stream identity, while connected-channel reads additionally bind the requested `channel_id`. Missing absolute timestamps produce a data-quality warning and nullable legacy channel IDs remain explicit rather than being guessed. The first version reuses the existing stream-key indexes; no speculative analytical index or migration is added before query behavior demonstrates a need.
+
 ### Identity and secret storage foundation
 
 The additive identity schema does not alter the current single-channel routes. `users` can link to Twitch identities, `channels` can have an owner, and `channel_memberships` constrains roles to `channel_owner`, `channel_admin`, `moderator`, or `chatter`.
@@ -73,7 +78,7 @@ SQLite has no row-level security (RLS). All application access control therefore
 - `requireChannelRole([...])` resolves `req.params.channelId` through `channel_memberships`, rejects disallowed users with `403`, and attaches `req.channelRole`.
 - `requireSelfOrChannelRole(...)` permits the matching linked Twitch identity or one of the explicitly allowed channel roles.
 
-Protected route handlers must compose these guards and must not implement custom ad-hoc ownership or role checks. In particular, handlers must not compare owner IDs or membership roles with inline `if` statements. The current legacy single-channel Fenya routes remain public during the staged multi-user migration; passive session attachment and the new login flow do not change their behavior.
+Protected route handlers must compose these guards and must not implement custom ad-hoc ownership or role checks. In particular, handlers must not compare owner IDs or membership roles with inline `if` statements. The channel-scoped advanced-analytics route accepts every established channel membership role (`channel_owner`, `channel_admin`, `moderator`, or `chatter`) as passive read access, while guests receive `401` and non-members receive `403`. Its repository lookup also binds the stream to the requested channel, so a stream from another channel returns `404`. The public advanced-analytics compatibility alias is narrower than that protected route: it accepts only the configured legacy login and excludes rows belonging to channels with a connected owner, returning `404` instead of bypassing membership checks. Other current legacy single-channel Fenya routes remain public during the staged multi-user migration; passive session attachment and the new login flow do not change their behavior.
 
 ### Twitch login flow
 
@@ -115,6 +120,22 @@ If the requested stream has no detailed events, seeded demo events are used with
 
 `reportService` combines stream metadata and the stored/generated summary into JSON or Markdown. Legacy seeded summaries without provider metadata are regenerated through the configured provider before a stream-specific report is returned.
 
+The local summary uses the same advanced clip-ranking function as the advanced endpoint. The normalized candidate keeps legacy `time` and `label` fields for existing JSON/Markdown consumers and adds the ranked window/duration, viewer direction, normalized score/confidence, reasons, peak metrics, and baseline deltas. ISO window times require every viewer sample to be anchored by its own timestamp or a valid stream start; otherwise all window fields keep `HH:mm` labels and never fabricate a Unix-epoch date.
+
+## Advanced analytics flow
+
+1. The legacy stream route resolves only an unowned compatibility stream for the configured login; the connected-channel route first applies centralized membership authorization.
+2. The repository loads the selected stream plus ordered samples, markers, segments, and channel/source-scoped history. Chat messages are aggregated in SQL by stream and normalized login, including timestamp-coverage metadata, instead of loading every raw message into application memory. The legacy `chatters` aggregate has no source column, so it is used only for non-Twitch compatibility history; Twitch loyalty fails closed to source-tagged messages.
+3. A data-quality summary records the exact row counts, historical depth, timestamp coverage, collection boundary, and warnings.
+4. Pure calculations produce four independent sections:
+   - chat loyalty from saved message rows and aggregate chatter participation only;
+   - explainable, merged clip recommendation windows;
+   - before/after correlation around saved markers;
+   - aggregate viewer-curve drops and recoveries inside the observed period.
+5. The route returns one normalized response without persisting a cache.
+
+The calculations use named thresholds exported from the service. Missing or partial inputs produce honest `partial`/`insufficient` states rather than mock substitution. Clip score considers normalized viewer/chat change, sustained duration, and marker context; timestamp completeness contributes to confidence only, and proposed editorial windows are cadence-capped around the winning peak. Event impact is descriptive correlation, not causal inference, and ongoing effects are returned as right-censored lower bounds. Retention requires sustained loss in both smoothed and raw samples, recomputes merged drops, and measures recovery as the share of the observed loss regained. It is based on aggregate viewer samples and cannot describe an individual viewer's session. If `collected_from` is later than `started_at`, all retention language is scoped to the collected part of the broadcast.
+
 ## Twitch provider boundary
 
 `twitchMetadataService` selects the unchanged mock provider by default or the real provider for `TWITCH_PROVIDER=twitch`. The auth service obtains and memory-caches an app token; the Helix client owns authenticated requests and safe upstream errors; the provider combines `/users`, `/channels`, and `/streams` into the frontend contract. Existing environment-based MVP tokens remain memory-only. The new durable account repository stores only AES-256-GCM ciphertext and no token is returned by diagnostics.
@@ -141,15 +162,15 @@ The frontend has three explicit data modes: `mock`, `legacy-fenya`, and `connect
 
 ## Test architecture
 
-Vitest runs one backend integration file with file-level parallelism disabled. Before each test it:
+Vitest discovers `server/**/*.test.js` in the Node environment with file-level parallelism disabled. Database integration files generally:
 
 1. creates a unique operating-system temporary directory;
 2. points `DATABASE_PATH` at a new SQLite file;
 3. forces mock Twitch and local summaries;
-4. seeds deterministic data only when the test needs it.
+4. seed deterministic data only when the test needs it.
 
-After each test the database singleton is closed, environment overrides are removed, and the temporary directory is deleted. Tests never import `server/index.js`, load Twitch/OpenAI credentials, or open the normal local database.
+After each test the database singleton is closed, environment overrides are removed, and the temporary directory is deleted. Pure analytics tests use fixed in-memory objects and no database. API tests create multiple channels and memberships to prove authorization, channel isolation, `404` behavior, and mock/Twitch source separation. Tests never import `server/index.js`, load Twitch/OpenAI credentials, or open the normal local database.
 
 ## Current boundaries
 
-This remains a local single-channel portfolio dashboard at the UI level. It now has backend Twitch login, identity, encrypted-token, persistent-session, channel, membership, and authorization-middleware foundations, but no user-facing account pages, complete multi-user route isolation, public deployment hardening, rate-limit retry strategy, or durable EventSub/replay recovery. EventSub reconnects while the process is alive, but ingest must be started again after restart. Legacy write, diagnostic, ingest, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.
+The dashboard now supports explicit `mock`, `legacy-fenya`, and `connected-channel` data modes, but it still has no full user-facing account area, public deployment hardening, rate-limit retry strategy, or durable EventSub/replay recovery. Advanced analytics is limited to locally saved rows: chat before `collected_from`, viewers who never wrote a message, and per-viewer entry/exit history cannot be reconstructed. EventSub reconnects while the process is alive, but ingest must be started again after restart. Legacy write, diagnostic, ingest, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.

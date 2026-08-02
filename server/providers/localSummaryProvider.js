@@ -1,10 +1,6 @@
 import { loadStreamDataset } from "../repositories/streamReportRepository.js";
-
-function minutes(time) {
-  if (!/^\d{2}:\d{2}$/.test(time ?? "")) return null;
-  const [hours, mins] = time.split(":").map(Number);
-  return (hours < 6 ? hours + 24 : hours) * 60 + mins;
-}
+import { calculateClipSuggestions } from "../services/advancedAnalyticsService.js";
+import { minutesFromTimeLabel } from "../services/streamTimeService.js";
 
 function peak(items, field) {
   return items.reduce((best, item) => (item[field] > (best?.[field] ?? -1) ? item : best), null);
@@ -12,10 +8,10 @@ function peak(items, field) {
 
 function calculateSegment(dataset) {
   const scored = dataset.segments.map((segment) => {
-    const start = minutes(segment.start);
-    const end = minutes(segment.end);
+    const start = minutesFromTimeLabel(segment.start);
+    const end = minutesFromTimeLabel(segment.end);
     const samples = dataset.viewerSamples.filter((sample) => {
-      const point = minutes(sample.time);
+      const point = minutesFromTimeLabel(sample.time);
       return point !== null && point >= start && point <= end;
     });
     const score = samples.reduce((total, sample) => total + sample.viewers / 100 + sample.messagesPerMinute, 0);
@@ -63,17 +59,7 @@ export async function generateLocalSummary(streamId) {
   const topChatters = dataset.chatters.slice(0, 10);
   const topWords = dataset.words.slice(0, 12).map(({ text, count }) => ({ text, count }));
   const notableMoments = buildMoments(dataset, viewerPeak, chatPeak);
-  const suggestedClipMoments = notableMoments
-    .map((moment) => ({ ...moment, score: (moment.viewers ?? 0) / 100 + (moment.messagesPerMinute ?? 0) }))
-    .sort((first, second) => second.score - first.score)
-    .slice(0, 5)
-    .map((moment) => ({
-      time: moment.time,
-      label: moment.label,
-      type: moment.type,
-      viewers: moment.viewers,
-      messagesPerMinute: moment.messagesPerMinute,
-    }));
+  const suggestedClipMoments = calculateClipSuggestions(dataset);
   const samples = dataset.viewerSamples;
   const averageViewers = samples.length
     ? Math.round(samples.reduce((total, sample) => total + sample.viewers, 0) / samples.length)

@@ -12,6 +12,7 @@ const defaultHeroAsset = {
 const navItems = [
   { id: 'top', labelKey: 'navTop' },
   { id: 'pulse', labelKey: 'navPulse' },
+  { id: 'insights', labelKey: 'navInsights' },
   { id: 'chatters', labelKey: 'navChatters' },
   { id: 'words', labelKey: 'navSpeech' },
   { id: 'moderators', labelKey: 'navMods' },
@@ -32,7 +33,7 @@ function Hero({ stream, heroAsset = defaultHeroAsset, activeSection = 'top', lan
         <div className="hero-cinematic-layer" aria-hidden="true" />
         <div className="hero-noise-layer" aria-hidden="true" />
 
-        <nav className="hero-navbar" aria-label="Primary">
+        <nav className="hero-navbar liquid-glass liquid-surface-elevated" aria-label="Primary" data-liquid-interactive>
           <a className="hero-logo" href="#top" aria-label="Fenya Stream Lab home">
             Fenya Lab
           </a>

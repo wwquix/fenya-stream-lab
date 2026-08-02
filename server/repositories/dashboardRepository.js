@@ -1,4 +1,5 @@
 import { getDatabase } from "../storage/db.js";
+import { timestampForTimeLabel } from "../services/streamTimeService.js";
 
 const clusterLabels = {
   gameplay: "Игровые моменты",
@@ -22,27 +23,6 @@ function parseJson(value, fallback) {
   } catch {
     return fallback;
   }
-}
-
-function timestampForTimeLabel(startedAt, timeLabel) {
-  if (!startedAt || !/^\d{2}:\d{2}$/.test(timeLabel)) {
-    return null;
-  }
-
-  const start = new Date(startedAt);
-  if (Number.isNaN(start.getTime())) {
-    return null;
-  }
-
-  const [hours, minutes] = timeLabel.split(":").map(Number);
-  const timestamp = new Date(start);
-  timestamp.setUTCHours(hours, minutes, 0, 0);
-
-  if (timestamp.getTime() < start.getTime() - 60 * 60 * 1000) {
-    timestamp.setUTCDate(timestamp.getUTCDate() + 1);
-  }
-
-  return timestamp.toISOString();
 }
 
 function currentStreamRow(database, tableName, source = null, channelId = null) {
@@ -258,6 +238,33 @@ function saveChat(database, chat, source = "mock") {
       stringify(message),
     );
   });
+
+  const insertHistoricalChatter = database.prepare(`
+    INSERT INTO chatters (
+      stream_id, nickname, message_count, messages_note, updated_at
+    ) VALUES (?, ?, ?, 'Участник сохранённого mock-чата', ?)
+    ON CONFLICT(stream_id, nickname) DO UPDATE SET
+      message_count = excluded.message_count,
+      messages_note = excluded.messages_note,
+      updated_at = excluded.updated_at
+  `);
+  for (const historyEntry of chat.participationHistory ?? []) {
+    const historicalStream = database.prepare(`
+      SELECT stream_id, COALESCE(ended_at, started_at, updated_at) AS participation_at
+      FROM streams
+      WHERE stream_id = ? AND source = ?
+    `).get(historyEntry.streamId, source);
+    if (!historicalStream) continue;
+
+    for (const participant of historyEntry.participants ?? []) {
+      insertHistoricalChatter.run(
+        historicalStream.stream_id,
+        participant.nickname,
+        participant.messageCount,
+        historicalStream.participation_at ?? now,
+      );
+    }
+  }
 }
 
 function saveWords(database, words, source = "mock") {

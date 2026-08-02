@@ -163,6 +163,15 @@ describe("Fenya Stream Lab API", () => {
     expect(response.body.metrics.peakViewers).toBeGreaterThan(0);
     expect(response.body.topChatters.length).toBeGreaterThan(0);
     expect(response.body.suggestedClipMoments).toBeInstanceOf(Array);
+    expect(response.body.suggestedClipMoments.length).toBeGreaterThan(0);
+    expect(response.body.suggestedClipMoments[0]).toEqual(expect.objectContaining({
+      time: expect.any(String),
+      label: expect.any(String),
+      startTime: expect.any(String),
+      peakTime: expect.any(String),
+      endTime: expect.any(String),
+      reasons: expect.any(Array),
+    }));
   });
 
   test("the stream report JSON endpoint returns the generated report", async () => {
@@ -173,6 +182,12 @@ describe("Fenya Stream Lab API", () => {
     expect(response.body.stream.streamId).toBe("2026-06-23");
     expect(response.body.summary.provider).toBe("local");
     expect(response.body.analytics.suggestedClipMoments).toBeInstanceOf(Array);
+    expect(response.body.analytics.suggestedClipMoments[0]).toEqual(expect.objectContaining({
+      time: expect.any(String),
+      label: expect.any(String),
+      score: expect.any(Number),
+      confidence: expect.any(Number),
+    }));
   });
 
   test("the stream report Markdown endpoint returns readable Markdown", async () => {

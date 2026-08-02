@@ -1,6 +1,7 @@
 const railItems = [
   { id: 'top', labelKey: 'navTop' },
   { id: 'pulse', labelKey: 'navPulse' },
+  { id: 'insights', labelKey: 'navInsights' },
   { id: 'chatters', labelKey: 'navChatters' },
   { id: 'words', labelKey: 'navSpeech' },
   { id: 'moderators', labelKey: 'navMods' },
@@ -24,9 +25,14 @@ function SectionRail({ activeSection = 'top', availableSectionIds = [], isVisibl
   }
 
   return (
-    <nav className={`section-rail ${isVisible ? 'is-visible' : ''}`} aria-label="Page sections" aria-hidden={!isVisible}>
+    <nav
+      className={`section-rail liquid-glass liquid-surface-elevated ${isVisible ? 'is-visible' : ''}`}
+      aria-label="Page sections"
+      aria-hidden={!isVisible}
+      data-liquid-interactive
+    >
       {railItems.filter((item) => availableSections.has(item.id)).map((item) => (
-        <a className={activeSection === item.id ? 'is-active' : ''} href={`#${item.id}`} key={item.id} tabIndex={isVisible ? 0 : -1} onClick={(event) => handleSectionClick(event, item.id)}>
+        <a className={`liquid-control ${activeSection === item.id ? 'is-active' : ''}`} href={`#${item.id}`} key={item.id} tabIndex={isVisible ? 0 : -1} onClick={(event) => handleSectionClick(event, item.id)}>
           <span aria-hidden="true" />
           <strong>{t[item.labelKey]}</strong>
         </a>

@@ -137,7 +137,12 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
     }), 'text/html;charset=utf-8', sessionExportFilename(selectedSession, 'html'))
 
     return (
-      <Reveal as="section" className="stream-control-bar twitch-control-bar glass-panel soft-glow" aria-label={t.streamControls}>
+      <Reveal
+        as="section"
+        className="stream-control-bar twitch-control-bar glass-panel soft-glow liquid-glass liquid-surface-elevated"
+        aria-label={t.streamControls}
+        data-liquid-interactive
+      >
         <div className="twitch-status-panel" aria-busy={isDataModeLoading || twitchIngest?.isPending ? 'true' : 'false'}>
           <div className="twitch-status-badges" aria-live="polite">
             <span className={`twitch-state-badge ${isDataModeLoading ? '' : connected ? 'is-connected' : statusError ? 'is-error' : ''}`}>
@@ -212,7 +217,12 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
   }
 
   return (
-    <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label={t.streamControls}>
+    <Reveal
+      as="section"
+      className="stream-control-bar glass-panel soft-glow liquid-glass liquid-surface-elevated"
+      aria-label={t.streamControls}
+      data-liquid-interactive
+    >
       <div className="stream-live-meta" aria-busy={twitchMetadata?.isLoading ? 'true' : 'false'}>
         <span className={`stream-live-status ${metadataStateClass} ${metadata?.isLive ? 'live-pulse' : ''}`}>
           {twitchMetadata?.isLoading ? t.loadingMetadata : liveLabel}

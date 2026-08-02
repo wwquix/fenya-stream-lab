@@ -30,18 +30,29 @@ import { useSessionReport } from './hooks/useSessionReport.js'
 import { useIdentity } from './hooks/useIdentity.js'
 import { useTwitchVods } from './hooks/useTwitchVods.js'
 import { useTwitchModerators } from './hooks/useTwitchModerators.js'
+import { useAdvancedAnalytics } from './hooks/useAdvancedAnalytics.js'
+import { useLiquidPointer } from './hooks/useLiquidPointer.js'
 import { translations } from './i18n/translations.js'
 import AppErrorState from './components/AppErrorState.jsx'
 import { isBackendUnavailable, resolveDashboardPermissions, resolveInitialTheme } from './utils/dashboardUi.js'
 import { buildInternalSessions, chooseDefaultSessionId, mergeSessionData } from './utils/sessionDashboard.js'
 
-const allSectionIds = ['top', 'pulse', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
+const allSectionIds = ['top', 'pulse', 'insights', 'chatters', 'words', 'moderators', 'archive', 'summary', 'import']
 const StreamPulse = lazy(() => import('./components/StreamPulse.jsx'))
+const AdvancedInsights = lazy(() => import('./components/AdvancedInsights.jsx'))
 
 function StreamPulseFallback({ t }) {
   return (
-    <section className="real-data-empty glass-panel" id="pulse" role="status">
+    <section className="real-data-empty liquid-glass liquid-surface" id="pulse" role="status">
       <p>{t.loadingMetadata}</p>
+    </section>
+  )
+}
+
+function AdvancedInsightsFallback({ t }) {
+  return (
+    <section className="real-data-empty liquid-glass liquid-surface" id="insights" role="status">
+      <p>{t.advancedLoading}</p>
     </section>
   )
 }
@@ -65,6 +76,7 @@ function adaptSessionToPulse(session, fallbackStream) {
 }
 
 function App() {
+  useLiquidPointer()
   const [language, setLanguage] = useState(() => localStorage.getItem('fenya-language') || 'ru')
   const [theme, setTheme] = useState(() => {
     try {
@@ -125,6 +137,13 @@ function App() {
   const compareSession = useMemo(() => mergeSessionData(compareInternalBase, compareSessionReport.report), [compareInternalBase, compareSessionReport.report])
   const clientReplay = useClientReplay(selectedSession?.samples ?? [], selectedInternalBase?.id)
   const isDataModeLoading = twitchIngest.isLoading && (channelId ? !twitchIngest.status : !twitchIngest.connection)
+  const advancedStreamId = isTwitchMode ? selectedInternalBase?.id ?? null : selectedStream.id
+  const advancedAnalytics = useAdvancedAnalytics({
+    streamId: advancedStreamId,
+    dashboardMode,
+    channelId,
+    enabled: !isDataModeLoading && Boolean(advancedStreamId),
+  })
   const permissions = resolveDashboardPermissions({
     identity: identity.identity,
     dashboardMode,
@@ -334,7 +353,7 @@ function App() {
           <AppErrorState compact title={t.apiRequestFailedTitle} message={t.apiRequestFailedMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
         ) : null}
         {isDataModeLoading ? (
-          <section className="real-data-empty glass-panel" role="status">
+          <section className="real-data-empty liquid-glass liquid-surface" role="status">
             <p>{t.loadingRealMode}</p>
           </section>
         ) : isTwitchMode ? (
@@ -356,6 +375,17 @@ function App() {
                 minHeight="chart"
               />
             )}
+            <Suspense fallback={<AdvancedInsightsFallback t={t} />}>
+              <AdvancedInsights
+                data={advancedAnalytics.data}
+                isLoading={advancedAnalytics.isLoading}
+                error={advancedAnalytics.error}
+                onRetry={advancedAnalytics.retry}
+                streamId={advancedStreamId}
+                language={language}
+                t={t}
+              />
+            </Suspense>
             <TopChatters
               chatters={[]}
               chatAnalytics={selectedIsCurrent ? chatAnalytics.analytics : selectedSession?.topChatters?.length ? {
@@ -410,6 +440,17 @@ function App() {
           <>
             <Suspense fallback={<StreamPulseFallback t={t} />}>
               <StreamPulse stream={streamPulseStream} compareStream={compareStream} events={streamPulseEvents} t={t} />
+            </Suspense>
+            <Suspense fallback={<AdvancedInsightsFallback t={t} />}>
+              <AdvancedInsights
+                data={advancedAnalytics.data}
+                isLoading={advancedAnalytics.isLoading}
+                error={advancedAnalytics.error}
+                onRetry={advancedAnalytics.retry}
+                streamId={advancedStreamId}
+                language={language}
+                t={t}
+              />
             </Suspense>
             {/* Data map is reserved for a future real data pipeline view. */}
             <TopChatters

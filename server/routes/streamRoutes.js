@@ -1,10 +1,20 @@
 import { Router } from "express";
+import process from "node:process";
 
 import { HttpError, routeHandler } from "../middleware/errorHandlers.js";
+import { getAdvancedStreamAnalytics } from "../services/advancedAnalyticsService.js";
 import { buildStreamReport, formatStreamReportMarkdown } from "../services/reportService.js";
 import { generateStreamSummary, getStreamSummary } from "../services/summaryService.js";
 
 const router = Router();
+
+router.get("/:streamId/advanced-analytics", routeHandler(async (req, res) => {
+  const analytics = getAdvancedStreamAnalytics(req.params.streamId, {
+    legacyChannelLogin: process.env.TWITCH_CHANNEL_LOGIN?.trim() || "fenya",
+  });
+  if (!analytics) throw new HttpError(404, `Stream "${req.params.streamId}" was not found.`);
+  res.json(analytics);
+}, "Failed to build advanced stream analytics"));
 
 router.post("/:streamId/summary/generate", routeHandler(async (req, res) => {
   try {
@@ -34,4 +44,3 @@ router.get("/:streamId/report/markdown", routeHandler(async (req, res) => {
 }, "Failed to build Markdown stream report"));
 
 export default router;
-

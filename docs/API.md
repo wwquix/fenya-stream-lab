@@ -46,6 +46,8 @@ Database-backed Twitch accounts refresh within ten minutes of expiration or once
 | GET | `/api/report/fenya/current-stream` | Compatibility combined JSON report |
 | GET | `/api/report/fenya/current-stream.json` | Compatibility JSON report alias |
 | GET | `/api/report/fenya/current-stream.md` | Compatibility Markdown report |
+| GET | `/api/streams/:streamId/advanced-analytics` | On-demand advanced analytics for one stored legacy/local stream |
+| GET | `/api/channels/:channelId/streams/:streamId/advanced-analytics` | Membership-protected, channel-isolated advanced analytics |
 
 ## Imports
 
@@ -120,6 +122,132 @@ Clients should listen for named events rather than only the default `message` ev
 | GET | `/api/streams/:streamId/report/markdown` | Stream-specific Markdown report |
 
 Summary generation uses `SUMMARY_PROVIDER=local` by default. It requires a stream row in SQLite and returns `404` when the stream does not exist. Reading a summary before generation returns `404`. Report endpoints generate/upgrade the local summary when necessary.
+
+Enhanced `suggestedClipMoments` entries preserve the legacy `time` and `label` fields consumed by existing reports. New consumers may also read `startTime`, `peakTime`, `endTime`, `durationMinutes`, `signalDurationMinutes`, `viewerDirection`, `score`, `confidence`, `reasons`, peak viewer/chat values, local-baseline deltas, and a nearby marker. The three window fields use ISO timestamps only when every viewer sample is anchored by its own parseable timestamp or a valid stream `started_at`; if any point remains unanchored, all three retain `HH:mm` labels. They are recommendations for an editor and do not represent generated video files.
+
+## Advanced stream analytics
+
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| GET | `/api/streams/:streamId/advanced-analytics` | Public compatibility read for the configured `TWITCH_CHANNEL_LOGIN` (default `fenya`), limited to rows with no channel or no connected owner |
+| GET | `/api/channels/:channelId/streams/:streamId/advanced-analytics` | Any authenticated membership in that channel; platform admin is also accepted by centralized middleware |
+
+The public alias cannot expose an owned connected-channel stream, even when its login matches `TWITCH_CHANNEL_LOGIN`; it returns `404` and the caller must use the channel-scoped route. For the channel-scoped route, guests receive the stable `401` envelope, authenticated non-members receive the stable `403` envelope, and a stream that does not belong to the selected channel returns `404`. The lookup is scoped by both channel and stream; it never returns another channel's data. Twitch-mode datasets are built only from Twitch-sourced rows and never substitute mock analytics.
+
+The successful response is calculated on demand from saved SQLite rows:
+
+```json
+{
+  "streamId": "string",
+  "channelId": 12,
+  "source": "twitch",
+  "generatedAt": "ISO date-time",
+  "dataQuality": {
+    "status": "complete",
+    "warnings": [],
+    "viewerSamples": 49,
+    "messages": 320,
+    "uniqueChatters": 44,
+    "markers": 5,
+    "historicalStreams": 5,
+    "hasAbsoluteTimestamps": true,
+    "collectedFrom": "2026-07-20T18:35:00.000Z",
+    "collectedPeriodOnly": true
+  },
+  "loyalty": {},
+  "clipSuggestions": [],
+  "eventImpact": [],
+  "retention": {}
+}
+```
+
+`dataQuality.status` is:
+
+- `complete`: the selected calculation has the expected timeline/history coverage;
+- `partial`: useful results exist, but timestamps, collection coverage, or one analytical input is incomplete;
+- `insufficient`: the saved rows cannot support a responsible result.
+
+Warnings are machine-readable strings suitable for localization. Counts describe the exact rows used, not inferred viewing activity. `collectedFrom` is the first locally observed ingest point. When it is later than the Twitch stream start, retention covers only the collected period.
+
+Current warning keys are `no-viewer-samples`, `limited-viewer-samples`, `no-chat-messages`, `insufficient-chat-history`, `missing-absolute-timestamps`, `collection-started-late`, and `no-markers`.
+
+### Configured thresholds
+
+All thresholds live in the exported `ADVANCED_ANALYTICS_CONFIG`; components do not duplicate them.
+
+| Area | Thresholds |
+| --- | --- |
+| Loyalty | At least 3 saved streams for sufficient history; recent window 5; regular at 3 attended streams; reactivated after at least 2 consecutively missed streams; top list limited to 10 |
+| Clips | At least 6 samples; 4 previous points for the rolling baseline; minimum score 28/100; saved-marker score floor 32/100 (score only); at most 5 windows; merge/marker proximity 1.5 median sample intervals; editorial window capped at 3 intervals around the winning peak; segment-start proximity 1 interval |
+| Clip normalization | Viewer baseline deviation target 25%; viewer point change target 18%; chat baseline deviation target 50%; chat point change target 45%; sustained-signal target 3 points with up to 8 score points and 0.08 confidence; own sample-timestamp coverage contributes up to 0.15 confidence |
+| Event impact | 3 median-cadence intervals before, 3 after, and 6 for extended recovery; at least 2 points on each side; notable change threshold 8% |
+| Viewer-curve retention | 3-point smoothing; first 15% for early baseline; sustained loss at least 12% for at least 2 consecutive smoothed and raw points; merge gap 1.5 median intervals; full recovery at 90% of the observed loss regained; partial recovery at 50%; segment summaries use 3 points |
+
+Median observed sample cadence converts point-based window settings into elapsed-time windows, so the API does not assume samples arrive once per minute.
+
+Clip confidence is `clamp(0.35 + 0.07 × reason count + min(sample count, 20) / 100 + 0.15 × own-timestamp share + 0.08 × duration strength)`. A marker affects confidence through the `marker-nearby` reason; the 32-point marker floor does not create a separate confidence floor. A valid stream start can anchor `HH:mm` samples for ISO output, but confidence timestamp coverage counts only parseable timestamps stored on the samples themselves.
+
+### Chat loyalty
+
+Loyalty is derived from saved `chat_messages` and, for non-Twitch legacy/mock history, aggregate `chatters` participation rows, grouped by normalized login and stream within the same channel. Zero-message aggregates are ignored. Because the legacy `chatters` table has no source column, real Twitch loyalty fails closed to source-tagged `chat_messages` only. It does not infer silent viewers or watch time. The deterministic mock seed includes aggregate message-count participation for archived demo streams.
+
+Categories are mutually exclusive. The service applies this priority:
+
+1. `insufficient-history` when there is not enough channel history for a confident classification;
+2. `new` when the selected stream is the first saved appearance;
+3. `reactivated` when an earlier participant returns after the configured consecutive-stream gap;
+4. `regular` when participation meets the configured recent-stream threshold;
+5. `returning` for any other participant with an earlier saved appearance.
+
+The section includes `activeParticipants`, `newParticipants` / `newShare`, `returningParticipants` / `returningShare`, `regularParticipants` / `regularShare`, `reactivatedParticipants` / `reactivatedShare`, `insufficientHistoryParticipants`, `knownParticipantsShare`, `averageStreamsAttended`, `historyStreamsUsed`, `isSufficient`, `topParticipants`, and the full `participants` list. Shares are fractions from `0` to `1`. Participant rows contain `login`, `streamsAttended`, `messagesInSelectedStream`, `firstKnownAt`, `lastKnownAt`, `category`, and `currentStreak`. Usernames remain source data and are not translated.
+
+### Clip suggestions
+
+Each candidate is an explainable, non-overlapping time window with:
+
+- `startTime`, `peakTime`, and `endTime`;
+- `durationMinutes`, sustained-signal `signalDurationMinutes`, and `viewerDirection` (`up`, `down`, or `neutral`);
+- normalized `score` and `confidence`;
+- localized/explainable reason keys and Russian/English summary text;
+- peak viewers and messages per minute;
+- deltas from local rolling baselines;
+- the related marker when present;
+- localized `text.ru` and `text.en`;
+- legacy `time` and `label` compatibility fields.
+
+Viewer and chat features are normalized before weighting, so absolute viewer scale cannot suppress chat variation. Both upward spikes and downward viewer cliffs can qualify. Signal duration contributes to score/confidence, and timestamp completeness contributes only to confidence. A nearby saved marker supplies a documented score floor and may create an editorial candidate on an otherwise flat timeline; an active segment by itself does not. Nearby high points are merged and no more than five candidates are returned. A flat/inadequate timeline without a qualifying saved marker returns an empty list rather than invented highlights.
+
+`durationMinutes` is the cadence-capped merged editorial window length. `signalDurationMinutes` is the median-cadence span of consecutive qualifying signal points for the winning peak candidate, so it may be longer than the proposed editing window.
+
+Clip confidence reflects reason count, sample depth, own-sample timestamp coverage, and sustained duration. Event confidence reflects before/after point coverage. Both are bounded numeric fractions from `0` to `1`; neither is a causal probability.
+
+### Event impact
+
+Each saved marker is compared with time-based windows strictly before and strictly after it; a sample aligned exactly with the marker is not counted in the post-event window. The service does not assume one-minute samples and reports the number of usable points. Results include before/after averages, absolute and percentage changes for viewers/chat, post-event peaks, time to peak, duration evidence, `confidence`, and one of:
+
+- `positive`
+- `negative`
+- `mixed`
+- `neutral`
+- `insufficient-data`
+
+Percentage change is omitted when its baseline is zero. Explanations use correlation language such as “after the event an increase was observed”; the API does not claim causation.
+
+Each event row also includes its saved identity/time/label/type, `dataPoints.before` and `dataPoints.after`, and localized `explanation.ru` / `explanation.en`. After a notable change, `effectDurationMinutes` measures marker-to-first-later-point time where both viewer and chat metrics return within ±8% of their pre-event baselines. If no such point exists, `effectDurationMinutes` is `null`, `effectObservedMinutes` measures marker-to-last-observed time in the extended window, and `effectCensored` is `true`. With insufficient data or no notable effect, both duration values remain `null` and `effectCensored` is `false`.
+
+### Viewer-curve retention
+
+Retention uses the aggregate viewer timeline, not unique-viewer sessions. It reports start/end/average/peak viewers, end-versus-start and early-baseline changes, notable drops, recovery counts, and the most stable/problematic segments.
+
+Each drop includes start, local minimum, recovery/end, absolute and percentage loss, duration, maximum recovery, recovery ratio, related markers/segments, and one status:
+
+- `recovered`
+- `partially-recovered`
+- `not-recovered`
+
+Rolling smoothing, a minimum percentage loss, matching consecutive-point requirements on both the smoothed and raw curves, nearby-drop merging, and an explicit recovery threshold prevent small noise or one isolated raw sample from becoming separate incidents. `maxRecovery` is the maximum intermediate regain, while `recoveryRatio` uses the terminal share of the observed start-to-trough loss regained after merged-drop recomputation. `recoveryTimeMinutes` is set only when the 90% threshold is reached and remains satisfied through the incident end; a later unrecovered leg therefore remains authoritative. An empty timeline returns the null/empty retention shell. A one-point timeline returns bounded start/end metrics and a one-point curve with no drops or segments; top-level `dataQuality` determines whether the overall response is insufficient.
+
+The section also returns the normalized/smoothed `curve`, `dropCount`, `recoveredDropCount`, `largestDrop`, `stableSegment`, and `problemSegment`. Curve points expose `time`, `elapsedMinutes`, `viewers`, and `smoothedViewers`.
 
 ## Local demo controls
 

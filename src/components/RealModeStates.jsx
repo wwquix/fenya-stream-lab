@@ -4,7 +4,7 @@ import { formatDashboardModeLabel } from '../utils/dashboardUi.js'
 
 export function RealModeNotice({ title, note }) {
   return (
-    <Reveal as="aside" className="real-mode-notice glass-panel" aria-label={title}>
+    <Reveal as="aside" className="real-mode-notice liquid-glass liquid-surface-elevated" aria-label={title}>
       <span className="twitch-state-badge is-offline">Twitch</span>
       <div>
         <strong>{title}</strong>
@@ -16,7 +16,7 @@ export function RealModeNotice({ title, note }) {
 
 export function RealDataEmptySection({ id, title, note, minHeight = 'medium' }) {
   return (
-    <Reveal as="section" className="section-panel real-empty-section" id={id} aria-labelledby={`${id}-title`}>
+    <Reveal as="section" className="section-panel real-empty-section liquid-glass liquid-surface" id={id} aria-labelledby={`${id}-title`}>
       <div className="section-heading">
         <div>
           <h2 id={`${id}-title`}>{title}</h2>
@@ -48,7 +48,7 @@ export function RealDataSummary({ connection, ingestStatus, metadata, chatAnalyt
   ]
 
   return (
-    <Reveal as="section" className="section-panel real-data-summary" id="summary" aria-labelledby="real-data-summary-title">
+    <Reveal as="section" className="section-panel real-data-summary liquid-glass liquid-surface" id="summary" aria-labelledby="real-data-summary-title" data-liquid-interactive>
       <div className="section-heading">
         <div>
           <h2 id="real-data-summary-title">{t.realSummaryTitle}</h2>

@@ -30,6 +30,7 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 - Validated JSON/CSV event imports with per-row job errors.
 - Replay Mode over Server-Sent Events at `1x`, `5x`, or `20x`.
 - Local summary generation with peaks, active segments, leaders, moderation load, clip suggestions, and health status.
+- On-demand advanced stream analytics for chat loyalty, explainable clip windows, event correlation, and aggregate viewer-curve retention.
 - JSON and Markdown reports for individual streams.
 - Russian and English interface support.
 - Static mock-data fallback when the local API is unavailable.
@@ -55,11 +56,21 @@ The repository is ready for project-specific screenshots, but no synthetic produ
 
 The project intentionally does not use TypeScript, Tailwind, a real Twitch SDK, or an OpenAI dependency.
 
+## Liquid Glass material
+
+The interface uses a restrained web adaptation of Liquid Glass rather than a copy of a system UI. Shared CSS tokens define the light and dark material variants, edge lighting, shadows, transparency, and backdrop enhancement.
+
+- Backdrop blur is limited to opt-in top-level and elevated surfaces.
+- Nested cards use a denser translucent background without a second blur.
+- A delegated, `requestAnimationFrame`-batched pointer highlight updates CSS variables without React state.
+- Touch/coarse pointers and reduced motion use a static highlight instead of pointer tracking.
+- Progressive fallbacks keep panels readable when `backdrop-filter` is unavailable or reduced transparency/forced colors are requested.
+
 ## Demo/mock mode
 
-Mock mode is the default portfolio experience. It requires no secrets, no Twitch account, and no backend credentials. It shows a complete deterministic dashboard with viewer timelines, chat leaderboards, word analytics, moderator workload, archive data, imports, replay, summaries, and local reports.
+Mock mode is the default portfolio experience. It requires no secrets, no Twitch account, and no backend credentials. It shows a complete deterministic dashboard with viewer timelines, saved chat-participation history for loyalty examples, chat leaderboards, word analytics, moderator workload, archive data, imports, replay, summaries, and local reports.
 
-If the local backend is unavailable during frontend development, the UI keeps a safe static mock fallback for the demo dashboard.
+If the local backend is unavailable during frontend development, the UI keeps a safe static fallback only for the `mock` dashboard after a transport or invalid-response failure. HTTP `4xx`/`5xx` responses and the `legacy-fenya` / `connected-channel` modes never receive mock analytics.
 
 ## Real Twitch mode
 
@@ -70,6 +81,10 @@ Real mode never uses mock analytics as fallback. When no rows have been collecte
 ## Known limitations
 
 - Live Twitch analytics exist only for events collected while the backend and ingest are running.
+- Chat loyalty measures saved chat participation, not viewing time or individual watch time.
+- Event impact is a correlation around saved markers; it does not establish that an event caused a metric change.
+- Audience retention is estimated from the aggregate viewer curve inside the collected period, not from per-viewer entry or exit data.
+- Suggested clip moments are ranked time windows for an editor; the project does not create or upload video clips.
 - Runtime ingest, replay, and mock sampler state is process-local and resets after restart.
 - SQLite is intended for local/demo deployment and single-process production experiments, not horizontal scale.
 - VOD sync is metadata-only unless a real internally collected stream session exists.
@@ -125,6 +140,8 @@ React hooks -> Express routes -> services/providers -> repositories -> SQLite
      +------ SSE replay events
 ```
 
+Advanced analytics follows the same boundary. The public stream alias selects only the configured-login, unowned compatibility scope, while the channel-scoped route enforces membership and binds both channel and stream. A repository loads the existing SQLite timeline and aggregates saved chat participation per stream/login, and pure service functions calculate the four analytical sections. Results are deterministic and calculated on demand; the first version does not add a parallel database or a result-cache table.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for lifecycle and boundary details.
 
 ## SQLite storage
@@ -152,6 +169,8 @@ Active replay timers and SSE clients do not survive a backend restart. Session m
 The default `localSummaryProvider` calculates report data from SQLite only. `mockSummaryProvider` remains available for deterministic fallback behavior. `openAiSummaryProvider` is an explicit non-functional placeholder; OpenAI is neither required nor called.
 
 Generated summaries are stored in `stream_summaries`. Stream reports are available as structured JSON and readable Markdown. See [docs/API.md](docs/API.md) for endpoints.
+
+The local summary reuses the advanced clip-ranking calculation for `suggestedClipMoments`. Enhanced candidates retain the legacy `time` and `label` fields used by existing reports while adding a ranked window, duration, direction, confidence, reasons, and normalized baseline deltas. Clip windows use ISO timestamps only when every viewer sample is anchored by its own timestamp or a valid stream start; otherwise all three window fields keep `HH:mm` labels instead of inventing a 1970 date. No external model or OpenAI call is involved.
 
 ## Twitch metadata integration
 
@@ -191,7 +210,7 @@ OAuth attempts expire after ten minutes. Multiple browser attempts can remain pe
 
 Stored Twitch user tokens refresh through `twitchTokenRefreshService`. Tokens within ten minutes of expiration refresh proactively, while account-aware Helix requests also refresh and retry once after a `401`. Twitch refresh-token rotation is persisted atomically as new AES-256-GCM ciphertext. Failed refreshes set `needs_reauth`; no token values are included in errors or scheduler logs. The legacy environment-token EventSub flow remains unchanged.
 
-The dashboard keeps the two data modes explicit:
+The dashboard keeps the two provider modes explicit:
 
 - `TWITCH_PROVIDER=mock` shows the complete deterministic demo dashboard and archive.
 - `TWITCH_PROVIDER=twitch` shows only Twitch rows actually collected into SQLite. Demo charts, leaderboards, summaries, moderation data, and archive sessions are not used as fallback in this mode.
@@ -263,7 +282,7 @@ Run the backend integration suite:
 npm test
 ```
 
-The suite covers health, database initialization, imports, reports, replay, Twitch metadata normalization, EventSub subscription setup, and Twitch SQLite aggregation. Twitch tests mock HTTP and WebSocket traffic and never contact Twitch.
+The suite covers health, database initialization, imports, reports, replay, Twitch metadata normalization, EventSub subscription setup, Twitch SQLite aggregation, pure advanced-analytics edge cases, channel/source isolation, and advanced API authorization. Twitch tests mock HTTP and WebSocket traffic and never contact Twitch.
 
 Recommended full verification:
 
@@ -304,6 +323,8 @@ Terminate HTTPS in nginx. Verify deployment with `curl https://stats.example.com
 ## API overview
 
 Base URL: `http://localhost:3001`. See [docs/API.md](docs/API.md) for the complete route table, request examples, responses, SSE events, and error behavior.
+
+Advanced analytics is available for an unowned legacy/local stream through `GET /api/streams/:streamId/advanced-analytics`; the compatibility lookup is restricted to the configured channel login and deliberately returns `404` for an owned connected-channel stream. Connected-channel clients use `GET /api/channels/:channelId/streams/:streamId/advanced-analytics` so membership authorization and channel isolation are enforced before analytics are calculated.
 
 ## Portfolio highlights
 

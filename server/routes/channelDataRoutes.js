@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { requireChannelRole } from "../middleware/authMiddleware.js";
 import { routeHandler } from "../middleware/errorHandlers.js";
 import {
   loadCurrentChatAnalyticsFromDatabase,
@@ -9,9 +10,12 @@ import {
   loadStreamArchiveFromDatabase,
 } from "../repositories/dashboardRepository.js";
 import { findChannelById } from "../repositories/channelRepository.js";
+import { CHANNEL_ROLES } from "../repositories/membershipRepository.js";
+import { getAdvancedStreamAnalytics } from "../services/advancedAnalyticsService.js";
 import { loadTwitchChannelMetadata } from "../services/twitchMetadataService.js";
 
 const router = Router();
+const readChannelAnalytics = requireChannelRole(CHANNEL_ROLES);
 
 router.get("/:channelId/twitch", routeHandler(async (req, res) => {
   const channel = findChannelById(req.params.channelId);
@@ -43,5 +47,15 @@ router.get("/:channelId/chat/current-stream", channelData(loadCurrentChatAnalyti
 router.get("/:channelId/words/current-stream", channelData(loadCurrentWordAnalyticsFromDatabase));
 router.get("/:channelId/moderation/current-stream", channelData(loadCurrentModerationAnalyticsFromDatabase));
 router.get("/:channelId/archive/streams", channelData(loadStreamArchiveFromDatabase));
+router.get("/:channelId/streams/:streamId/advanced-analytics", readChannelAnalytics, routeHandler(async (req, res) => {
+  const analytics = getAdvancedStreamAnalytics(req.params.streamId, {
+    channelId: req.params.channelId,
+  });
+  if (!analytics) {
+    res.status(404).json({ error: true, message: `Stream "${req.params.streamId}" was not found.` });
+    return;
+  }
+  res.json(analytics);
+}, "Failed to build channel advanced analytics"));
 
 export default router;

@@ -138,6 +138,71 @@ CSV must include `type`, `stream_id`, and `timestamp`. Unsupported event types a
 
 Status is `completed`, `completed_with_errors`, or `failed`. Duplicate supplied `eventId` values are rejected and recorded on the job. Use `/api/import/:jobId/errors` for row numbers, messages, and original normalized payloads.
 
+## Advanced analytics output
+
+Advanced analytics is a derived read model, not another import type or persisted event table. The endpoint combines one selected stream with route-scoped history: `channel_id`-bound history for a connected-channel route, or configured-login/unowned history for the public compatibility alias:
+
+```json
+{
+  "streamId": "2026-06-23",
+  "channelId": 12,
+  "source": "twitch",
+  "generatedAt": "2026-07-26T12:00:00.000Z",
+  "dataQuality": {
+    "status": "complete",
+    "warnings": [],
+    "viewerSamples": 49,
+    "messages": 320,
+    "uniqueChatters": 44,
+    "markers": 5,
+    "historicalStreams": 5,
+    "hasAbsoluteTimestamps": true,
+    "collectedFrom": "2026-06-23T19:00:00.000Z",
+    "collectedPeriodOnly": false
+  },
+  "loyalty": {},
+  "clipSuggestions": [],
+  "eventImpact": [],
+  "retention": {}
+}
+```
+
+### Time fields
+
+- Absolute ISO timestamps are preferred for ordering and elapsed-window calculations.
+- `HH:mm` labels are normalized relative to the saved stream start using the project's midnight rule when an absolute event timestamp is unavailable.
+- Algorithms operate on elapsed time, not sample-array positions. Irregular viewer-sample intervals are valid.
+- Clip windows use ISO `startTime`, `peakTime`, and `endTime` only when every viewer-sample point is anchored by its own parseable timestamp or a valid stream `started_at`. If any point remains unanchored, all three fields use `HH:mm`; no Unix-epoch/1970 timestamp is serialized. Stream-start anchoring does not count as own-sample timestamp coverage for clip confidence.
+- Clip rows expose `durationMinutes`, sustained-signal `signalDurationMinutes`, and `viewerDirection` (`up`, `down`, or `neutral`).
+- Retention drops reuse normalized timeline labels in `startTime`, `troughTime`, and `endTime`; `durationMinutes`, `recoveryTimeMinutes`, and curve `elapsedMinutes` carry the arithmetic meaning.
+- After a notable event change, `effectDurationMinutes` measures marker-to-first-later-point time where both metrics return within ±8% of baseline. If the effect is still present at the last extended-window point, `effectDurationMinutes` is `null`, `effectObservedMinutes` is the marker-to-last-point lower bound, and `effectCensored` is `true`.
+- `collectedFrom` is evidence of the locally observed boundary, not the Twitch broadcast start.
+
+### Quality and percentage semantics
+
+- `dataQuality.status` is `complete`, `partial`, or `insufficient`.
+- Missing timestamps, limited history, absent before/after windows, and collection that starts after broadcast start are represented by warnings.
+- A percentage change is `null` when the baseline is zero; the API never divides by zero or substitutes an arbitrary percentage.
+- Shares use the selected stream's normalized active chat participants as the denominator. A stream with no messages returns zero counts and an explicit insufficient/empty state.
+- Confidence expresses input completeness and signal agreement; it is not a probability that an event caused a result.
+- Retention `recoveryRatio` is the terminal share of the observed start-to-trough loss regained. `recovered` requires at least 90%, `partially-recovered` at least 50%, and merged drops are recomputed from the final combined window.
+- A notable retention loss must persist for at least two consecutive smoothed points and also contain a two-point raw below-threshold run; one isolated raw outlier is not a drop.
+
+### Enumerations
+
+- Loyalty category: `new`, `returning`, `regular`, `reactivated`, `insufficient-history`.
+- Event direction: `positive`, `negative`, `mixed`, `neutral`, `insufficient-data`.
+- Drop status: `recovered`, `partially-recovered`, `not-recovered`.
+- Quality status: `complete`, `partial`, `insufficient`.
+
+### Interpretation limits
+
+- Chat loyalty measures participation in saved messages. It is not individual watch time and excludes silent viewers.
+- Clip suggestions identify promising editing windows; they do not create or upload video.
+- Event impact is a before/after correlation around saved markers and does not prove causation.
+- Audience retention is derived from aggregate viewer counts for the collected period. The project has no per-viewer arrival/departure history.
+- Real Twitch mode never replaces missing Twitch rows with mock data.
+
 Committed examples:
 
 - `examples/sample-stream-events.json`

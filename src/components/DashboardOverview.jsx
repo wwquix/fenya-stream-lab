@@ -115,7 +115,7 @@ function DashboardOverview({ stream, moderators, events, chatters, streamSummary
   const cards = createBackendCards(streamSummary, t) ?? fallbackCards
 
   return (
-    <Reveal as="section" className="section-panel dashboard-overview" id="summary" aria-labelledby="dashboard-overview-title" data-entity-type="stream" data-entity-id={stream.id}>
+    <Reveal as="section" className="section-panel dashboard-overview liquid-glass liquid-surface" id="summary" aria-labelledby="dashboard-overview-title" data-entity-type="stream" data-entity-id={stream.id} data-liquid-interactive>
       <div className="section-heading">
         <div>
           <p className="eyebrow">{t.summaryKicker}</p>

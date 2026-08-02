@@ -39,7 +39,7 @@ function CustomSelect({ id, label, value, options, onChange, disabled = false })
       <span className="custom-select-label" id={`${id}-label`}>
         {label}
       </span>
-      <div className="custom-select-shell">
+      <div className="custom-select-shell liquid-control">
         <button
           className="custom-select-trigger"
           type="button"
