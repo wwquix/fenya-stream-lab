@@ -9,7 +9,9 @@ Ordinary API errors use a safe JSON envelope. Authentication and authorization f
 { "error": "forbidden", "message": "Insufficient permissions" }
 ```
 
-Malformed JSON returns `400` with `Request body contains invalid JSON.` Twitch login and `/api/me` use database-backed authentication. Every mutating `/api` request is guarded server-side: a channel owner may mutate only their channel, platform admins may perform administrative mutations, and chatter/moderator access is read-only. Legacy Fenya mutations require the Fenya channel owner or a platform admin.
+Malformed JSON returns `400` with `Request body contains invalid JSON.` Twitch login uses database-backed authentication. Production and Twitch mutations are guarded server-side: a channel owner may mutate only their channel, platform admins may perform administrative mutations, and chatter/moderator access is read-only. Legacy Fenya mutations require the configured channel owner, platform admin, or (ingest start/stop only) its linked reader. In development mock mode only, loopback clients may POST import/json, import/csv, replay/:streamId/start or stop, and streams/:streamId/summary/generate without a login. The exception never grants channel or Twitch write access.
+
+Browser mutations with an untrusted `Origin` return `403` before processing. Development accepts loopback HTTP(S) origins; production accepts only the origin from `APP_BASE_URL`. Requests without `Origin` remain usable for CLI clients and still undergo RBAC. OAuth login GET requests share the sensitive-request rate limit (120 requests per IP/minute, process-local).
 
 ## Authentication
 
@@ -22,7 +24,7 @@ Malformed JSON returns `400` with `Request body contains invalid JSON.` Twitch l
 
 Browser callback failures are rendered as a small safe HTML retry page. An expired, unknown, or process-lost OAuth state does not return the global JSON error contract and never includes cookie, state, token, or client-secret values.
 
-The callback never returns Twitch or session tokens. `/api/me` requires an active HTTP-only session cookie and returns `401` for guests. A locally allowlisted platform administrator receives `roleSummary.isPlatformAdmin: true` and `globalRoles: ["platform_admin"]`; this is an application role only and does not grant Twitch permissions or bypass OAuth scopes.
+The callback never returns Twitch or session tokens. `/api/me` returns a safe guest contract (`isLoggedIn: false`) without a session; authenticated callers receive their identity contract. It uses `Cache-Control: no-store`. The safe `provider` field also identifies mock/Twitch mode if the connection diagnostic request fails. `permissions.canWriteDemo` describes whether shared import/replay/summary writes are available to this caller (local development mock or platform admin). A locally allowlisted platform administrator receives `roleSummary.isPlatformAdmin: true` and `globalRoles: ["platform_admin"]`; this is an application role only and does not grant Twitch permissions or bypass OAuth scopes.
 
 `GET /auth/twitch/login?format=json` returns `{ authorizationUrl }` for the onboarding panel. Configuration failures use a safe readable `message`; the direct browser route renders a local HTML explanation instead of raw JSON.
 
@@ -160,7 +162,7 @@ Set `ALLOW_DEMO_WRITES=true` only for a deliberately isolated demo environment. 
 
 The connection route returns only presence flags, token validity/scopes, configured broadcaster ID, and a safe last error. It never returns token or client-secret values. These routes are local development diagnostics, not public authenticated operations.
 
-In production, legacy Fenya ingest/write helpers are disabled unless `ALLOW_DEMO_WRITES=true`. Prefer channel-scoped authenticated routes for real deployments.
+In production, legacy demo sample/reset/sampler helpers and legacy Twitch poll-once/VOD-sync/moderator-sync helpers are disabled unless `ALLOW_DEMO_WRITES=true`; that flag does not bypass RBAC. Ingest start/stop stays protected by authentication and channel/reader/admin permissions. Prefer channel-scoped authenticated sync routes for real deployments, keeping `ALLOW_DEMO_WRITES=false`.
 
 ### EventSub ingest
 
@@ -182,7 +184,7 @@ Moderator directory responses contain `available`, `missingScopes`, `message`, a
 
 Legacy start resolves the broadcaster through `TWITCH_CHANNEL_LOGIN` and the chat reader through the validated configured user token. Safe failures distinguish invalid tokens, missing chat-reader or broadcaster IDs, missing `user:read:chat`, and EventSub subscription rejection.
 
-Ingest requires `TWITCH_PROVIDER=twitch`, valid client credentials, and `TWITCH_USER_ACCESS_TOKEN` with `user:read:chat`. On start, the backend resolves the broadcaster, creates a WebSocket `channel.chat.message` subscription using the validated token user ID, and begins Helix polling. Chat messages are deduplicated by Twitch message ID and update `chat_messages`, `chatters`, `word_stats`, and stream totals. Live polls update stream title/category/start time and append `viewer_samples`.
+Ingest requires `TWITCH_PROVIDER=twitch`, valid client credentials, and a linked encrypted OAuth account with `user:read:chat`. Configure an allowed reader identity and complete `purpose=ingest` OAuth for the legacy configured channel. Environment user tokens are ignored unless `TWITCH_LEGACY_ENV_TOKEN_MODE=true` is explicitly enabled in development; production forbids that compatibility mode. On start, the backend resolves the broadcaster, creates a WebSocket `channel.chat.message` subscription using the validated token user ID, and begins Helix polling. Chat messages are deduplicated by Twitch message ID and update `chat_messages`, `chatters`, `word_stats`, and stream totals. Live polls update stream title/category/start time and append `viewer_samples`.
 
 Status responses contain connection IDs, timestamps, counters, provider state, and a safe `lastError`; they contain no credentials. Pool state, sockets, and timers are in memory and do not survive process restart. Mock mode remains available and refuses to start real ingest cleanly.
 

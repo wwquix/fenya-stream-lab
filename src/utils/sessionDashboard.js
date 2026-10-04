@@ -110,9 +110,9 @@ export function mergeSessionData(base, report, liveData = {}) {
   }
 }
 
-function csvCell(value) {
+export function csvCell(value) {
   const text = String(value ?? '')
-  const safeText = /^\s*[=+\-@]/.test(text) ? `'${text}` : text
+  const safeText = /^[\t\r\n]|^\s*[=+\-@＝＋－＠]/u.test(text) ? `'${text}` : text
   return `"${safeText.replaceAll('"', '""')}"`
 }
 

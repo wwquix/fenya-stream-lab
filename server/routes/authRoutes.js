@@ -23,6 +23,8 @@ import {
   validateOAuthAccessToken,
 } from "../services/twitchOAuthService.js";
 import { getIdentitySummary } from "../services/identityService.js";
+import { isLocalDemoRequest } from "../middleware/httpHardening.js";
+import { getTwitchProviderName } from "../services/twitchMetadataService.js";
 
 const router = Router();
 const OAUTH_STATE_COOKIE = "fenya_oauth_attempts";
@@ -222,7 +224,11 @@ router.post("/auth/logout", routeHandler(async (req, res) => {
 }, "Logout failed"));
 
 router.get("/api/me", routeHandler(async (req, res) => {
-  res.json(getIdentitySummary(req.user));
+  const identity = getIdentitySummary(req.user);
+  identity.provider = getTwitchProviderName();
+  identity.permissions.canWriteDemo = Boolean(identity.roleSummary.isPlatformAdmin || isLocalDemoRequest(req));
+  res.set("Cache-Control", "no-store");
+  res.json(identity);
 }, "Could not load current user"));
 
 export default router;

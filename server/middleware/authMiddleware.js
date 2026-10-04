@@ -5,6 +5,7 @@ import { findSessionByRawToken, SESSION_COOKIE_NAME } from "../services/sessionS
 import { userIsPlatformAdmin } from "../services/identityService.js";
 import { getDatabase } from "../storage/db.js";
 import { HttpError } from "./errorHandlers.js";
+import { isLocalDemoMutation } from "./httpHardening.js";
 
 function readCookie(cookieHeader, name) {
   if (!cookieHeader) return null;
@@ -125,6 +126,10 @@ export function requireChannelRole(roles) {
 
 export function requireApiMutationPermission(req, res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    next();
+    return;
+  }
+  if (isLocalDemoMutation(req)) {
     next();
     return;
   }

@@ -34,6 +34,9 @@ async function readJson(response, fallbackMessage) {
 }
 
 export function createTwitchAuthorization({ forceVerify = false, requestedScopes = [], purpose = null, targetChannelId = null } = {}) {
+  // Fail before retaining a pending attempt when OAuth is not configured.
+  const clientId = requiredEnv("TWITCH_CLIENT_ID");
+  const redirectUri = getTwitchRedirectUri();
   for (const [pendingState, context] of pendingStates) {
     if (context.expiresAt <= Date.now()) pendingStates.delete(pendingState);
   }
@@ -52,8 +55,8 @@ export function createTwitchAuthorization({ forceVerify = false, requestedScopes
   const scopes = [...new Set([...configuredScopes, ...REQUIRED_TWITCH_OAUTH_SCOPES, ...optionalScopes])];
   const query = new URLSearchParams({
     response_type: "code",
-    client_id: requiredEnv("TWITCH_CLIENT_ID"),
-    redirect_uri: getTwitchRedirectUri(),
+    client_id: clientId,
+    redirect_uri: redirectUri,
     scope: scopes.join(" "),
     state,
   });

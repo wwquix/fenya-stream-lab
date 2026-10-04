@@ -23,6 +23,7 @@ import { attachCurrentUser, requireApiMutationPermission } from "./middleware/au
 import {
   blockProductionDemoWrites,
   createCorsMiddleware,
+  createMutationOriginGuard,
   createRateLimitMiddleware,
   isSensitiveMutation,
   securityHeaders,
@@ -38,6 +39,7 @@ export function createApp({
 
   app.use(securityHeaders);
   app.use(createCorsMiddleware());
+  app.use(createMutationOriginGuard());
   app.use(createRateLimitMiddleware({ matcher: isSensitiveMutation }));
   app.use(express.json({ limit: "2mb" }));
   app.use(attachCurrentUser);
