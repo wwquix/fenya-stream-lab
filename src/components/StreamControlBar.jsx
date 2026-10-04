@@ -2,7 +2,7 @@ import CustomSelect from './CustomSelect.jsx'
 import { ProgressActionButton, Reveal } from './MotionPrimitives.jsx'
 import { formatCategory, formatStreamTitle } from '../i18n/translations.js'
 import { hasCollectionGap } from '../utils/dashboardUi.js'
-import { createSessionCsv, createSessionReportHtml, sessionExportFilename } from '../utils/sessionDashboard.js'
+import { createSessionCsv, createSessionReportHtml, csvCell, sessionExportFilename } from '../utils/sessionDashboard.js'
 
 function createCsv(stream) {
   const rows = [
@@ -10,7 +10,7 @@ function createCsv(stream) {
     ...stream.chartData.map((point) => [point.time, point.viewers, point.chatMessagesPerMinute, point.category, point.previewLabel ?? '']),
   ]
 
-  return rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\n')
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n')
 }
 
 function downloadCsv(stream) {
@@ -55,11 +55,11 @@ function formatCollectionTime(value, isRussian) {
   }).format(date)
 }
 
-function StreamControlBar({ streams, internalSessions = [], selectedSession = null, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, sessionDataLoading = false, theme, onToggleTheme, replay, streamSummary, t }) {
+function StreamControlBar({ streams, internalSessions = [], selectedSession = null, selectedStreamId, compareStreamId, onStreamChange, onCompareChange, twitchMetadata, twitchIngest, persistedMessageCount = 0, isTwitchMode, dashboardMode = 'mock', canManageChannel = false, readOnlyAccess = false, isDataModeLoading, sessionDataLoading = false, apiAvailable = true, demoWritesAllowed = true, theme, onToggleTheme, replay, streamSummary, t }) {
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? streams[0]
   const metadata = twitchMetadata?.metadata
   const streamOptions = streams.map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) }))
-  const preparingLabel = t.exportReport === 'Отчёт' ? 'Готовим...' : 'Preparing...'
+  const preparingLabel = t.preparingExport
   const compareOptions = [
     { value: '', label: t.compareOff },
     ...streams.filter((stream) => stream.id !== selectedStreamId).map((stream) => ({ value: stream.id, label: formatStreamTitle(stream, t) })),
@@ -67,12 +67,12 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
   const metadataTitle = metadata?.streamTitle || formatStreamTitle(selectedStream, t)
   const metadataCategory = metadata?.categoryName || formatCategory(selectedStream.summary?.bestCategory || selectedStream.category, t)
   const hasLiveState = typeof metadata?.isLive === 'boolean'
-  const liveLabel = hasLiveState ? (metadata.isLive ? t.liveNow : t.offlineNow) : t.mockFallback
-  const metadataStateClass = metadata?.isLive ? 'is-live' : 'is-offline'
+  const liveLabel = !apiAvailable ? t.staticDemoTitle : hasLiveState ? (metadata.isLive ? t.liveNow : t.offlineNow) : t.mockFallback
+  const metadataStateClass = apiAvailable && metadata?.isLive ? 'is-live' : 'is-offline'
   const isRussian = t.navTop === 'Топ'
   const themeLabel = theme === 'light' ? t.switchToDarkTheme : t.switchToLightTheme
   const replayOptions = [1, 5, 20].map((value) => ({ value, label: `${value}x` }))
-  const replayStatus = replay.error
+  const replayStatus = !apiAvailable ? t.serverActionsUnavailable : !demoWritesAllowed ? t.demoWritesRestricted : replay.error
     ? t.replayError
     : replay.status.isActive ? `${t.replayRunning} · ${replay.status.progress ?? 0}%` : t.replayIdle
 
@@ -214,7 +214,7 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
   return (
     <Reveal as="section" className="stream-control-bar glass-panel soft-glow" aria-label={t.streamControls}>
       <div className="stream-live-meta" aria-busy={twitchMetadata?.isLoading ? 'true' : 'false'}>
-        <span className={`stream-live-status ${metadataStateClass} ${metadata?.isLive ? 'live-pulse' : ''}`}>
+        <span className={`stream-live-status ${metadataStateClass} ${apiAvailable && metadata?.isLive ? 'live-pulse' : ''}`}>
           {twitchMetadata?.isLoading ? t.loadingMetadata : liveLabel}
         </span>
         <div className="stream-live-copy">
@@ -234,8 +234,8 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
             <span className={`replay-state ${replay.status.isActive ? 'is-active' : ''}`} aria-live="polite">{replayStatus}</span>
           </span>
           <div className="replay-actions">
-            <button className="liquid-button" type="button" disabled={replay.isPending || replay.status.isActive} onClick={() => replay.start().catch(() => undefined)}>{t.startReplay}</button>
-            <button className="liquid-button" type="button" disabled={replay.isPending || !replay.status.isActive} onClick={() => replay.stop().catch(() => undefined)}>{t.stopReplay}</button>
+            <button className="liquid-button" type="button" disabled={!apiAvailable || !demoWritesAllowed || replay.isPending || replay.status.isActive} onClick={() => replay.start().catch(() => undefined)}>{t.startReplay}</button>
+            <button className="liquid-button" type="button" disabled={!apiAvailable || !demoWritesAllowed || replay.isPending || !replay.status.isActive} onClick={() => replay.stop().catch(() => undefined)}>{t.stopReplay}</button>
           </div>
         </div>
       </div>
@@ -248,13 +248,13 @@ function StreamControlBar({ streams, internalSessions = [], selectedSession = nu
         <ProgressActionButton className="liquid-button" preparingLabel={preparingLabel} onAction={() => downloadCsv(selectedStream)}>
           {t.exportCsv}
         </ProgressActionButton>
-        <button className="liquid-button" type="button" disabled={streamSummary.isGenerating} onClick={() => streamSummary.generate().catch(() => undefined)}>
+        <button className="liquid-button" type="button" disabled={!apiAvailable || !demoWritesAllowed || streamSummary.isGenerating} onClick={() => streamSummary.generate().catch(() => undefined)}>
           {streamSummary.isGenerating ? t.generatingReport : t.generateReport}
         </button>
-        {streamSummary.summary ? <button className="liquid-button" type="button" onClick={downloadMarkdownReport}>{t.downloadReport}</button> : null}
+        {apiAvailable && streamSummary.summary ? <button className="liquid-button" type="button" onClick={downloadMarkdownReport}>{t.downloadReport}</button> : null}
       </div>
-      {streamSummary.error ? <p className="control-feedback is-error" role="alert">{t.reportError}</p> : null}
-      {!streamSummary.isLoading && !streamSummary.summary && !streamSummary.error ? <p className="control-feedback">{t.reportEmpty}</p> : null}
+      {apiAvailable && streamSummary.error ? <p className="control-feedback is-error" role="alert">{t.reportError}</p> : null}
+      {apiAvailable && !streamSummary.isLoading && !streamSummary.summary && !streamSummary.error ? <p className="control-feedback">{t.reportEmpty}</p> : null}
     </Reveal>
   )
 }

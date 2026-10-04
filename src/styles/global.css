@@ -8215,10 +8215,10 @@ dt,
   appearance: none;
   min-height: 38px;
   padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--theme-border);
   border-radius: 16px;
-  color: rgba(255, 255, 255, 0.84);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--theme-text-primary);
+  background: var(--theme-hover);
   box-shadow: none;
   cursor: pointer;
   white-space: nowrap;
@@ -8227,8 +8227,8 @@ dt,
 
 .import-file-field .liquid-button:hover,
 .import-submit:not(:disabled):hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--theme-border-soft);
+  background: var(--theme-card-elevated);
   box-shadow: none;
   transform: none;
 }

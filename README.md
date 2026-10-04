@@ -3,7 +3,7 @@ You can try it https://89-169-55-49.nip.io/
 The current version supports mock/local data, JSON/CSV imports, Replay Mode, SQLite storage, local reports, real Twitch channel/live polling through Helix, and process-local EventSub WebSocket chat ingestion into SQLite.
 
 ## Screenshots
-The repository is ready for project-specific screenshots, but no synthetic product screenshots are committed. Recommended portfolio captures:
+The screenshots below show the existing dashboard and its main sections:
 
 1. Full desktop dashboard with Stream Pulse and summary cards.
 <img width="1875" height="762" alt="image" src="https://github.com/user-attachments/assets/e10357e5-b585-41e3-a8d8-382dc91d61d2" />
@@ -77,10 +77,12 @@ Real mode never uses mock analytics as fallback. When no rows have been collecte
 
 ## Run locally
 
-Requirements: a current Node.js release and npm.
+Requirements: Node.js 22.13+ on the 22.x line, or Node.js 24+ with npm. CI uses Node.js 22. Use `npm ci` to reproduce the committed lockfile. SQLite includes a native module; installation needs its supported prebuilt binary or a working native build toolchain.
+
+After switching Node.js major versions, run `npm ci` again; a `better-sqlite3` binary built for one Node ABI cannot be reused with another. If npm restricts dependency install scripts, explicitly allow the trusted `better-sqlite3` install/rebuild step using your npm version's script approval mechanism.
 
 ```bash
-npm install
+npm ci
 ```
 
 Create the optional local environment file (it is ignored by Git and must never be committed):
@@ -114,6 +116,10 @@ npm run dev
 ```
 
 Vite proxies relative `/api` requests to `http://localhost:3001`.
+
+Open `http://localhost:5173/`. In development mock mode, loopback clients can import JSON/CSV, run replay, and generate local summaries without a Twitch login. This exception applies only to these demo operations: Twitch ingest and channel mutations still require authentication. Production does not allow guest writes; shared imports/replay/summary generation require a platform administrator, and the UI disables those controls for other users. Do not expose a development server through a public reverse proxy.
+
+`PORT` changes the backend port only; if changed, also update the proxy target in `vite.config.js`. `npm run preview` previews static assets and does not proxy the API. For full production behavior, set `NODE_ENV=production` and `DATABASE_PATH`, build, and run Express as described below.
 
 ## Backend architecture
 
@@ -162,8 +168,9 @@ TWITCH_PROVIDER=twitch
 TWITCH_CHANNEL_LOGIN=fenya
 TWITCH_CLIENT_ID=your_client_id
 TWITCH_CLIENT_SECRET=your_client_secret
-TWITCH_USER_ACCESS_TOKEN=your_user_token
-TWITCH_REFRESH_TOKEN=your_refresh_token
+TOKEN_ENCRYPTION_KEY=your_32_byte_hex_or_base64_key
+TWITCH_CHAT_READER_LOGIN=your_chat_reader_login
+TWITCH_LEGACY_ENV_TOKEN_MODE=false
 TWITCH_LIVE_INGEST_AUTOSTART=false
 TWITCH_POLL_INTERVAL_MS=30000
 TWITCH_EVENTSUB_RECONNECT_MS=5000
@@ -171,7 +178,9 @@ TWITCH_EVENTSUB_RECONNECT_MS=5000
 
 The backend uses Twitch Client Credentials, caches the app access token in memory, and resolves Helix user, channel, and current-stream data. `GET /api/twitch/fenya/connection` provides secret-free local diagnostics.
 
-Start real ingestion with `POST /api/twitch/fenya/ingest/start`. It validates the configured user token and its `user:read:chat` scope, opens Twitch EventSub WebSocket, subscribes to `channel.chat.message`, stores messages and aggregates in SQLite, and polls live metadata/viewer samples at `TWITCH_POLL_INTERVAL_MS`. Status and stop routes are documented in [docs/API.md](docs/API.md). The connection and timers are process-local and must be restarted after the backend restarts.
+Connect the configured chat reader through the dashboard's reader OAuth action (`purpose=ingest`). This stores an encrypted OAuth account in SQLite and links it to the configured channel. Prefer `TWITCH_CHAT_READER_USER_ID` over the login allowlist once the ID is known. Authenticated authorized users can then start real ingestion with `POST /api/twitch/fenya/ingest/start`, or use the protected channel-scoped controls. The service validates `user:read:chat`, opens EventSub, stores chat events, and polls Helix at `TWITCH_POLL_INTERVAL_MS`. Status and stop routes are documented in [docs/API.md](docs/API.md). The connection and timers are process-local and must be restarted after the backend restarts.
+
+For development compatibility only, `TWITCH_LEGACY_ENV_TOKEN_MODE=true` enables `TWITCH_USER_ACCESS_TOKEN` and `TWITCH_REFRESH_TOKEN`; both must be configured. Production rejects this mode. Legacy environment tokens are otherwise ignored. They are separate from browser OAuth accounts.
 
 The runtime ingest implementation is a channel-keyed connection pool. Authorized channel owners/admins can use `/api/channels/:channelId/ingest/*`; each channel owns an independent EventSub socket, polling timer, reconnect state, and runtime counters. Starting the same channel twice reuses its existing connection, while stopping one channel leaves others running. The historical `/api/twitch/fenya/ingest/*` routes remain wrappers around a dedicated legacy pool entry.
 
@@ -212,12 +221,16 @@ In Twitch mode, use the compact dashboard status panel to start or stop ingest. 
 | `TOKEN_ENCRYPTION_KEY` | empty | 32-byte hex/base64 key; required when Twitch tokens are stored |
 | `TWITCH_PROVIDER` | `mock` | `mock` or real Helix metadata via `twitch` |
 | `TWITCH_CHANNEL_LOGIN` | `fenya` | Channel login to resolve |
+| `TWITCH_CHAT_READER_USER_ID` | empty | Allowed reader Twitch ID; preferred, one reader identity is required in production Twitch mode |
+| `TWITCH_CHAT_READER_LOGIN` | empty | Initial reader login allowlist when its ID is not configured |
 | `TWITCH_CLIENT_ID` | empty | Required in Twitch mode |
 | `TWITCH_CLIENT_SECRET` | empty | Required in Twitch mode; server-side only |
 | `TWITCH_REDIRECT_URI` | `http://localhost:3001/auth/twitch/callback` | Must exactly match the Twitch app OAuth redirect URL |
+| `TWITCH_OAUTH_SCOPES` | empty | Optional additional browser-login scopes; `user:read:chat` is always requested |
 | `AUTH_SUCCESS_REDIRECT_URI` | `http://localhost:5173/` | Legacy/local post-login fallback when `APP_BASE_URL` is absent |
-| `TWITCH_USER_ACCESS_TOKEN` | empty | Required for EventSub; must include `user:read:chat` |
-| `TWITCH_REFRESH_TOKEN` | empty | Configure for in-memory user-token refresh |
+| `TWITCH_LEGACY_ENV_TOKEN_MODE` | `false` | Explicit development-only compatibility mode; forbidden in production |
+| `TWITCH_USER_ACCESS_TOKEN` | empty | Required only in legacy environment-token mode, with `user:read:chat` |
+| `TWITCH_REFRESH_TOKEN` | empty | Required only in legacy environment-token mode |
 | `TWITCH_BROADCASTER_ID` | empty | Optional override; otherwise resolved from channel login |
 | `TWITCH_BOT_USER_ID` | empty | Optional safety check against the validated token user ID |
 | `TWITCH_POLL_INTERVAL_MS` | `30000` | Live Helix polling interval (minimum 1000 ms) |
@@ -231,13 +244,13 @@ In Twitch mode, use the compact dashboard status panel to start or stop ingest. 
 | `ALLOW_DEMO_WRITES` | `false` | Allow legacy demo mutation/reset endpoints in production; keep `false` for public deployments |
 | `REPLAY_MS_PER_STREAM_MINUTE` | `250` | Local replay timing scale before speed multiplier |
 
-No credentials are required in the default mock mode. Twitch mode requires client credentials and a user token with `user:read:chat`; configure a refresh token as well so the local process can refresh an expired user token. `TOKEN_ENCRYPTION_KEY` is required only when durable Twitch token storage is used. Generate and keep it in the ignored local `.env`; `.env` and all secrets must never be committed.
+No credentials are required in the default mock mode. Twitch mode requires client credentials and an OAuth account with `user:read:chat`. Production uses the encrypted account stored in SQLite, not environment user tokens, and requires `TOKEN_ENCRYPTION_KEY` plus an allowed chat reader identity. Generate a key from 32 random bytes encoded as hex/base64 and keep it in the ignored local `.env`; `.env` and all secrets must never be committed. The root `.env` belongs to the backend and is not loaded by Vite. Never place secrets in `VITE_*` variables.
 
 Optional `PLATFORM_ADMIN_TWITCH_IDS` and `PLATFORM_ADMIN_TWITCH_LOGINS` comma-separated allowlists define local Fenya Stream Lab administrators independently from channel roles. `/api/me` exposes this only as `roleSummary.isPlatformAdmin` and `globalRoles: ["platform_admin"]`; it does not expose the allowlist itself. Platform admin never grants Twitch broadcaster/moderator permissions and never bypasses OAuth scopes. The archive can synchronize the latest 50 Twitch VOD metadata records; it does not invent chat, viewer, word, or moderation analytics for VOD-only entries.
 
 Channel roles are assigned automatically from Twitch identity and channel ownership; there is no manual role switch in the dashboard. The platform-admin badge is a local application role only. Twitch still requires the matching OAuth scopes for each protected operation. The VOD archive contains Twitch metadata only, while full chat, word, viewer, and moderation analytics exist only for streams collected live by Fenya Stream Lab.
 
-Server-side RBAC protects every mutating `/api` request. Channel owners may control and synchronize only their own channel, while locally allowlisted platform admins can perform administrative mutations. Chatter and moderator roles are read-only; hiding controls in the frontend is only a UX layer and is not the security boundary.
+Server-side RBAC protects production and Twitch mutations. Only loopback development mock import/replay/summary operations have the documented demo exception. Channel owners may control and synchronize only their own channel, while locally allowlisted platform admins can perform administrative mutations. Chatter and moderator roles are read-only outside the local demo exception; hiding controls in the frontend is only a UX layer and is not the security boundary. Browser mutations reject an untrusted `Origin`; API clients without `Origin` still require the applicable authorization. OAuth login attempts are rate-limited.
 
 The current channel moderator list is optional and requires `moderation:read`. The dashboard asks for it only when an owner explicitly reconnects Twitch from the moderator section. This stage stores and displays the directory only; moderator actions, bans, timeouts, and moderation EventSub analytics remain future work.
 
@@ -286,6 +299,16 @@ NODE_ENV=production npm start
 ```
 
 Set at least `NODE_ENV=production`, `PORT=3001`, `APP_BASE_URL=https://stats.example.com`, `TWITCH_REDIRECT_URI=https://stats.example.com/auth/twitch/callback`, and a writable absolute `DATABASE_PATH`. Add the exact callback URL to the Twitch developer console. Keep Twitch credentials, token encryption keys, and tokens only in the ignored `.env`. A systemd service can run `npm start` from the project directory with `EnvironmentFile=/path/to/app/.env`.
+
+For Twitch deployments also set `TWITCH_PROVIDER=twitch`, `TWITCH_CHANNEL_LOGIN`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`, and `TWITCH_CHAT_READER_USER_ID` (or initial `TWITCH_CHAT_READER_LOGIN`). Complete browser OAuth for the reader before expecting ingest to work. With autostart enabled, restart after linking the reader, or start it through an authorized UI session. Do not enable `TWITCH_LEGACY_ENV_TOKEN_MODE` in production. For a production mock demo, only `NODE_ENV=production` and a writable `DATABASE_PATH` are mandatory for startup; guest writes remain disabled.
+
+PowerShell production mock example, after copying `.env.example` and setting `DATABASE_PATH`:
+
+```powershell
+npm run build
+$env:NODE_ENV = 'production'
+npm start
+```
 
 Proxy the public origin to the one local service; Express serves `dist`, `/api/*`, `/auth/*`, and `/health`:
 

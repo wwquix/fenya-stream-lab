@@ -21,6 +21,40 @@ function originFrom(value) {
   }
 }
 
+function isAllowedOrigin(origin, env) {
+  return env.NODE_ENV === "production"
+    ? Boolean(originFrom(env.APP_BASE_URL) && origin === originFrom(env.APP_BASE_URL))
+    : LOCAL_ORIGIN_PATTERN.test(origin);
+}
+
+export function createMutationOriginGuard(env = process.env) {
+  return (req, res, next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+    const origin = req.get("Origin");
+    const rejected = origin !== undefined
+      ? !isAllowedOrigin(origin, env)
+      : req.get("Sec-Fetch-Site") === "cross-site";
+    if (rejected) {
+      return res.status(403).json({ error: true, message: "Request origin is not allowed." });
+    }
+    return next();
+  };
+}
+
+export function isLocalDemoRequest(req, env = process.env) {
+  const address = req.socket?.remoteAddress;
+  const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(address);
+  const localOrigin = !req.headers.origin || LOCAL_ORIGIN_PATTERN.test(req.headers.origin);
+  return (env.NODE_ENV || "development") === "development"
+    && (env.TWITCH_PROVIDER || "mock").trim().toLowerCase() === "mock"
+    && loopback && localOrigin;
+}
+
+export function isLocalDemoMutation(req, env = process.env) {
+  const demoPath = /^\/(?:import\/(?:json|csv)|replay\/[^/]+\/(?:start|stop)|streams\/[^/]+\/summary\/generate)\/?$/;
+  return isLocalDemoRequest(req, env) && req.method === "POST" && demoPath.test(req.path);
+}
+
 export function createCorsMiddleware(env = process.env) {
   const nodeEnv = env.NODE_ENV || "development";
   const productionOrigin = originFrom(env.APP_BASE_URL);
@@ -116,6 +150,8 @@ export function createRateLimitMiddleware({
 }
 
 export function isSensitiveMutation(req) {
+  // Starting OAuth allocates state even though browser navigation uses GET.
+  if (["GET", "HEAD"].includes(req.method) && /^\/auth\/twitch\/login\/?$/i.test(req.path)) return true;
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return false;
   return req.path.startsWith("/auth/")
     || req.path.startsWith("/api/import")

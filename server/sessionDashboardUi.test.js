@@ -85,6 +85,13 @@ describe('restored session dashboard controls', () => {
     expect(csv).not.toContain('"=HYPERLINK')
   })
 
+  test.each(['＝SUM(1,1)', '＋1', '－1', '＠SUM(1)', '\ttext', '\rtext', '\ntext'])('CSV export quotes dangerous leading text: %j', (title) => {
+    const session = { title, samples: [{ time: '12:00', viewers: 42, messagesPerMinute: 3 }] }
+    const csv = createSessionCsv(session)
+    expect(csv).toContain(`"'${title}"`)
+    expect(csv).toContain('"42","3"')
+  })
+
   test('HTML report marks missing metrics as unavailable and escapes session text', () => {
     const html = createSessionReportHtml({ title: '<Unsafe>', date: null, samples: [], topChatters: [], topWords: [] }, 'Not available')
     expect(html).toContain('&lt;Unsafe&gt;')

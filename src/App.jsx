@@ -97,7 +97,7 @@ function App() {
   const wordAnalytics = useWordAnalytics({ channelId })
   const moderationAnalytics = useModerationAnalytics({ channelId })
   const streamArchive = useStreamArchive({ channelId })
-  const dashboardMode = channelId ? 'connected-channel' : twitchIngest.connection?.provider === 'twitch' ? 'legacy-fenya' : 'mock'
+  const dashboardMode = channelId ? 'connected-channel' : (twitchIngest.connection?.provider ?? identity.identity?.provider) === 'twitch' ? 'legacy-fenya' : 'mock'
   const isTwitchMode = dashboardMode !== 'mock'
   const streamSummary = useStreamSummary(selectedStream.id, { enabled: !isTwitchMode })
   const replay = useReplay(selectedStream.id, { enabled: !isTwitchMode })
@@ -190,10 +190,10 @@ function App() {
     && !twitchIngest.connection?.needsReauth,
   )
   const renderedSectionIds = useMemo(() => (
-    backendUnavailable || isDataModeLoading
+    isDataModeLoading
       ? ['top']
       : allSectionIds
-  ), [backendUnavailable, isDataModeLoading])
+  ), [isDataModeLoading])
   const replayChatAnalytics = useMemo(() => {
     if (!replay.data.chatMessages.length) return null
     const counts = new Map()
@@ -285,14 +285,6 @@ function App() {
     setCompareStreamId((currentCompareId) => (currentCompareId === streamId ? '' : currentCompareId))
   }
 
-  if (backendUnavailable) {
-    return (
-      <main className="app-shell app-error-shell">
-        <AppErrorState title={t.backendUnavailableTitle} message={t.backendUnavailableMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
-      </main>
-    )
-  }
-
   return (
     <main className="app-shell">
       <Hero stream={selectedStream} activeSection={activeSection} language={language} onToggleLanguage={() => setLanguage((current) => (current === 'ru' ? 'en' : 'ru'))} t={t} />
@@ -300,7 +292,10 @@ function App() {
       <BackToTop isVisible={showBackToTop} />
 
       <div className="content-grid" id="dashboard">
+        {backendUnavailable ? <AppErrorState compact title={t.staticDemoTitle} message={t.staticDemoMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} /> : null}
         <StreamControlBar
+          apiAvailable={!backendUnavailable}
+          demoWritesAllowed={Boolean(identity.identity?.permissions?.canWriteDemo)}
           streams={streams}
           internalSessions={internalSessions}
           selectedSession={selectedSession}
@@ -323,7 +318,7 @@ function App() {
           streamSummary={streamSummary}
           t={t}
         />
-        <ChannelOnboardingPanel
+        {!backendUnavailable ? <ChannelOnboardingPanel
           t={t}
           identity={identity.identity}
           canConnectChannel={Boolean(identity.identity?.permissions?.canControlIngest)}
@@ -340,7 +335,7 @@ function App() {
             setSelectedChannel(channel)
             document.getElementById('dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }}
-        />
+        /> : null}
         {dashboardRequestFailed ? (
           <AppErrorState compact title={t.apiRequestFailedTitle} message={t.apiRequestFailedMessage} actionLabel={t.retryRequest} onAction={() => window.location.reload()} />
         ) : null}
@@ -415,7 +410,7 @@ function App() {
               channelLogin={selectedChannel?.twitchLogin}
               t={t}
             />
-            <ImportDataPanel t={t} />
+            <ImportDataPanel t={t} apiAvailable={!backendUnavailable} canImport={Boolean(identity.identity?.permissions?.canWriteDemo)} />
           </>
         ) : (
           <>
@@ -462,7 +457,7 @@ function App() {
               streamSummary={streamSummary.summary}
               t={t}
             />
-            <ImportDataPanel t={t} />
+            <ImportDataPanel t={t} apiAvailable={!backendUnavailable} canImport={Boolean(identity.identity?.permissions?.canWriteDemo)} />
           </>
         )}
       </div>

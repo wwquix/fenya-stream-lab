@@ -184,5 +184,10 @@ export function subscribeToReplay(streamId, response) {
   }
   session.clients.add(response);
   send(response, session.status === "running" ? "replay_started" : "replay_finished", publicStatus(session));
-  return () => session.clients.delete(response);
+  return () => {
+    // startReplay replaces the idle session object but reuses its client set.
+    session.clients.delete(response);
+    const current = sessions.get(normalizedId);
+    if (current?.status === "idle" && current.clients.size === 0) sessions.delete(normalizedId);
+  };
 }

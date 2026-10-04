@@ -1,13 +1,15 @@
 import { useRef, useState } from 'react'
 import { Reveal } from './MotionPrimitives.jsx'
+import { getNextTabIndex } from '../utils/tabNavigation.js'
 
 const emptyResult = {
   successCount: 0,
   rejectedCount: 0,
 }
 
-function ImportDataPanel({ t }) {
+function ImportDataPanel({ t, apiAvailable = true, canImport = true }) {
   const fileInputRef = useRef(null)
+  const tabRefs = useRef([])
   const [format, setFormat] = useState('json')
   const [contents, setContents] = useState('')
   const [sourceName, setSourceName] = useState('')
@@ -26,6 +28,14 @@ function ImportDataPanel({ t }) {
     setState(contents.trim() ? 'ready' : 'idle')
     setMessage(contents.trim() ? t.importReady : t.importIdle)
     resetResult()
+  }
+
+  function handleTabKeyDown(event, index) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const nextIndex = getNextTabIndex(index, event.key, 2)
+    handleFormatChange(['json', 'csv'][nextIndex])
+    tabRefs.current[nextIndex]?.focus()
   }
 
   function handleContentsChange(event) {
@@ -59,7 +69,7 @@ function ImportDataPanel({ t }) {
   }
 
   async function handleImport() {
-    if (!contents.trim() || state === 'importing') {
+    if (!apiAvailable || !canImport || !contents.trim() || state === 'importing') {
       return
     }
 
@@ -125,12 +135,17 @@ function ImportDataPanel({ t }) {
       <div className="import-panel-grid">
         <div className="import-input-panel glass-panel">
           <div className="import-mode-tabs" role="tablist" aria-label={t.importFormatLabel}>
-            {['json', 'csv'].map((item) => (
+            {['json', 'csv'].map((item, index) => (
               <button
                 className={format === item ? 'is-active' : ''}
                 type="button"
                 role="tab"
+                id={`import-tab-${item}`}
+                aria-controls="import-inputs"
                 aria-selected={format === item}
+                tabIndex={format === item ? 0 : -1}
+                ref={(element) => { tabRefs.current[index] = element }}
+                onKeyDown={(event) => handleTabKeyDown(event, index)}
                 onClick={() => handleFormatChange(item)}
                 key={item}
               >
@@ -139,6 +154,7 @@ function ImportDataPanel({ t }) {
             ))}
           </div>
 
+          <div id="import-inputs" role="tabpanel" aria-labelledby={`import-tab-${format}`}>
           <div className="import-file-field">
             <span id="import-file-label">{t.importUploadLabel}</span>
             <input
@@ -148,9 +164,10 @@ function ImportDataPanel({ t }) {
               accept=".json,.csv,application/json,text/csv"
               aria-hidden="true"
               tabIndex="-1"
+              disabled={!apiAvailable || !canImport}
               onChange={handleFileChange}
             />
-            <button className="liquid-button" type="button" onClick={() => fileInputRef.current?.click()}>
+            <button className="liquid-button" type="button" disabled={!apiAvailable || !canImport} onClick={() => fileInputRef.current?.click()}>
               {t.importChooseFile}
             </button>
             <small>{sourceName || t.importNoFile}</small>
@@ -164,23 +181,25 @@ function ImportDataPanel({ t }) {
               onChange={handleContentsChange}
               placeholder={format === 'json' ? t.importJsonPlaceholder : t.importCsvPlaceholder}
               spellCheck="false"
+              disabled={!apiAvailable || !canImport}
             />
           </label>
 
           <button
             className="liquid-button import-submit"
             type="button"
-            disabled={!contents.trim() || state === 'importing'}
+            disabled={!apiAvailable || !canImport || !contents.trim() || state === 'importing'}
             onClick={handleImport}
           >
             {state === 'importing' ? t.importing : t.importAction}
           </button>
+          </div>
         </div>
 
         <aside className="import-result-panel glass-panel" aria-live="polite">
           <div className={`import-state is-${state}`}>
             <span>{t.importStateLabel}</span>
-            <strong>{message}</strong>
+            <strong>{!apiAvailable ? t.serverActionsUnavailable : !canImport ? t.demoWritesRestricted : message}</strong>
           </div>
 
           <div className="import-counts">

@@ -16,7 +16,7 @@ React hooks -> Express routes -> services/providers |
                                   repositories -> SQLite
 ```
 
-The frontend keeps committed mock datasets as a defensive fallback only in mock mode. With `TWITCH_PROVIDER=twitch`, dashboard routes and components accept only SQLite rows sourced from Twitch and render explicit empty states instead of demo fallback data.
+The frontend keeps committed mock datasets as a defensive fallback in mock mode. If both bootstrap requests fail before a provider is known, it shows an explicitly labeled static demo and disables server actions. This never claims to be Twitch analytics. Once Twitch mode is known, dashboard routes and components accept only SQLite rows sourced from Twitch and render explicit empty/error states instead of demo fallback data.
 
 ## Backend layers
 
@@ -73,7 +73,7 @@ SQLite has no row-level security (RLS). All application access control therefore
 - `requireChannelRole([...])` resolves `req.params.channelId` through `channel_memberships`, rejects disallowed users with `403`, and attaches `req.channelRole`.
 - `requireSelfOrChannelRole(...)` permits the matching linked Twitch identity or one of the explicitly allowed channel roles.
 
-Protected route handlers must compose these guards and must not implement custom ad-hoc ownership or role checks. In particular, handlers must not compare owner IDs or membership roles with inline `if` statements. The current legacy single-channel Fenya routes remain public during the staged multi-user migration; passive session attachment and the new login flow do not change their behavior.
+Protected route handlers compose these guards. Legacy read endpoints remain public, but mutation middleware checks production and Twitch writes. Only loopback development mock import/replay/summary operations have a narrow unauthenticated exception; channel and Twitch writes never do. A separate Origin guard rejects untrusted browser mutations. Frontend disabled controls mirror permissions and are not an authorization boundary.
 
 ### Twitch login flow
 
@@ -121,7 +121,7 @@ If the requested stream has no detailed events, seeded demo events are used with
 
 `twitchIngestPoolService` owns ingest runtime state as `Map<channelId, ingestState>`. Every entry has its own socket, EventSub session/subscription IDs, poll/watchdog/reconnect timers, current stream session, counters, and error state. Per-channel start is duplicate-safe, stop is idempotent, reconnect/migration creation is serialized, and shutdown stops the full pool. `twitchIngestService` remains only as the Fenya compatibility facade.
 
-The compatibility facade resolves its broadcaster from `TWITCH_CHANNEL_LOGIN` through Helix and its chat reader from the validated environment user token; it does not require a browser session. The frontend ingest hook uses `/api/twitch/fenya/ingest/*` by default and switches to the RBAC-protected `/api/channels/:channelId/ingest/*` contract when given a channel ID. Actions have a bounded client timeout and always clear pending state.
+The compatibility facade resolves its broadcaster from `TWITCH_CHANNEL_LOGIN` through Helix and uses the channel's encrypted OAuth reader account. Environment tokens require explicit development-only `TWITCH_LEGACY_ENV_TOKEN_MODE=true`. API start/stop controls require a platform admin, channel owner, or linked ingest reader. The frontend ingest hook uses `/api/twitch/fenya/ingest/*` by default and switches to the RBAC-protected `/api/channels/:channelId/ingest/*` contract when given a channel ID. Actions have a bounded client timeout and always clear pending state.
 
 `twitchIngestRepository` resolves a concrete `channel_id` and writes `stream_session_id` on Twitch streams, viewer samples, and chat messages. Current-stream lookup and offline completion are channel-scoped, preventing one broadcaster from becoming another channel's chat target. Legacy configuration creates or resolves its channel record automatically.
 
@@ -141,15 +141,15 @@ The frontend has three explicit data modes: `mock`, `legacy-fenya`, and `connect
 
 ## Test architecture
 
-Vitest runs one backend integration file with file-level parallelism disabled. Before each test it:
+Vitest runs the backend integration suites and frontend helper/rendering tests under `server/**/*.test.js`, with file-level parallelism disabled. Database-backed suites:
 
 1. creates a unique operating-system temporary directory;
 2. points `DATABASE_PATH` at a new SQLite file;
 3. forces mock Twitch and local summaries;
 4. seeds deterministic data only when the test needs it.
 
-After each test the database singleton is closed, environment overrides are removed, and the temporary directory is deleted. Tests never import `server/index.js`, load Twitch/OpenAI credentials, or open the normal local database.
+After each database-backed test the database singleton is closed, environment overrides are removed, and the temporary directory is deleted. Tests do not start `server/index.js`, load Twitch/OpenAI credentials, or open the normal local database. The audit regression suite covers the credential-free local demo path as well as production/Twitch guest denial, mutation Origin checks, OAuth rate limiting, and idle SSE cleanup. Browser interaction checks are separate from Vitest and must be reported separately.
 
 ## Current boundaries
 
-This remains a local single-channel portfolio dashboard at the UI level. It now has backend Twitch login, identity, encrypted-token, persistent-session, channel, membership, and authorization-middleware foundations, but no user-facing account pages, complete multi-user route isolation, public deployment hardening, rate-limit retry strategy, or durable EventSub/replay recovery. EventSub reconnects while the process is alive, but ingest must be started again after restart. Legacy write, diagnostic, ingest, reset, sampler, import, and replay endpoints must not be exposed publicly without additional controls.
+This remains a portfolio dashboard with a local SQLite backend. It has browser onboarding, encrypted Twitch token storage, persistent sessions, channel roles, Origin checks, rate limiting, and production mutation guards. It is not a complete private multi-tenant service: legacy reads and stream reports are public, process-local rate limits do not coordinate across instances, and EventSub/replay runtime state is not durable. Public deployments must use production mode, restrict network access to the backend, and decide which collected data may be public. Migrations, backups, monitoring, and durable recovery remain future work.
